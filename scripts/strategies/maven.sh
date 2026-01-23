@@ -1,0 +1,134 @@
+#!/usr/bin/env bash
+# maven.sh - Maven build strategies
+# Defines build configurations to try for Maven projects
+
+# ============================================================================
+# Maven Build Strategies
+# ============================================================================
+
+# Each strategy is: "JDK_VERSION|BUILD_ARGS"
+# Strategies are tried in order until one succeeds
+
+MAVEN_STRATEGIES=(
+  # Modern JDKs with standard test skipping
+  "21|-DskipTests=true -Dmaven.test.skip=true"
+  "17|-DskipTests=true -Dmaven.test.skip=true"
+  
+  # Older JDKs with more aggressive skipping
+  "11|-DskipTests=true -Dmaven.test.skip=true -Dmaven.javadoc.skip=true"
+  "8|-DskipTests=true -Dmaven.test.skip=true -Dmaven.javadoc.skip=true -Denforcer.skip=true"
+  
+  # Fallback: try with checkstyle/spotbugs disabled
+  "17|-DskipTests=true -Dmaven.test.skip=true -Dcheckstyle.skip=true -Dspotbugs.skip=true -Dpmd.skip=true"
+  "11|-DskipTests=true -Dmaven.test.skip=true -Dcheckstyle.skip=true -Dspotbugs.skip=true -Dpmd.skip=true -Denforcer.skip=true"
+)
+
+# Get Maven command for a build
+# Usage: get_maven_command <build_dir>
+# Returns: maven command (mvn or ./mvnw)
+get_maven_command() {
+  local build_dir="$1"
+  
+  if [[ -x "${build_dir}/mvnw" ]]; then
+    echo "./mvnw"
+  else
+    echo "mvn"
+  fi
+}
+
+# Build Maven project with specific strategy
+# Usage: maven_build <build_dir> <strategy_args> <log_file>
+# Returns: 0 on success, non-zero on failure
+maven_build() {
+  local build_dir="$1"
+  local strategy_args="$2"
+  local log_file="$3"
+  
+  local mvn_cmd
+  mvn_cmd="$(get_maven_command "$build_dir")"
+  
+  # Base command: clean compile (we don't need to run verify for SonarQube)
+  # SonarQube needs compiled classes, not packaged artifacts
+  local base_args="clean compile"
+  
+  # Save and restore working directory
+  pushd "$build_dir" >/dev/null || return 1
+  
+  # Run the build
+  # shellcheck disable=SC2086
+  local exit_code=0
+  run_logged "$log_file" $mvn_cmd $base_args $strategy_args -B || exit_code=$?
+  
+  popd >/dev/null
+  return $exit_code
+}
+
+# Run SonarQube analysis for Maven project
+# Usage: maven_sonar <build_dir> <project_key> <log_file>
+maven_sonar() {
+  local build_dir="$1"
+  local project_key="$2"
+  local log_file="$3"
+  
+  local mvn_cmd
+  mvn_cmd="$(get_maven_command "$build_dir")"
+  
+  # Save and restore working directory
+  pushd "$build_dir" >/dev/null || return 1
+  
+  # Run sonar analysis (classes should already be compiled)
+  local exit_code=0
+  run_logged "$log_file" $mvn_cmd \
+    org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
+    -Dsonar.host.url="$SONAR_HOST_URL" \
+    -Dsonar.token="$SONAR_TOKEN" \
+    -Dsonar.projectKey="$project_key" \
+    -DskipTests=true \
+    -B || exit_code=$?
+  
+  popd >/dev/null
+  return $exit_code
+}
+
+# Parse Maven build error for classification
+# Usage: parse_maven_error <log_file>
+# Returns: error classification code
+parse_maven_error() {
+  local log_file="$1"
+  
+  if grep -q "release version .* not supported" "$log_file" 2>/dev/null; then
+    echo "jdk_mismatch"
+  elif grep -q "Unsupported class file major version" "$log_file" 2>/dev/null; then
+    echo "jdk_mismatch"
+  elif grep -qE "(Cannot resolve|Could not find artifact)" "$log_file" 2>/dev/null; then
+    echo "dependency_failure"
+  elif grep -qE "(401|403|Unauthorized)" "$log_file" 2>/dev/null; then
+    echo "dependency_failure"
+  elif grep -q "Compilation failure" "$log_file" 2>/dev/null; then
+    echo "compilation_failure"
+  elif grep -qE "BUILD FAILURE" "$log_file" 2>/dev/null; then
+    echo "build_failure"
+  else
+    echo "unknown"
+  fi
+}
+
+# Extract error message from Maven log
+# Usage: extract_maven_error_message <log_file>
+extract_maven_error_message() {
+  local log_file="$1"
+  
+  # Try to find the most relevant error line
+  local error_line
+  error_line="$(grep -m1 -E "(ERROR|FATAL|\[ERROR\])" "$log_file" 2>/dev/null | head -c 200)"
+  
+  if [[ -z "$error_line" ]]; then
+    error_line="$(grep -m1 "BUILD FAILURE" "$log_file" 2>/dev/null)"
+  fi
+  
+  if [[ -z "$error_line" ]]; then
+    error_line="Build failed (see log for details)"
+  fi
+  
+  echo "$error_line"
+}

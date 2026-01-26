@@ -85,7 +85,8 @@ submit_to_sonar() {
   ensure_dir "$log_dir"
   
   require_env "SONAR_HOST_URL" "Set in .env file"
-  require_env "SONAR_TOKEN" "Generate in SonarQube UI → My Account → Security"
+  require_env "SONAR_TOKEN" "Generate at sonarcloud.io → My Account → Security"
+  require_env "SONAR_ORGANIZATION" "Your SonarCloud organization key"
   
   SONAR_TASK_ID=""
   

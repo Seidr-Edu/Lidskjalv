@@ -1,22 +1,14 @@
 // cSpell:disable
 # Lidskjalv
 
-SonarQube analysis setup for batch scanning Java repositories with persistent PostgreSQL storage.
+Batch scanning tool for analyzing Java repositories with SonarCloud.
 
 ## Architecture
 
-- **SonarQube**: Community LTS edition for static code analysis
-- **PostgreSQL**: Database for persistent storage of analysis results
-- **Docker Compose**: Orchestrates both services with health checks
+- **SonarCloud**: Cloud-hosted static code analysis with persistent storage
+- **Batch Scanner**: Shell scripts for automated multi-repository scanning
 
 ## Prerequisites
-
-### For SonarQube Server
-- Docker
-- Docker Compose v2 (`docker compose`)
-- macOS, Linux, or Windows
-
-### For Batch Scanning
 
 **Required tools:**
 - `git` - Repository cloning
@@ -66,52 +58,33 @@ which git jq curl mvn java
 
 ## Quick Start
 
-### 1. Start the Services
+### 1. Set Up SonarCloud
 
-From the repository root:
+1. Go to [sonarcloud.io](https://sonarcloud.io) and log in (via GitHub, GitLab, etc.)
+2. Create or select an organization
+3. Note your **organization key** from the URL: `sonarcloud.io/organizations/<org-key>`
 
-```bash
-docker compose up -d
-```
-
-This will:
-- Start PostgreSQL and initialize the `sonarqube` database
-- Wait for PostgreSQL to be healthy
-- Start SonarQube and connect it to PostgreSQL
-- Expose SonarQube UI at `http://localhost:9000`
-
-**First startup takes ~1-2 minutes** while SonarQube initializes the database.
-
-### 2. Initial Login
-
-1. Open `http://localhost:9000` in your browser
-2. Log in with default credentials:
-   - **Username**: `admin`
-   - **Password**: `admin`
-3. **Change the password** when prompted (required on first login)
-
-### 3. Generate API Token
-
-To run analysis scripts, you need an authentication token:
+### 2. Generate API Token
 
 1. Click your profile icon (top right) → **My Account**
 2. Go to the **Security** tab
 3. Under "Generate Tokens":
-   - **Name**: `local-scanner` (or any name)
+   - **Name**: `lidskjalv` (or any name)
    - **Type**: User Token
-   - **Expires**: Set far in future or "No expiration"
-4. Click **Generate** and copy the token.
+   - **Expires**: Set as needed
+4. Click **Generate** and copy the token
 
-### 4. Configure Environment
+### 3. Configure Environment
 
 Create a `.env` file in the project root:
 
 ```bash
-SONAR_HOST_URL=http://localhost:9000
-SONAR_TOKEN=squ_your_generated_token_here
+SONAR_HOST_URL=https://sonarcloud.io
+SONAR_TOKEN=your_generated_token_here
+SONAR_ORGANIZATION=your_organization_key
 ```
 
-Replace `squ_your_generated_token_here` with the token from step 3.
+Replace the values with your actual token and organization key from steps 1-2.
 
 ## Scanning Repositories
 
@@ -168,28 +141,19 @@ The scanner maintains state to enable resumable runs:
   - `clone.log` - Git clone output
   - `detect.log` - Build system detection
   - `build-attempt-*.log` - Build attempts with different strategies
-  - `sonar.log` - SonarQube submission
-
-View current state:
-```bash
-cat state/scan-state.json | jq '.repositories | to_entries[] | {key: .key, status: .value.status}'
-```
+  - `sonar.log` - SonarCloud submission
 
 ## Useful Commands
 
 ```bash
-# View logs
-docker compose logs -f sonarqube
-docker compose logs -f postgres
+# View scan state
+cat state/scan-state.json | jq '.repositories | to_entries[] | {key: .key, status: .value.status}'
 
-# Restart services
-docker compose restart
+# View failed repos
+cat state/scan-state.json | jq '.repositories | to_entries[] | select(.value.status == "failed")'
 
-# Stop services
-docker compose down
-
-# Stop and remove data (DESTRUCTIVE)
-docker compose down -v
+# Reset state (start fresh)
+rm -f state/scan-state.json
 ```
 
 ## Configuration
@@ -218,14 +182,10 @@ https://github.com/org4/repo4.git # subdir=backend, jdk=17
 
 ## Troubleshooting
 
-### SonarQube won't start
-- Check logs: `docker compose logs sonarqube`
-- Verify PostgreSQL is healthy: `docker compose ps`
-- Wait 1-2 minutes for full initialization
-
 ### "Unauthorized" errors during scan
-- Regenerate your API token in SonarQube UI
-- Update the `SONAR_TOKEN` in `.env`
+- Verify your token is valid at sonarcloud.io → My Account → Security
+- Ensure `SONAR_TOKEN` in `.env` is correct
+- Check that `SONAR_ORGANIZATION` matches your organization key
 
 ### Build failures
 - Check logs: `cat logs/{project-key}/build-attempt-*.log`

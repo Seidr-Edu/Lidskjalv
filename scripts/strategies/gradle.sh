@@ -84,7 +84,7 @@ gradle_sonar() {
   local exit_code=0
   
   # Common sonar args to skip recompilation (already built) and tests
-  local sonar_args="-Dsonar.host.url=$SONAR_HOST_URL -Dsonar.token=$SONAR_TOKEN -Dsonar.projectKey=$project_key -Dsonar.gradle.skipCompile=true"
+  local sonar_args="-Dsonar.host.url=$SONAR_HOST_URL -Dsonar.token=$SONAR_TOKEN -Dsonar.projectKey=$project_key -Dsonar.organization=$SONAR_ORGANIZATION -Dsonar.gradle.skipCompile=true"
   
   # Check if project has sonarqube plugin configured
   if grep -qE "sonarqube|org.sonarqube" build.gradle* 2>/dev/null; then
@@ -98,6 +98,7 @@ gradle_sonar() {
         -Dsonar.host.url="$SONAR_HOST_URL" \
         -Dsonar.token="$SONAR_TOKEN" \
         -Dsonar.projectKey="$project_key" \
+        -Dsonar.organization="$SONAR_ORGANIZATION" \
         -Dsonar.projectBaseDir="$build_dir" \
         -Dsonar.sources=src/main \
         -Dsonar.java.binaries=build/classes || exit_code=$?

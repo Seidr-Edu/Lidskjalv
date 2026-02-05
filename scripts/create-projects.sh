@@ -64,6 +64,7 @@ create_project() {
     --data-urlencode "project=$projectKey" \
     --data-urlencode "name=$projectName" \
     --data-urlencode "organization=$SONAR_ORGANIZATION" \
+    --data-urlencode "visibility=public"
     2>&1) || true
   
   # Check response for success or expected errors

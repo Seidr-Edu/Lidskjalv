@@ -307,39 +307,8 @@ main() {
     require_env "SONAR_TOKEN" "Generate in SonarQube UI → My Account → Security"
   fi
   
-  # Debug: Check state file before initialization
-  log_info "========================================"
-  log_info "State File Debug Information"
-  log_info "========================================"
-  log_info "STATE_FILE (before absolute path resolution): $STATE_FILE"
-  log_info "Current working directory: $(pwd)"
-  
-  if [[ -f "$STATE_FILE" ]]; then
-    log_info "State file EXISTS before state_init()"
-    log_info "State file size: $(stat -f%z "$STATE_FILE" 2>/dev/null || stat -c%s "$STATE_FILE" 2>/dev/null) bytes"
-    log_info "State file contents:"
-    cat "$STATE_FILE" | jq -r '.repositories | to_entries | map("  " + .key + ": " + .value.status) | .[]' 2>/dev/null || echo "  (failed to parse state file)"
-  else
-    log_info "State file DOES NOT EXIST before state_init()"
-  fi
-  log_info "========================================"
-  echo ""
-  
   state_init
   state_update_last_run
-  
-  # Debug: Check state file after initialization
-  log_info "========================================"
-  log_info "State After Initialization"
-  log_info "========================================"
-  log_info "STATE_FILE (after absolute path resolution): $STATE_FILE"
-  if [[ -f "$STATE_FILE" ]]; then
-    log_info "State file size: $(stat -f%z "$STATE_FILE" 2>/dev/null || stat -c%s "$STATE_FILE" 2>/dev/null) bytes"
-    log_info "Repositories in state:"
-    cat "$STATE_FILE" | jq -r '.repositories | to_entries | map("  " + .key + ": " + .value.status) | .[]' 2>/dev/null || echo "  (failed to parse state file)"
-  fi
-  log_info "========================================"
-  echo ""
   
   discover_jdks
   

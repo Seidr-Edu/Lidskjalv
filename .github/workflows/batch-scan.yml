@@ -41,8 +41,6 @@ jobs:
         with:
           path: state/scan-state.json
           key: scan-state-${{ github.ref_name }}
-          restore-keys: |
-            scan-state-
 
       - name: Setup JDK 8
         uses: actions/setup-java@v4

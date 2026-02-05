@@ -100,7 +100,7 @@ build_project() {
       continue
     fi
     
-    ((attempt++))
+    ((++attempt))
     BUILD_RESULT_ATTEMPTS=$attempt
     
     log_info "  Attempt $attempt: JDK $jdk_version with args: $build_args"

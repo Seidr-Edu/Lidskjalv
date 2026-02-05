@@ -380,11 +380,11 @@ main() {
     
     IFS='|' read -r url jdk subdir <<< "$entry"
     
-    ((processed++))
+    ((++processed))
     log_info "[$processed/$total] Processing..."
     
     if process_repo "$url" "$jdk" "$subdir"; then
-      ((succeeded++))
+      ((++succeeded))
     else
       local key
       key="$(derive_key "$url")"
@@ -392,9 +392,9 @@ main() {
       status="$(state_get_status "$key")"
       
       if [[ "$status" == "skipped" ]]; then
-        ((skipped++))
+        ((++skipped))
       else
-        ((failed++))
+        ((++failed))
       fi
     fi
     

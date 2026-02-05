@@ -1,10 +1,10 @@
 name: Batch Scan Repositories
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - 4-use-github-actions-to-run-script
-  workflow_dispatch:
     inputs:
       force:
         description: 'Force reprocess all repos (ignore previous success)'

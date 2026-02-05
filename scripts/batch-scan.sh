@@ -334,6 +334,8 @@ main() {
   log_info "Found $total repositories to process"
   echo ""
   
+  # Debug: show time limit status
+  log_info "Time limit: ${WORKFLOW_TIME_LIMIT_MINUTES:-0} minutes"
 
   if $DRY_RUN; then
     log_info "DRY RUN - Would process:"
@@ -360,7 +362,11 @@ main() {
   local skipped=0
   local stopped_early=false
   
+  log_info "Starting main processing loop..."
+  
   for entry in "${repos_to_process[@]}"; do
+    log_info "Processing entry: $entry"
+    
     # Check time limit before starting new repo
     if ! should_continue_processing; then
       log_info "Stopped due to time limit - will resume next run"

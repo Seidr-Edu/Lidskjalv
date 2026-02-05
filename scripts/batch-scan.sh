@@ -11,10 +11,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
-# Change to project root
 cd "$PROJECT_ROOT"
 
-# Source library modules
 source "${SCRIPT_DIR}/lib/common.sh"
 source "${SCRIPT_DIR}/lib/state.sh"
 source "${SCRIPT_DIR}/lib/clone.sh"
@@ -22,8 +20,33 @@ source "${SCRIPT_DIR}/lib/detect-build.sh"
 source "${SCRIPT_DIR}/lib/build.sh"
 source "${SCRIPT_DIR}/lib/submit-sonar.sh"
 
-# Resolve all config paths to absolute (prevents issues when cwd changes)
 resolve_config_paths
+
+# ============================================================================
+# Time Limit Handling
+# ============================================================================
+
+WORKFLOW_START_TIME=$(date +%s)
+WORKFLOW_TIME_LIMIT_MINUTES=${WORKFLOW_TIME_LIMIT_MINUTES:-0}
+
+should_continue_processing() {
+  # Skip time limit check if disabled (0 = no limit, for local runs)
+  if [[ "$WORKFLOW_TIME_LIMIT_MINUTES" -eq 0 ]]; then
+    return 0
+  fi
+  
+  local time_limit_seconds=$((WORKFLOW_TIME_LIMIT_MINUTES * 60))
+  local elapsed=$(($(date +%s) - WORKFLOW_START_TIME))
+  local remaining=$((time_limit_seconds - elapsed))
+  
+  if [[ $remaining -lt 600 ]]; then  # Less than 10 minutes remaining
+    log_warn "Time limit approaching (${remaining}s remaining)"
+    log_warn "Stopping gracefully - incomplete repos will retry next run"
+    return 1
+  fi
+  
+  return 0
+}
 
 # ============================================================================
 # CLI Arguments
@@ -119,9 +142,6 @@ parse_args() {
 # Main Pipeline
 # ============================================================================
 
-# Process a single repository through the entire pipeline
-# Usage: process_repo <url> [jdk_hint] [subdir_hint]
-# Returns: 0 on success, 1 on failure
 process_repo() {
   local url="$1"
   local jdk_hint="${2:-}"
@@ -137,16 +157,13 @@ process_repo() {
   log_info "Project key: $key"
   log_info "=========================================="
   
-  # Initialize repo in state if needed
   state_init_repo "$key" "$url"
   
-  # Check if already successful (unless force mode)
   if ! $FORCE_RERUN && state_is_success "$key"; then
     log_info "Already successfully analyzed, skipping (use --force to rerun)"
     return 0
   fi
   
-  # Increment attempt counter
   state_increment_attempts "$key"
   
   # ---- CLONE STAGE ----
@@ -170,20 +187,17 @@ process_repo() {
     return 1
   fi
   
-  # Parse build result
   parse_build_result "$build_result"
   local build_tool="$BUILD_TOOL"
   local build_subdir="${subdir_hint:-$BUILD_SUBDIR}"
   
   log_info "Detected build system: $build_tool${build_subdir:+ (subdir: $build_subdir)}"
   
-  # Get effective build directory
   local build_dir="$repo_dir"
   if [[ -n "$build_subdir" ]]; then
     build_dir="${repo_dir}/${build_subdir}"
   fi
   
-  # Use forced JDK or hint
   local effective_jdk="${FORCED_JDK:-$jdk_hint}"
   
   # ---- BUILD STAGE ----
@@ -195,7 +209,6 @@ process_repo() {
     return 1
   fi
   
-  # Update state with successful build info
   state_set_build_info "$key" "$build_tool" "$BUILD_RESULT_JDK"
   
   # ---- SONAR STAGE ----
@@ -211,7 +224,6 @@ process_repo() {
       return 1
     fi
     
-    # Store task ID if available
     if [[ -n "$SONAR_TASK_ID" ]]; then
       state_set_sonar_task "$key" "$SONAR_TASK_ID"
     fi
@@ -282,23 +294,18 @@ generate_summary() {
 main() {
   parse_args "$@"
   
-  # Load environment
   load_env
   
-  # Check dependencies
   check_dependencies
   
-  # Verify required env vars (unless dry run)
   if ! $DRY_RUN && ! $SKIP_SONAR; then
     require_env "SONAR_HOST_URL" "Set in .env file"
     require_env "SONAR_TOKEN" "Generate in SonarQube UI → My Account → Security"
   fi
   
-  # Initialize state
   state_init
   state_update_last_run
   
-  # Discover available JDKs
   discover_jdks
   
   log_info "Batch Scanner Starting"
@@ -308,14 +315,11 @@ main() {
   log_info "  Available JDKs: ${AVAILABLE_JDKS[*]:-none}"
   echo ""
   
-  # Build list of repos to process
   declare -a repos_to_process=()
   
   if [[ -n "$SINGLE_REPO" ]]; then
-    # Single repo mode
     repos_to_process+=("${SINGLE_REPO}||")
   else
-    # Read from repos file
     if [[ ! -f "$REPOS_FILE" ]]; then
       log_error "Repos file not found: $REPOS_FILE"
       exit 1
@@ -330,7 +334,7 @@ main() {
   log_info "Found $total repositories to process"
   echo ""
   
-  # Dry run: just show what would be processed
+
   if $DRY_RUN; then
     log_info "DRY RUN - Would process:"
     for entry in "${repos_to_process[@]}"; do
@@ -349,13 +353,21 @@ main() {
     exit 0
   fi
   
-  # Process each repository
+
   local processed=0
   local succeeded=0
   local failed=0
   local skipped=0
+  local stopped_early=false
   
   for entry in "${repos_to_process[@]}"; do
+    # Check time limit before starting new repo
+    if ! should_continue_processing; then
+      log_info "Stopped due to time limit - will resume next run"
+      stopped_early=true
+      break
+    fi
+    
     IFS='|' read -r url jdk subdir <<< "$entry"
     
     ((processed++))
@@ -379,14 +391,19 @@ main() {
     echo ""
   done
   
-  # Generate summary
+
   echo ""
   log_info "=========================================="
-  log_info "Batch Processing Complete"
+  if $stopped_early; then
+    log_info "Batch Processing Stopped (time limit)"
+    log_info "Processed $processed of $total repos before stopping"
+  else
+    log_info "Batch Processing Complete"
+  fi
   log_info "=========================================="
   generate_summary
   
-  # Exit with error if any failed
+  # Exit with error if any failed (but not if we just stopped early)
   if [[ $failed -gt 0 ]]; then
     exit 1
   fi

@@ -35,9 +35,13 @@ should_continue_processing() {
     return 0
   fi
   
+  local current_time
+  current_time=$(date +%s)
   local time_limit_seconds=$((WORKFLOW_TIME_LIMIT_MINUTES * 60))
-  local elapsed=$(($(date +%s) - WORKFLOW_START_TIME))
+  local elapsed=$((current_time - WORKFLOW_START_TIME))
   local remaining=$((time_limit_seconds - elapsed))
+  
+  log_info "Time check: start=$WORKFLOW_START_TIME, now=$current_time, elapsed=${elapsed}s, remaining=${remaining}s"
   
   if [[ $remaining -lt 600 ]]; then  # Less than 10 minutes remaining
     log_warn "Time limit approaching (${remaining}s remaining)"

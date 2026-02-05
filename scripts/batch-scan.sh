@@ -202,6 +202,7 @@ process_repo() {
   if $SKIP_SONAR; then
     log_info "Skipping SonarQube submission (--skip-sonar)"
     state_set_status "$key" "success"
+    state_set_scan_timestamp "$key"
   else
     state_set_status "$key" "submitting"
     
@@ -216,6 +217,7 @@ process_repo() {
     fi
     
     state_set_status "$key" "success"
+    state_set_scan_timestamp "$key"
   fi
   
   # ---- CLEANUP ----
@@ -242,6 +244,14 @@ generate_summary() {
     echo ""
     state_summary
     echo ""
+    
+    local success_count
+    success_count="$(state_count_by_status "success")"
+    if [[ "$success_count" -gt 0 ]]; then
+      echo "Successful repositories:"
+      state_list_successful
+      echo ""
+    fi
     
     local failed_count
     failed_count="$(state_count_by_status "failed")"

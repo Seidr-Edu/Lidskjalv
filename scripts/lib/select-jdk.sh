@@ -109,6 +109,9 @@ _discover_jdks_macos() {
 
 # Discover JDKs on Linux
 _discover_jdks_linux() {
+  # First check GitHub Actions environment variables (JAVA_HOME_*_X64)
+  _discover_jdks_github_actions
+  
   # Check common Linux JDK locations
   local jdk_base_dirs="/usr/lib/jvm /usr/java /opt/java $HOME/.sdkman/candidates/java"
   
@@ -128,6 +131,31 @@ _discover_jdks_linux() {
         _set_jdk_home "$version" "$jdk_dir"
       fi
     done
+  done
+}
+
+# Discover JDKs from GitHub Actions environment variables
+# actions/setup-java sets JAVA_HOME_8_X64, JAVA_HOME_11_X64, etc.
+_discover_jdks_github_actions() {
+  # Check for GitHub Actions runner
+  if [[ -z "${GITHUB_ACTIONS:-}" ]]; then
+    return 0
+  fi
+  
+  log_info "Detected GitHub Actions environment"
+  
+  # Check for JAVA_HOME_*_X64 environment variables
+  for version in 8 11 17 21; do
+    local var_name="JAVA_HOME_${version}_X64"
+    local jdk_path="${!var_name:-}"
+    
+    if [[ -n "$jdk_path" && -d "$jdk_path" ]]; then
+      if ! _has_jdk_home "$version"; then
+        AVAILABLE_JDKS+=("$version")
+        _set_jdk_home "$version" "$jdk_path"
+        log_info "Found JDK $version from GitHub Actions: $jdk_path"
+      fi
+    fi
   done
 }
 

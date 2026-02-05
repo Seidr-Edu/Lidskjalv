@@ -230,6 +230,20 @@ state_set_sonar_task() {
   state_set "$key" "sonar_task_id" "$task_id"
 }
 
+# Set clone timestamp (when repo was last cloned or fetched)
+# Usage: state_set_clone_timestamp <project_key>
+state_set_clone_timestamp() {
+  local key="$1"
+  state_set "$key" "clone_timestamp" "$(timestamp)"
+}
+
+# Set scan timestamp (when SonarCloud analysis completed successfully)
+# Usage: state_set_scan_timestamp <project_key>
+state_set_scan_timestamp() {
+  local key="$1"
+  state_set "$key" "scan_timestamp" "$(timestamp)"
+}
+
 # ============================================================================
 # State query operations
 # ============================================================================
@@ -334,5 +348,30 @@ state_list_skipped() {
     .repositories | to_entries[] | 
     select(.value.status == "skipped") | 
     "  - \(.key): \(.value.failure_reason // "skipped") - \(.value.failure_message // "no message")"
+  '
+}
+
+# List successful repositories with timestamps
+state_list_successful() {
+  state_read | jq -r '
+    .repositories | to_entries[] | 
+    select(.value.status == "success") | 
+    "  - \(.key):
+      Cloned:  \(.value.clone_timestamp // "N/A")
+      Scanned: \(.value.scan_timestamp // "N/A")
+      Build:   \(.value.build_tool // "N/A") with JDK \(.value.jdk_version // "N/A")"
+  '
+}
+
+# List all repositories with detailed status
+state_list_all_details() {
+  state_read | jq -r '
+    .repositories | to_entries[] | 
+    "Repository: \(.key)
+  Status:  \(.value.status)
+  Cloned:  \(.value.clone_timestamp // "N/A")
+  Scanned: \(.value.scan_timestamp // "N/A")
+  Build:   \(.value.build_tool // "N/A")\(if .value.jdk_version then " with JDK \(.value.jdk_version)" else "" end)
+"
   '
 }

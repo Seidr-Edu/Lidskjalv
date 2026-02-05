@@ -252,6 +252,25 @@ require_env() {
 # repos.txt parsing
 # ============================================================================
 
+# Validate a repository URL
+# Usage: is_valid_repo_url <url>
+# Returns: 0 if valid, 1 if invalid
+is_valid_repo_url() {
+  local url="$1"
+  
+  # Must start with https:// or http://
+  if [[ ! "$url" =~ ^https?:// ]]; then
+    return 1
+  fi
+  
+  # Must contain at least one path component after the host
+  if [[ ! "$url" =~ ^https?://[^/]+/.+ ]]; then
+    return 1
+  fi
+  
+  return 0
+}
+
 # Parse repos.txt and output URLs with optional metadata
 # Format: Each line outputs: URL|jdk|subdir
 # Example: https://github.com/org/repo.git|17|backend
@@ -273,6 +292,12 @@ parse_repos_file() {
     local url
     url="$(echo "$line" | sed -E 's/#.*//' | xargs)"
     [[ -z "$url" ]] && continue
+    
+    # Validate URL
+    if ! is_valid_repo_url "$url"; then
+      log_warn "Skipping invalid URL: $url"
+      continue
+    fi
     
     # Extract metadata from comment if present
     local jdk="" subdir=""

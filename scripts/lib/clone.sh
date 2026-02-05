@@ -2,9 +2,12 @@
 # clone.sh - Repository cloning module
 # Handles cloning repositories with logging and idempotency
 
-# Ensure common.sh is sourced
+# Ensure common.sh and state.sh are sourced
 if [[ -z "${WORK_DIR:-}" ]]; then
   source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+fi
+if ! declare -f state_set_clone_timestamp &>/dev/null; then
+  source "$(dirname "${BASH_SOURCE[0]}")/state.sh"
 fi
 
 # ============================================================================
@@ -39,6 +42,7 @@ clone_repo() {
       if run_logged "$log_file" git -C "$target_dir" fetch --depth 1 origin; then
         if run_logged "$log_file" git -C "$target_dir" reset --hard origin/HEAD; then
           log_success "Updated existing clone: $key"
+          state_set_clone_timestamp "$key"
           return 0
         fi
       fi
@@ -58,6 +62,7 @@ clone_repo() {
   
   if run_logged "$log_file" git clone --depth 1 "$url" "$target_dir"; then
     log_success "Cloned repository: $key"
+    state_set_clone_timestamp "$key"
     return 0
   else
     log_error "Failed to clone repository: $url"

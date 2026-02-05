@@ -187,6 +187,7 @@ log_success "Build succeeded with JDK $BUILD_RESULT_JDK"
 if $SKIP_SONAR; then
   log_info "Skipping SonarQube submission (--skip-sonar)"
   state_set_status "$PROJECT_KEY" "success"
+  state_set_scan_timestamp "$PROJECT_KEY"
 else
   state_set_status "$PROJECT_KEY" "submitting"
   
@@ -202,6 +203,7 @@ else
   fi
   
   state_set_status "$PROJECT_KEY" "success"
+  state_set_scan_timestamp "$PROJECT_KEY"
 fi
 
 log_success "=========================================="

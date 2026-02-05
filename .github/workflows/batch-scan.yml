@@ -30,17 +30,19 @@ on:
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 360  # Max allowed for public repos on free tier
+    timeout-minutes: 360
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Restore scan state from cache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v5
         with:
           path: state/scan-state.json
-          key: scan-state-${{ github.ref_name }}
+          key: scan-state-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            scan-state-master-
 
       - name: Setup JDK 8
         uses: actions/setup-java@v4
@@ -126,6 +128,13 @@ jobs:
           name: scan-state
           path: state/scan-state.json
           retention-days: 90
+
+      - name: Save scan state to cache
+        uses: actions/cache/save@v5
+        if: always()
+        with:
+          path: state/scan-state.json
+          key: scan-state-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Display summary
         if: always()

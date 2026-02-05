@@ -1,6 +1,9 @@
 name: Batch Scan Repositories
 
 on:
+  push:
+    branches:
+      - 4-use-github-actions-to-run-script
   workflow_dispatch:
     inputs:
       force:

@@ -1,10 +1,8 @@
 name: Batch Scan Repositories
 
 on:
-  workflow_dispatch:
   push:
-    branches:
-      - 4-use-github-actions-to-run-script
+  workflow_dispatch:
     inputs:
       force:
         description: 'Force reprocess all repos (ignore previous success)'
@@ -96,24 +94,24 @@ jobs:
           WORKFLOW_TIME_LIMIT_MINUTES: ${{ inputs.time_limit_minutes || 350 }}
         run: |
           chmod +x scripts/batch-scan.sh
-          
-          # Build command with options
           CMD="./scripts/batch-scan.sh"
           
-          if [ "${{ inputs.force || 'false' }}" = "true" ]; then
-            CMD="$CMD --force"
-          fi
-          
-          if [ "${{ inputs.jdk || 'auto' }}" != "auto" ]; then
-            CMD="$CMD --jdk ${{ inputs.jdk }}"
-          fi
-          
-          if [ "${{ inputs.cleanup || 'true' }}" = "true" ]; then
-            CMD="$CMD --cleanup"
+          if [ "${{ github.event_name }}" = "push" ]; then
+            CMD="$CMD --dry-run"
+          else
+            if [ "${{ inputs.force || 'false' }}" = "true" ]; then
+              CMD="$CMD --force"
+            fi
+            if [ "${{ inputs.jdk || 'auto' }}" != "auto" ]; then
+              CMD="$CMD --jdk ${{ inputs.jdk }}"
+            fi
+            if [ "${{ inputs.cleanup || 'true' }}" = "true" ]; then
+              CMD="$CMD --cleanup"
+            fi
           fi
           
           echo "Running: $CMD"
-          $CMD || true  # Don't fail the workflow on scan failures
+          $CMD || true
 
       - name: Upload scan logs
         uses: actions/upload-artifact@v4

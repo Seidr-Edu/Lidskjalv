@@ -93,22 +93,22 @@ jobs:
           SONAR_HOST_URL: https://sonarcloud.io
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
-          WORKFLOW_TIME_LIMIT_MINUTES: ${{ inputs.time_limit_minutes }}
+          WORKFLOW_TIME_LIMIT_MINUTES: ${{ inputs.time_limit_minutes || 350 }}
         run: |
           chmod +x scripts/batch-scan.sh
           
           # Build command with options
           CMD="./scripts/batch-scan.sh"
           
-          if [ "${{ inputs.force }}" = "true" ]; then
+          if [ "${{ inputs.force || 'false' }}" = "true" ]; then
             CMD="$CMD --force"
           fi
           
-          if [ "${{ inputs.jdk }}" != "auto" ]; then
+          if [ "${{ inputs.jdk || 'auto' }}" != "auto" ]; then
             CMD="$CMD --jdk ${{ inputs.jdk }}"
           fi
           
-          if [ "${{ inputs.cleanup }}" = "true" ]; then
+          if [ "${{ inputs.cleanup || 'true' }}" = "true" ]; then
             CMD="$CMD --cleanup"
           fi
           

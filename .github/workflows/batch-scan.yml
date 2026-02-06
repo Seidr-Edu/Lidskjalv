@@ -116,7 +116,7 @@ jobs:
 
       - name: Upload scan logs
         uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && github.event_name != 'push'
         with:
           name: scan-logs
           path: logs/
@@ -124,7 +124,7 @@ jobs:
 
       - name: Upload scan state
         uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && github.event_name != 'push'
         with:
           name: scan-state
           path: state/scan-state.json

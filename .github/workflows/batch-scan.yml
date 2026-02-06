@@ -131,7 +131,7 @@ jobs:
 
       - name: Save scan state to cache
         uses: actions/cache/save@v5
-        if: always()
+        if: always() && github.event_name != 'push'
         with:
           path: state/scan-state.json
           key: scan-state-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}

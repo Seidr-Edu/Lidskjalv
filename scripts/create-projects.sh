@@ -12,6 +12,10 @@ fi
 : "${SONAR_TOKEN:?Missing SONAR_TOKEN (set it in .env)}"
 : "${SONAR_ORGANIZATION:?Missing SONAR_ORGANIZATION (set it in .env)}"
 
+# Source common helpers for consistent repo parsing and key derivation
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/common.sh"
+
 # Check if argument is a URL or a file
 SINGLE_URL=""
 REPOS_FILE=""
@@ -32,21 +36,6 @@ if [[ -z "$SINGLE_URL" && ! -f "$REPOS_FILE" ]]; then
   echo "Repo list not found: $REPOS_FILE"
   exit 1
 fi
-
-# Derive projectKey from repo URL: <org>_<repo>
-# Example: https://github.com/spring-projects/spring-petclinic.git -> spring-projects_spring-petclinic
-derive_key() {
-  local url="$1"
-  local path="${url#*://*/}" 2>/dev/null || true
-  # Safer parsing:
-  path="$(echo "$url" | sed -E 's#https?://[^/]+/##')"
-  local org="$(echo "$path" | cut -d/ -f1)"
-  local repo="$(echo "$path" | cut -d/ -f2 | sed -E 's#\.git$##')"
-  local key="${org}_${repo}"
-  # Replace illegal chars with underscore
-  key="$(echo "$key" | sed -E 's#[^a-zA-Z0-9_.-]#_#g')"
-  echo "$key"
-}
 
 # Function to create a single project
 create_project() {
@@ -81,11 +70,13 @@ create_project() {
 if [[ -n "$SINGLE_URL" ]]; then
   create_project "$SINGLE_URL"
 else
-  while IFS= read -r repo_url; do
-    [[ -z "$repo_url" ]] && continue
-    [[ "$repo_url" =~ ^# ]] && continue
-    create_project "$repo_url"
-  done < "$REPOS_FILE"
+  # Use parse_repos_file for consistency with batch-scan.sh
+  # Format: url|jdk|subdir (jdk and subdir are ignored here)
+  while IFS= read -r entry; do
+    [[ -z "$entry" ]] && continue
+    IFS='|' read -r url jdk subdir <<< "$entry"
+    create_project "$url"
+  done < <(parse_repos_file "$REPOS_FILE")
 fi
 
 echo "Done. Check SonarCloud → Projects."

@@ -86,6 +86,30 @@ gradle_sonar() {
   # Common sonar args to skip recompilation (already built) and tests
   local sonar_args="-Dsonar.host.url=$SONAR_HOST_URL -Dsonar.token=$SONAR_TOKEN -Dsonar.projectKey=$project_key -Dsonar.organization=$SONAR_ORGANIZATION -Dsonar.gradle.skipCompile=true"
   
+  # Detect Java version for SonarQube plugin compatibility
+  local java_major_version=21
+  if [[ -n "${JAVA_HOME:-}" ]]; then
+    # Extract major version from JAVA_HOME (handles both 1.8 and 11+ formats)
+    java_major_version=$(${JAVA_HOME}/bin/java -version 2>&1 | grep -oE 'version "([0-9]+\.[0-9]+\.[0-9_]+|[0-9]+\.[0-9]+)"' | grep -oE '([0-9]+\.[0-9]+\.[0-9_]+|[0-9]+\.[0-9]+)' | head -1 | cut -d'.' -f1)
+    # Handle 1.8 -> 8 conversion
+    if [[ "$java_major_version" == "1" ]]; then
+      java_major_version=$(${JAVA_HOME}/bin/java -version 2>&1 | grep -oE 'version "1\.([0-9]+)' | grep -oE '[0-9]+$')
+    fi
+  fi
+  
+  # Select SonarQube Gradle plugin version based on Java version
+  # - JDK 8-10: Use 3.5.0.2730 (last version supporting JDK 8)
+  # - JDK 11-16: Use 4.4.1.3373 (stable for JDK 11-16)
+  # - JDK 17+: Use 5.1.0.4882 (avoids Gradle 9.x deprecated API issues)
+  local sonar_plugin_version="6.0.0.5145"
+  if [[ "$java_major_version" -le 10 ]]; then
+    sonar_plugin_version="3.5.0.2730"
+  elif [[ "$java_major_version" -le 16 ]]; then
+    sonar_plugin_version="4.4.1.3373"
+  else
+    sonar_plugin_version="5.1.0.4882"
+  fi
+  
   # Check if project has sonarqube plugin configured
   if grep -qE "sonarqube|org.sonarqube" build.gradle* 2>/dev/null; then
     # Use project's sonar task (sonarqube is deprecated)
@@ -104,15 +128,15 @@ gradle_sonar() {
         -Dsonar.java.binaries=build/classes || exit_code=$?
     else
       # Try adding sonarqube plugin dynamically via init script
-      # Using plugin version 6.0.0.5145 for Gradle 9.x compatibility
+      # Plugin version selected based on Java version (see above)
       local init_script="${build_dir}/sonar-init.gradle"
-      cat > "$init_script" << 'GRADLE_INIT'
+      cat > "$init_script" << GRADLE_INIT
 initscript {
     repositories {
         maven { url = uri("https://plugins.gradle.org/m2/") }
     }
     dependencies {
-        classpath "org.sonarsource.scanner.gradle:sonarqube-gradle-plugin:6.0.0.5145"
+        classpath "org.sonarsource.scanner.gradle:sonarqube-gradle-plugin:${sonar_plugin_version}"
     }
 }
 allprojects {

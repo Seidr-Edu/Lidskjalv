@@ -60,10 +60,10 @@ FORCE_RERUN=false
 DRY_RUN=false
 SINGLE_REPO=""
 CONTINUE_MODE=false
-FORCED_JDK=""
 REPOS_FILE="repos.txt"
 SKIP_SONAR=false
 CLEANUP_AFTER=false
+RETRY_SONAR_FAILED=false
 
 print_usage() {
   cat << EOF
@@ -72,21 +72,20 @@ Usage: $(basename "$0") [OPTIONS]
 Batch scan Java repositories with SonarQube.
 
 Options:
-  -f, --force           Reprocess all repos (ignore previous success)
-  -n, --dry-run         Show what would be processed without running
-  -r, --repo <url>      Process only this specific repository
-  -c, --continue        Resume from last incomplete run
-  -j, --jdk <version>   Force specific JDK for all repos
-  -i, --input <file>    Use specified repos file (default: repos.txt)
-  --skip-sonar          Build only, skip SonarQube submission
-  --cleanup             Remove cloned repos after successful analysis
-  -h, --help            Show this help message
+  -f, --force              Reprocess all repos (ignore previous success and sonar failures)
+  -n, --dry-run            Show what would be processed without running
+  -r, --repo <url>         Process only this specific repository
+  -c, --continue           Resume from last incomplete run
+  -i, --input <file>       Use specified repos file (default: repos.txt)
+  --skip-sonar             Build only, skip SonarQube submission
+  --cleanup                Remove cloned repos after successful analysis
+  --retry-sonar-failed     Retry repos that previously failed SonarQube submission
+  -h, --help               Show this help message
 
 Examples:
   $(basename "$0")                           # Process all pending repos
   $(basename "$0") --force                   # Reprocess everything
   $(basename "$0") --repo https://github.com/org/repo.git
-  $(basename "$0") --jdk 17                  # Force JDK 17 for all builds
   $(basename "$0") --dry-run                 # Preview what would run
 
 State is persisted in: ${STATE_FILE}
@@ -113,10 +112,6 @@ parse_args() {
         CONTINUE_MODE=true
         shift
         ;;
-      -j|--jdk)
-        FORCED_JDK="$2"
-        shift 2
-        ;;
       -i|--input)
         REPOS_FILE="$2"
         shift 2
@@ -127,6 +122,10 @@ parse_args() {
         ;;
       --cleanup)
         CLEANUP_AFTER=true
+        shift
+        ;;
+      --retry-sonar-failed)
+        RETRY_SONAR_FAILED=true
         shift
         ;;
       -h|--help)
@@ -168,7 +167,20 @@ process_repo() {
     return 0
   fi
   
+  local current_status
+  current_status="$(state_get_status "$key")"
+  if [[ "$current_status" == "sonar_failed" ]]; then
+    if ! $RETRY_SONAR_FAILED && ! $FORCE_RERUN; then
+      log_info "Previously failed SonarQube submission, skipping"
+      return 0
+    fi
+    log_info "Retrying SonarQube-failed repository"
+  fi
+  
   state_increment_attempts "$key"
+  
+  local cached_jdk
+  cached_jdk="$(state_get_successful_build_version "$key")"
   
   # ---- CLONE STAGE ----
   state_set_status "$key" "cloning"
@@ -202,7 +214,11 @@ process_repo() {
     build_dir="${repo_dir}/${build_subdir}"
   fi
   
-  local effective_jdk="${FORCED_JDK:-$jdk_hint}"
+  # Use cached successful build version if available, otherwise fall back to hints
+  local effective_jdk="${cached_jdk:-$jdk_hint}"
+  if [[ -n "$cached_jdk" ]]; then
+    log_info "Using cached successful build version: JDK $cached_jdk"
+  fi
   
   # ---- BUILD STAGE ----
   state_set_status "$key" "building"
@@ -213,7 +229,7 @@ process_repo() {
     return 1
   fi
   
-  state_set_build_info "$key" "$build_tool" "$BUILD_RESULT_JDK"
+  state_set_successful_build "$key" "$build_tool" "$BUILD_RESULT_JDK"
   
   # ---- SONAR STAGE ----
   if $SKIP_SONAR; then
@@ -224,7 +240,7 @@ process_repo() {
     state_set_status "$key" "submitting"
     
     if ! submit_to_sonar "$key" "$build_dir" "$build_tool"; then
-      state_set_status "$key" "failed" "sonar_submission_failed" "SonarQube analysis failed"
+      state_set_status "$key" "sonar_failed" "sonar_submission_failed" "SonarQube analysis failed"
       return 1
     fi
     
@@ -315,7 +331,7 @@ main() {
   log_info "Batch Scanner Starting"
   log_info "  Force mode: $FORCE_RERUN"
   log_info "  Dry run: $DRY_RUN"
-  log_info "  Forced JDK: ${FORCED_JDK:-<auto>}"
+  log_info "  Retry SonarQube failures: $RETRY_SONAR_FAILED"
   log_info "  Available JDKs: ${AVAILABLE_JDKS[*]:-none}"
   echo ""
   

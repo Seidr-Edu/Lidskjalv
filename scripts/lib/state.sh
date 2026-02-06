@@ -136,6 +136,8 @@ state_init_repo() {
         "status": "pending",
         "build_tool": null,
         "jdk_version": null,
+        "successful_build_tool": null,
+        "successful_build_version": null,
         "last_attempt": $ts,
         "attempts": 0
       }
@@ -219,6 +221,37 @@ state_set_build_info() {
   ')"
   
   state_write "$new_state"
+}
+
+# Set successful build configuration (for re-runs)
+# Usage: state_set_successful_build <project_key> <build_tool> <jdk_version>
+state_set_successful_build() {
+  local key="$1"
+  local build_tool="$2"
+  local jdk_version="$3"
+  
+  local current_state
+  current_state="$(state_read)"
+  
+  local new_state
+  new_state="$(echo "$current_state" | jq \
+    --arg key "$key" \
+    --arg tool "$build_tool" \
+    --arg jdk "$jdk_version" '
+    .repositories[$key].build_tool = $tool |
+    .repositories[$key].jdk_version = $jdk |
+    .repositories[$key].successful_build_tool = $tool |
+    .repositories[$key].successful_build_version = $jdk
+  ')"
+  
+  state_write "$new_state"
+}
+
+# Get successful build version for a repository
+# Usage: state_get_successful_build_version <project_key>
+state_get_successful_build_version() {
+  local key="$1"
+  state_get "$key" "successful_build_version"
 }
 
 # Set SonarQube task ID on successful submission
@@ -317,10 +350,11 @@ state_summary() {
   local state
   state="$(state_read)"
   
-  local total success failed skipped pending
+  local total success failed sonar_failed skipped pending
   total="$(echo "$state" | jq '.repositories | length')"
   success="$(echo "$state" | jq '[.repositories | to_entries[] | select(.value.status == "success")] | length')"
   failed="$(echo "$state" | jq '[.repositories | to_entries[] | select(.value.status == "failed")] | length')"
+  sonar_failed="$(echo "$state" | jq '[.repositories | to_entries[] | select(.value.status == "sonar_failed")] | length')"
   skipped="$(echo "$state" | jq '[.repositories | to_entries[] | select(.value.status == "skipped")] | length')"
   pending="$(echo "$state" | jq '[.repositories | to_entries[] | select(.value.status == "pending" or .value.status == "cloning" or .value.status == "building" or .value.status == "submitting")] | length')"
   
@@ -328,7 +362,8 @@ state_summary() {
   echo "============="
   echo "Total repositories: $total"
   echo "  Successful: $success"
-  echo "  Failed: $failed"
+  echo "  Failed (build): $failed"
+  echo "  Failed (SonarQube): $sonar_failed"
   echo "  Skipped: $skipped"
   echo "  Pending: $pending"
 }
@@ -339,6 +374,15 @@ state_list_failed() {
     .repositories | to_entries[] | 
     select(.value.status == "failed") | 
     "  - \(.key): \(.value.failure_reason // "unknown") - \(.value.failure_message // "no message")"
+  '
+}
+
+# Get SonarQube-failed repositories with reasons
+state_list_sonar_failed() {
+  state_read | jq -r '
+    .repositories | to_entries[] | 
+    select(.value.status == "sonar_failed") | 
+    "  - \(.key): \(.value.failure_reason // "unknown") - \(.value.failure_message // "no message")\(if .value.successful_build_version then " (cached: JDK \(.value.successful_build_version))" else "" end)"
   '
 }
 
@@ -359,7 +403,8 @@ state_list_successful() {
     "  - \(.key):
       Cloned:  \(.value.clone_timestamp // "N/A")
       Scanned: \(.value.scan_timestamp // "N/A")
-      Build:   \(.value.build_tool // "N/A") with JDK \(.value.jdk_version // "N/A")"
+      Build:   \(.value.build_tool // "N/A") with JDK \(.value.jdk_version // "N/A")
+      Cached:  \(if .value.successful_build_version then "JDK \(.value.successful_build_version)" else "N/A" end)"
   '
 }
 

@@ -78,6 +78,7 @@ jobs:
           echo "::add-mask::${{ secrets.SONAR_TOKEN }}"
 
       - name: Create projects in SonarCloud
+        if: github.event_name != 'push'
         env:
           SONAR_HOST_URL: https://sonarcloud.io
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

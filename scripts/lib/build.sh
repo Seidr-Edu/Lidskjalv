@@ -24,14 +24,14 @@ BUILD_RESULT_ATTEMPTS=0
 # ============================================================================
 
 # Build a project using multiple strategies
-# Usage: build_project <project_key> <build_dir> <build_tool> [forced_jdk]
+# Usage: build_project <project_key> <build_dir> <build_tool> [jdk_hint]
 # Returns: 0 on success, 1 on failure
 # Sets: BUILD_RESULT_* variables
 build_project() {
   local key="$1"
   local build_dir="$2"
   local build_tool="$3"
-  local forced_jdk="${4:-}"
+  local jdk_hint="${4:-}"
   
   local log_dir="${LOG_DIR}/${key}"
   ensure_dir "$log_dir"
@@ -60,29 +60,24 @@ build_project() {
       ;;
   esac
   
-  # If JDK is forced, filter strategies to only that JDK
-  if [[ -n "$forced_jdk" ]]; then
-    local -a filtered=()
+  # If JDK hint is provided, try it first by reordering strategies
+  if [[ -n "$jdk_hint" ]]; then
+    local -a reordered=()
+    local -a rest=()
+    
     for strategy in "${strategies[@]}"; do
       local jdk_version="${strategy%%|*}"
-      if [[ "$jdk_version" == "$forced_jdk" ]]; then
-        filtered+=("$strategy")
+      if [[ "$jdk_version" == "$jdk_hint" ]]; then
+        reordered+=("$strategy")
+      else
+        rest+=("$strategy")
       fi
     done
     
-    if [[ ${#filtered[@]} -eq 0 ]]; then
-      # Add default strategy for forced JDK
-      case "$build_tool" in
-        maven)
-          filtered+=("${forced_jdk}|-DskipTests=true -Dmaven.test.skip=true")
-          ;;
-        gradle)
-          filtered+=("${forced_jdk}|build -x test -x check")
-          ;;
-      esac
+    if [[ ${#reordered[@]} -gt 0 ]]; then
+      strategies=("${reordered[@]}" "${rest[@]}")
+      log_info "Prioritizing JDK $jdk_hint based on hint"
     fi
-    
-    strategies=("${filtered[@]}")
   fi
   
   # Try each strategy
@@ -165,16 +160,16 @@ build_project() {
 }
 
 # Build with timeout
-# Usage: build_project_with_timeout <project_key> <build_dir> <build_tool> [forced_jdk]
+# Usage: build_project_with_timeout <project_key> <build_dir> <build_tool> [jdk_hint]
 build_project_with_timeout() {
   local key="$1"
   local build_dir="$2"
   local build_tool="$3"
-  local forced_jdk="${4:-}"
+  local jdk_hint="${4:-}"
   
   # Note: Timeout is applied per-attempt in maven_build/gradle_build via run_logged
   # This wrapper exists for future timeout-at-project-level if needed
-  build_project "$key" "$build_dir" "$build_tool" "$forced_jdk"
+  build_project "$key" "$build_dir" "$build_tool" "$jdk_hint"
 }
 
 # ============================================================================

@@ -7,16 +7,6 @@ on:
         description: 'Force reprocess all repos (ignore previous success)'
         type: boolean
         default: false
-      jdk:
-        description: 'Force specific JDK version'
-        type: choice
-        options:
-          - 'auto'
-          - '21'
-          - '17'
-          - '11'
-          - '8'
-        default: 'auto'
       cleanup:
         description: 'Remove cloned repos after successful scan'
         type: boolean
@@ -97,9 +87,6 @@ jobs:
 
           if [ "${{ inputs.force || 'false' }}" = "true" ]; then
             CMD="$CMD --force"
-          fi
-          if [ "${{ inputs.jdk || 'auto' }}" != "auto" ]; then
-            CMD="$CMD --jdk ${{ inputs.jdk }}"
           fi
           if [ "${{ inputs.cleanup || 'true' }}" = "true" ]; then
             CMD="$CMD --cleanup"

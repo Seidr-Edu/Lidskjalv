@@ -1,5 +1,3 @@
-https://github.com/TheAlgorithms/Java.git
-https://github.com/conductor-oss/conductor.git
-https://github.com/apache/incubator-seata.git
-https://github.com/CodePhiliaX/Chat2DB.git
-https://github.com/google/gson.git
+https://github.com/Netflix/zuul.git
+https://github.com/redis/jedis.git
+https://github.com/Netflix/eureka.git

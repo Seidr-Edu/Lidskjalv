@@ -3,3 +3,4 @@ _work/
 logs/
 state/
 claude.md
+.github/copilot-instructions.md

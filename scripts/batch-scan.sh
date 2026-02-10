@@ -214,6 +214,11 @@ process_repo() {
     build_dir="${repo_dir}/${build_subdir}"
   fi
   
+  # Check if this is an Android project
+  if is_android_project "$build_dir"; then
+    log_info "Detected Android project (may require special handling)"
+  fi
+  
   # Use cached successful build version if available, otherwise fall back to hints
   local effective_jdk="${cached_jdk:-$jdk_hint}"
   if [[ -n "$cached_jdk" ]]; then

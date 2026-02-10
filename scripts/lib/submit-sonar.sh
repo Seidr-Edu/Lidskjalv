@@ -118,6 +118,15 @@ submit_to_sonar() {
     return 1
   fi
   
+  # Record analysis method if available
+  if [[ -f "${build_dir}/.sonar-analysis-method" ]]; then
+    local method
+    method="$(cat "${build_dir}/.sonar-analysis-method")"
+    log_info "Analysis completed using method: $method"
+    # Clean up marker file
+    rm -f "${build_dir}/.sonar-analysis-method"
+  fi
+  
   # Extract task ID from log if possible
   SONAR_TASK_ID="$(sed -n 's/.*task?id=\([A-Za-z0-9_-]*\).*/\1/p' "$log_file" 2>/dev/null | tail -1 || echo "")"
   

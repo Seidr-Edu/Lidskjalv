@@ -167,7 +167,10 @@ BUILD_DIR="$REPO_DIR"
 if [[ -n "$BUILD_SUBDIR" ]]; then
   BUILD_DIR="${REPO_DIR}/${BUILD_SUBDIR}"
 fi
-
+# Check if this is an Android project
+if is_android_project "$BUILD_DIR"; then
+  log_info "Detected Android project (may require special handling)"
+fi
 # ---- BUILD ----
 state_set_status "$PROJECT_KEY" "building"
 state_increment_attempts "$PROJECT_KEY"

@@ -263,6 +263,15 @@ state_set_sonar_task() {
   state_set "$key" "sonar_task_id" "$task_id"
 }
 
+# Set analysis method used (GRADLE or CLI)
+# Usage: state_set_analysis_method <project_key> <method>
+state_set_analysis_method() {
+  local key="$1"
+  local method="$2"
+  
+  state_set "$key" "analysis_method" "$method"
+}
+
 # Set clone timestamp (when repo was last cloned or fetched)
 # Usage: state_set_clone_timestamp <project_key>
 state_set_clone_timestamp() {

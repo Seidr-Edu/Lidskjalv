@@ -247,3 +247,34 @@ detect_java_version() {
   
   echo "$version"
 }
+
+# ============================================================================
+# Android project detection
+# ============================================================================
+
+# Check if a project is an Android project
+# Usage: is_android_project <build_dir>
+# Returns: 0 if Android, 1 if not
+is_android_project() {
+  local build_dir="$1"
+  
+  # Check for Android Gradle Plugin in build files
+  if [[ -f "${build_dir}/build.gradle" ]]; then
+    if grep -qE "com\.android\.(application|library|test|dynamic-feature)" "${build_dir}/build.gradle" 2>/dev/null; then
+      return 0
+    fi
+  fi
+  
+  if [[ -f "${build_dir}/build.gradle.kts" ]]; then
+    if grep -qE "com\.android\.(application|library|test|dynamic-feature)" "${build_dir}/build.gradle.kts" 2>/dev/null; then
+      return 0
+    fi
+  fi
+  
+  # Check for AndroidManifest.xml
+  if [[ -f "${build_dir}/src/main/AndroidManifest.xml" ]] || [[ -f "${build_dir}/AndroidManifest.xml" ]]; then
+    return 0
+  fi
+  
+  return 1
+}

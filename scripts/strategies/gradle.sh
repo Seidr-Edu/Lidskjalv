@@ -10,9 +10,9 @@
 # Strategies are tried in order until one succeeds
 
 GRADLE_STRATEGIES=(
-  # Modern JDKs with test skipping
-  "21|build -x test -x check -x integrationTest"
-  "17|build -x test -x check -x integrationTest"
+  # Modern JDKs with test skipping (no -x integrationTest: Gradle 8.9+ fails on non-existent tasks)
+  "21|build -x test -x check"
+  "17|build -x test -x check"
   
   # Try just assemble (compile without tests)
   "21|assemble"
@@ -87,15 +87,17 @@ gradle_sonar() {
   local sonar_args="-Dsonar.host.url=$SONAR_HOST_URL -Dsonar.token=$SONAR_TOKEN -Dsonar.projectKey=$project_key -Dsonar.organization=$SONAR_ORGANIZATION -Dsonar.gradle.skipCompile=true"
   
   # Detect Gradle version for SonarQube plugin compatibility
-  # The compatibility issue is between SonarQube plugin and Gradle version, not JDK version
   local gradle_major_version=8
+  local gradle_full_version="unknown"
   if [[ -f "${build_dir}/gradle/wrapper/gradle-wrapper.properties" ]]; then
     local gradle_dist_url=$(grep -E "distributionUrl" "${build_dir}/gradle/wrapper/gradle-wrapper.properties" 2>/dev/null | cut -d'=' -f2)
     if [[ -n "$gradle_dist_url" ]]; then
-      # Extract version like "8.14.3" or "9.2.1" from URL
-      gradle_major_version=$(echo "$gradle_dist_url" | grep -oE '[0-9]+\.[0-9]+' | head -1 | cut -d'.' -f1)
+      gradle_full_version=$(echo "$gradle_dist_url" | grep -oE '[0-9]+\.[0-9]+\.?[0-9]*' | head -1)
+      gradle_major_version=$(echo "$gradle_full_version" | cut -d'.' -f1)
     fi
   fi
+  
+  log_info "Detected Gradle version: ${gradle_full_version} (major: ${gradle_major_version})"
   
   # Select SonarQube Gradle plugin version based on Gradle version
   # Reference: https://docs.sonarsource.com/sonarqube/latest/analyzing-source-code/scanners/sonarscanner-for-gradle/#requirements
@@ -111,27 +113,15 @@ gradle_sonar() {
     sonar_plugin_version="5.1.0.4882"
   fi
   
-  # Check if project has sonarqube plugin configured
+  log_info "Selected SonarQube plugin version: ${sonar_plugin_version} for Gradle ${gradle_major_version}.x"
+  
   if grep -qE "sonarqube|org.sonarqube" build.gradle* 2>/dev/null; then
-    # Use project's sonar task (sonarqube is deprecated)
-    # shellcheck disable=SC2086
+    log_info "Project has SonarQube plugin configured, using 'sonar' task"
     run_logged "$log_file" $gradle_cmd sonar $sonar_args -x test || exit_code=$?
   else
-    # Fall back to sonar-scanner CLI if available
-    if command -v sonar-scanner &>/dev/null; then
-      run_logged "$log_file" sonar-scanner \
-        -Dsonar.host.url="$SONAR_HOST_URL" \
-        -Dsonar.token="$SONAR_TOKEN" \
-        -Dsonar.projectKey="$project_key" \
-        -Dsonar.organization="$SONAR_ORGANIZATION" \
-        -Dsonar.projectBaseDir="$build_dir" \
-        -Dsonar.sources=src/main \
-        -Dsonar.java.binaries=build/classes || exit_code=$?
-    else
-      # Try adding sonarqube plugin dynamically via init script
-      # Plugin version selected based on Java version (see above)
-      local init_script="${build_dir}/sonar-init.gradle"
-      cat > "$init_script" << GRADLE_INIT
+    log_info "No SonarQube plugin found, injecting via init script"
+    local init_script="${build_dir}/sonar-init.gradle"
+    cat > "$init_script" << GRADLE_INIT
 initscript {
     repositories {
         maven { url = uri("https://plugins.gradle.org/m2/") }
@@ -144,12 +134,93 @@ allprojects {
     apply plugin: org.sonarqube.gradle.SonarQubePlugin
 }
 GRADLE_INIT
-      
-      # shellcheck disable=SC2086
-      run_logged "$log_file" $gradle_cmd --init-script "$init_script" sonar $sonar_args -x test || exit_code=$?
-      
-      rm -f "$init_script"
+    
+    run_logged "$log_file" $gradle_cmd --init-script "$init_script" sonar $sonar_args -x test || exit_code=$?
+    
+    rm -f "$init_script"
+  fi
+  
+  if [[ $exit_code -ne 0 ]]; then
+    log_warn "Gradle-based SonarQube analysis failed (exit code: $exit_code)"
+    
+    if grep -q "com/android/build/gradle" "$log_file" 2>/dev/null; then
+      log_warn "Detected Android Gradle Plugin incompatibility, trying sonar-scanner CLI fallback"
     fi
+    
+    if command -v sonar-scanner &>/dev/null; then
+      log_info "Falling back to sonar-scanner CLI"
+      
+      local source_dirs=""
+      local binary_dirs=""
+      
+      while IFS= read -r src_dir; do
+        if [[ -n "$source_dirs" ]]; then
+          source_dirs="${source_dirs},"
+        fi
+        local rel_path="${src_dir#$build_dir/}"
+        source_dirs="${source_dirs}${rel_path}"
+      done < <(find "$build_dir" -type d -path "*/src/main/java" 2>/dev/null)
+      
+      if [[ -z "$source_dirs" ]]; then
+        while IFS= read -r src_dir; do
+          if [[ -n "$source_dirs" ]]; then
+            source_dirs="${source_dirs},"
+          fi
+          local rel_path="${src_dir#$build_dir/}"
+          source_dirs="${source_dirs}${rel_path}"
+        done < <(find "$build_dir" -type d -name "src" -maxdepth 3 2>/dev/null)
+      fi
+      
+      while IFS= read -r class_dir; do
+        if [[ -n "$binary_dirs" ]]; then
+          binary_dirs="${binary_dirs},"
+        fi
+        local rel_path="${class_dir#$build_dir/}"
+        binary_dirs="${binary_dirs}${rel_path}"
+      done < <(find "$build_dir" -type d \( -path "*/build/*/classes" -o -path "*/build/classes" \) 2>/dev/null)
+      
+      if [[ -z "$source_dirs" ]]; then
+        source_dirs="src/main/java"
+        log_warn "No source directories auto-detected, using default: $source_dirs"
+      else
+        log_info "Auto-detected source directories: $source_dirs"
+      fi
+      
+      if [[ -n "$binary_dirs" ]]; then
+        log_info "Auto-detected binary directories: $binary_dirs"
+      else
+        log_warn "No compiled classes found - analysis will run without bytecode (reduced rule coverage)"
+      fi
+      
+      # Build sonar-scanner command with optional binaries
+      local sonar_cmd=(
+        sonar-scanner
+        -Dsonar.host.url="$SONAR_HOST_URL"
+        -Dsonar.token="$SONAR_TOKEN"
+        -Dsonar.projectKey="$project_key"
+        -Dsonar.organization="$SONAR_ORGANIZATION"
+        -Dsonar.projectBaseDir="$build_dir"
+        -Dsonar.sources="$source_dirs"
+      )
+      
+      # Only add binaries parameter if we found compiled classes
+      if [[ -n "$binary_dirs" ]]; then
+        sonar_cmd+=(-Dsonar.java.binaries="$binary_dirs")
+      fi
+      
+      run_logged "$log_file" "${sonar_cmd[@]}" || exit_code=$?
+      
+      if [[ $exit_code -eq 0 ]]; then
+        log_success "SonarQube analysis succeeded via CLI fallback"
+        echo "CLI" > "${build_dir}/.sonar-analysis-method"
+      fi
+    else
+      log_error "sonar-scanner CLI not available for fallback"
+      log_error "Install with: brew install sonar-scanner"
+      log_error "Or run this in CI where sonar-scanner is pre-installed"
+    fi
+  else
+    echo "GRADLE" > "${build_dir}/.sonar-analysis-method"
   fi
   
   popd >/dev/null
@@ -162,7 +233,12 @@ GRADLE_INIT
 parse_gradle_error() {
   local log_file="$1"
   
-  if grep -q "Unsupported class file major version" "$log_file" 2>/dev/null; then
+  if grep -q "SDK location not found" "$log_file" 2>/dev/null; then
+  elif grep -q "com/android/build/gradle" "$log_file" 2>/dev/null; then
+    echo "android_plugin_incompatibility"
+  elif grep -q "Task .* not found in root project" "$log_file" 2>/dev/null; then
+    echo "task_not_found"
+  elif grep -q "Unsupported class file major version" "$log_file" 2>/dev/null; then
     echo "jdk_mismatch"
   elif grep -qE "Could not determine java version|UnsupportedClassVersionError" "$log_file" 2>/dev/null; then
     echo "jdk_mismatch"
@@ -186,15 +262,22 @@ parse_gradle_error() {
 extract_gradle_error_message() {
   local log_file="$1"
   
-  # Try to find the most relevant error line
   local error_line
-  error_line="$(grep -m1 -A2 "FAILURE:" "$log_file" 2>/dev/null | tail -1 | head -c 200)"
   
-  if [[ -z "$error_line" ]]; then
+  if grep -q "SDK location not found" "$log_file" 2>/dev/null; then
+    error_line="Android SDK not found (set ANDROID_HOME or sdk.dir in local.properties)"
+  elif grep -q "Task .* not found in root project" "$log_file" 2>/dev/null; then
+    error_line="$(grep -m1 "Task .* not found" "$log_file" 2>/dev/null | head -c 200)"
+  elif grep -q "What went wrong:" "$log_file" 2>/dev/null; then
+    error_line="$(grep -A2 "What went wrong:" "$log_file" 2>/dev/null | tail -1 | sed 's/^[[:space:]]*//' | head -c 200)"
+  elif grep -q "FAILURE:" "$log_file" 2>/dev/null; then
+    error_line="$(grep -m1 -A2 "FAILURE:" "$log_file" 2>/dev/null | tail -1 | sed 's/^[[:space:]]*//' | head -c 200)"
+  # Try generic error markers
+  elif grep -qE "^> .*" "$log_file" 2>/dev/null; then
     error_line="$(grep -m1 -E "^> .*" "$log_file" 2>/dev/null | head -c 200)"
   fi
   
-  if [[ -z "$error_line" ]]; then
+  if [[ -z "$error_line" || "$error_line" =~ ^[[:space:]]*$ ]]; then
     error_line="Build failed (see log for details)"
   fi
   

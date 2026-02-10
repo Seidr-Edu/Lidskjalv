@@ -237,6 +237,9 @@ sonar_create_project() {
   
   require_env "SONAR_HOST_URL"
   require_env "SONAR_TOKEN"
+  if [[ "$SONAR_HOST_URL" == *"sonarcloud.io"* ]]; then
+    require_env "SONAR_ORGANIZATION" "Required for SonarCloud project creation"
+  fi
   
   # Check if already exists
   if sonar_project_exists "$key"; then
@@ -245,11 +248,18 @@ sonar_create_project() {
   fi
   
   log_info "Creating SonarQube project: $key ($name)"
-  
+
+  local -a create_args=(
+    --data-urlencode "project=${key}"
+    --data-urlencode "name=${name}"
+  )
+  if [[ -n "${SONAR_ORGANIZATION:-}" ]]; then
+    create_args+=(--data-urlencode "organization=${SONAR_ORGANIZATION}")
+  fi
+
   curl -sf -u "${SONAR_TOKEN}:" \
     -X POST "${SONAR_HOST_URL}/api/projects/create" \
-    --data-urlencode "project=${key}" \
-    --data-urlencode "name=${name}" \
+    "${create_args[@]}" \
     >/dev/null 2>&1 || true
   
   return 0

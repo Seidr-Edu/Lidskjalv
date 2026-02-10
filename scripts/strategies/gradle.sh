@@ -59,10 +59,20 @@ gradle_build() {
   # Save and restore working directory
   pushd "$build_dir" >/dev/null || return 1
   
-  # Run the build
+  # Run the build.
+  # Prefer --stacktrace for standard Gradle, but retry without it for custom
+  # wrapper scripts that only accept task names.
   # shellcheck disable=SC2086
   local exit_code=0
   run_logged "$log_file" $gradle_cmd $strategy_args --stacktrace || exit_code=$?
+
+  if [[ $exit_code -ne 0 ]] && [[ "$gradle_cmd" == "./gradlew" ]]; then
+    if grep -q "Unsupported task: --stacktrace" "$log_file" 2>/dev/null; then
+      log_warn "Custom gradlew detected (no --stacktrace support), retrying without --stacktrace"
+      exit_code=0
+      run_logged "$log_file" $gradle_cmd $strategy_args || exit_code=$?
+    fi
+  fi
   
   popd >/dev/null
   return $exit_code
@@ -234,6 +244,7 @@ parse_gradle_error() {
   local log_file="$1"
   
   if grep -q "SDK location not found" "$log_file" 2>/dev/null; then
+    echo "sdk_not_found"
   elif grep -q "com/android/build/gradle" "$log_file" 2>/dev/null; then
     echo "android_plugin_incompatibility"
   elif grep -q "Task .* not found in root project" "$log_file" 2>/dev/null; then

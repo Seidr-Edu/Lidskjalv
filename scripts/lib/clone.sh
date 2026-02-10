@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# clone.sh - Repository cloning module
-# Handles cloning repositories with logging and idempotency
+# clone.sh - Repository source preparation module
+# Handles URL cloning and local-path source validation
 
 # Ensure common.sh and state.sh are sourced
 if [[ -z "${WORK_DIR:-}" ]]; then
@@ -70,6 +70,56 @@ clone_repo() {
   fi
 }
 
+# Prepare repository source and return usable repository path.
+# Usage: prepare_repo_source <source_type> <source_ref> <project_key> [base_dir]
+# Returns: repository path on stdout when successful
+prepare_repo_source() {
+  local source_type="$1"
+  local source_ref="$2"
+  local key="$3"
+  local base_dir="${4:-$(pwd)}"
+
+  case "$source_type" in
+    url)
+      if ! clone_repo "$source_ref" "$key"; then
+        return 1
+      fi
+      clone_get_path "$key"
+      ;;
+    path)
+      local resolved_path
+      resolved_path="$(resolve_repo_path "$source_ref" "$base_dir")"
+
+      local log_dir="${LOG_DIR}/${key}"
+      local log_file="${log_dir}/clone.log"
+      ensure_dir "$log_dir"
+
+      {
+        echo "========================================"
+        echo "Local Source Preparation"
+        echo "Timestamp: $(timestamp)"
+        echo "Input path: $source_ref"
+        echo "Resolved path: $resolved_path"
+        echo "========================================"
+      } > "$log_file"
+
+      if [[ ! -d "$resolved_path" ]]; then
+        echo "ERROR: Local path does not exist: $resolved_path" >> "$log_file"
+        log_error "Local repository path not found: $resolved_path"
+        return 1
+      fi
+
+      log_info "Using local repository path: $resolved_path"
+      state_set_clone_timestamp "$key"
+      echo "$resolved_path"
+      ;;
+    *)
+      log_error "Unsupported source type: $source_type"
+      return 1
+      ;;
+  esac
+}
+
 # Remove a cloned repository
 # Usage: clone_cleanup <project_key>
 clone_cleanup() {
@@ -79,6 +129,18 @@ clone_cleanup() {
   if [[ -d "$target_dir" ]]; then
     log_info "Cleaning up: $target_dir"
     rm -rf "$target_dir"
+  fi
+}
+
+# Cleanup prepared source when applicable.
+# URL sources are deleted from WORK_DIR, local path sources are never removed.
+# Usage: source_cleanup <source_type> <project_key>
+source_cleanup() {
+  local source_type="$1"
+  local key="$2"
+
+  if [[ "$source_type" == "url" ]]; then
+    clone_cleanup "$key"
   fi
 }
 

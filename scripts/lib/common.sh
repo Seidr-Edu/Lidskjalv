@@ -115,26 +115,210 @@ get_project_root() {
 }
 
 # ============================================================================
-# Project key derivation
+# Repository source helpers
 # ============================================================================
+
+# Trim leading/trailing whitespace
+trim_whitespace() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  echo "$value"
+}
+
+# Replace characters unsupported by SonarQube project keys
+sanitize_project_key() {
+  local value="$1"
+  echo "$value" | sed -E 's#[^a-zA-Z0-9_.-]#_#g'
+}
+
+# Convert git remote (https/ssh/scp-like) to org/repo path
+# Example: git@github.com:org/repo.git -> org/repo
+_remote_to_path() {
+  local remote="$1"
+  local normalized="$remote"
+
+  normalized="${normalized#ssh://}"
+  normalized="${normalized#http://}"
+  normalized="${normalized#https://}"
+  normalized="${normalized#git://}"
+  normalized="${normalized#git@}"
+  normalized="${normalized#*@}"
+
+  # Convert scp-like syntax host:path -> host/path
+  normalized="$(echo "$normalized" | sed -E 's#^([^/]+):#\1/#')"
+  echo "${normalized#*/}"
+}
+
+# Short deterministic hash used for local path fallback keys
+_short_hash() {
+  local value="$1"
+  if command -v shasum &>/dev/null; then
+    printf '%s' "$value" | shasum -a 1 | awk '{print substr($1,1,8)}'
+  elif command -v sha1sum &>/dev/null; then
+    printf '%s' "$value" | sha1sum | awk '{print substr($1,1,8)}'
+  else
+    printf '%s' "$value" | cksum | awk '{print $1}'
+  fi
+}
+
+# Resolve a path against a base directory.
+# If the directory exists, returns canonical path.
+resolve_repo_path() {
+  local path_ref="$1"
+  local base_dir="${2:-$(pwd)}"
+  local candidate="$path_ref"
+
+  if [[ ! "$candidate" = /* ]]; then
+    candidate="${base_dir}/${candidate}"
+  fi
+
+  if [[ -d "$candidate" ]]; then
+    (cd "$candidate" >/dev/null 2>&1 && pwd -P) || echo "$candidate"
+  else
+    # Best-effort absolute path even when it does not exist.
+    local parent_dir
+    parent_dir="$(dirname "$candidate")"
+    if [[ -d "$parent_dir" ]]; then
+      echo "$(cd "$parent_dir" >/dev/null 2>&1 && pwd -P)/$(basename "$candidate")"
+    else
+      echo "$candidate"
+    fi
+  fi
+}
+
+# Validate a repository URL
+# Usage: is_valid_repo_url <url>
+# Returns: 0 if valid, 1 if invalid
+is_valid_repo_url() {
+  local url="$1"
+
+  # Must start with https:// or http://
+  if [[ ! "$url" =~ ^https?:// ]]; then
+    return 1
+  fi
+
+  # Must contain at least one path component after the host
+  if [[ ! "$url" =~ ^https?://[^/]+/.+ ]]; then
+    return 1
+  fi
+
+  return 0
+}
+
+# Parse a source entry. Supports:
+#   - plain URL (treated as url)
+#   - url:<url>
+#   - path:<path>
+# Output format: source_type|source_ref
+parse_repo_source() {
+  local raw_entry="$1"
+  local entry
+  entry="$(trim_whitespace "$raw_entry")"
+
+  if [[ -z "$entry" ]]; then
+    return 1
+  fi
+
+  if [[ "$entry" == url:* ]]; then
+    local url_ref
+    url_ref="$(trim_whitespace "${entry#url:}")"
+    if ! is_valid_repo_url "$url_ref"; then
+      return 1
+    fi
+    echo "url|$url_ref"
+    return 0
+  fi
+
+  if [[ "$entry" == path:* ]]; then
+    local path_ref
+    path_ref="$(trim_whitespace "${entry#path:}")"
+    [[ -n "$path_ref" ]] || return 1
+    echo "path|$path_ref"
+    return 0
+  fi
+
+  if is_valid_repo_url "$entry"; then
+    echo "url|$entry"
+    return 0
+  fi
+
+  return 1
+}
+
+# Normalize source reference to a stable value
+# URLs are unchanged, paths become absolute (resolved against base_dir).
+normalize_source_ref() {
+  local source_type="$1"
+  local source_ref="$2"
+  local base_dir="${3:-$(pwd)}"
+
+  case "$source_type" in
+    url) echo "$source_ref" ;;
+    path) resolve_repo_path "$source_ref" "$base_dir" ;;
+    *) echo "$source_ref" ;;
+  esac
+}
 
 # Derive a project key from a repository URL
 # Example: https://github.com/spring-projects/spring-petclinic.git -> spring-projects_spring-petclinic
 derive_key() {
   local url="$1"
   local path
-  # Remove protocol and host
   path="$(echo "$url" | sed -E 's#https?://[^/]+/##')"
-  
+
   local org repo
   org="$(echo "$path" | cut -d/ -f1)"
   repo="$(echo "$path" | cut -d/ -f2 | sed -E 's#\.git$##')"
-  
-  local key="${org}_${repo}"
-  # Replace illegal characters with underscore
-  key="$(echo "$key" | sed -E 's#[^a-zA-Z0-9_.-]#_#g')"
-  
-  echo "$key"
+
+  sanitize_project_key "${org}_${repo}"
+}
+
+# Try to derive key from git remote URL (supports https/ssh/scp syntax)
+derive_key_from_git_remote() {
+  local remote="$1"
+  local path
+  path="$(_remote_to_path "$remote")"
+
+  local org repo
+  org="$(echo "$path" | cut -d/ -f1)"
+  repo="$(echo "$path" | cut -d/ -f2 | sed -E 's#\.git$##')"
+
+  if [[ -z "$org" || -z "$repo" ]]; then
+    return 1
+  fi
+
+  sanitize_project_key "${org}_${repo}"
+}
+
+# Derive a project key from local path.
+# Priority: git remote origin key -> local_<basename>_<hash>.
+derive_key_from_path() {
+  local path_ref="$1"
+  local abs_path
+  abs_path="$(resolve_repo_path "$path_ref")"
+
+  local remote=""
+  if [[ -d "$abs_path/.git" ]]; then
+    remote="$(git -C "$abs_path" remote get-url origin 2>/dev/null || echo "")"
+  fi
+
+  if [[ -n "$remote" ]]; then
+    local remote_key=""
+    remote_key="$(derive_key_from_git_remote "$remote" 2>/dev/null || true)"
+    if [[ -n "$remote_key" ]]; then
+      echo "$remote_key"
+      return 0
+    fi
+  fi
+
+  local base_name
+  base_name="$(basename "$abs_path")"
+  base_name="$(sanitize_project_key "$base_name")"
+  local hash
+  hash="$(_short_hash "$abs_path")"
+
+  sanitize_project_key "local_${base_name}_${hash}"
 }
 
 # Extract org/repo display name from URL
@@ -143,12 +327,83 @@ derive_display_name() {
   local url="$1"
   local path
   path="$(echo "$url" | sed -E 's#https?://[^/]+/##')"
-  
+
   local org repo
   org="$(echo "$path" | cut -d/ -f1)"
   repo="$(echo "$path" | cut -d/ -f2 | sed -E 's#\.git$##')"
-  
+
   echo "${org}/${repo}"
+}
+
+# Derive display name from local path.
+# Uses git remote org/repo if available, else directory name.
+derive_display_name_from_path() {
+  local path_ref="$1"
+  local abs_path
+  abs_path="$(resolve_repo_path "$path_ref")"
+
+  local remote=""
+  if [[ -d "$abs_path/.git" ]]; then
+    remote="$(git -C "$abs_path" remote get-url origin 2>/dev/null || echo "")"
+  fi
+
+  if [[ -n "$remote" ]]; then
+    local remote_path
+    remote_path="$(_remote_to_path "$remote")"
+    local org repo
+    org="$(echo "$remote_path" | cut -d/ -f1)"
+    repo="$(echo "$remote_path" | cut -d/ -f2 | sed -E 's#\.git$##')"
+    if [[ -n "$org" && -n "$repo" ]]; then
+      echo "${org}/${repo}"
+      return 0
+    fi
+  fi
+
+  basename "$abs_path"
+}
+
+# Derive project key for any source.
+# Usage: derive_source_key <source_type> <source_ref> [explicit_key]
+derive_source_key() {
+  local source_type="$1"
+  local source_ref="$2"
+  local explicit_key="${3:-}"
+
+  if [[ -n "$explicit_key" ]]; then
+    sanitize_project_key "$explicit_key"
+    return 0
+  fi
+
+  case "$source_type" in
+    url) derive_key "$source_ref" ;;
+    path) derive_key_from_path "$source_ref" ;;
+    *)
+      log_error "Unknown source type for key derivation: $source_type"
+      return 1
+      ;;
+  esac
+}
+
+# Derive display name for any source.
+# Usage: derive_source_display_name <source_type> <source_ref> [explicit_name]
+derive_source_display_name() {
+  local source_type="$1"
+  local source_ref="$2"
+  local explicit_name="${3:-}"
+
+  if [[ -n "$explicit_name" ]]; then
+    echo "$explicit_name"
+    return 0
+  fi
+
+  case "$source_type" in
+    url) derive_display_name "$source_ref" ;;
+    path) derive_display_name_from_path "$source_ref" ;;
+    *)
+      log_error "Unknown source type for display name derivation: $source_type"
+      return 1
+      ;;
+  esac
 }
 
 # ============================================================================
@@ -252,71 +507,73 @@ require_env() {
 # repos.txt parsing
 # ============================================================================
 
-# Validate a repository URL
-# Usage: is_valid_repo_url <url>
-# Returns: 0 if valid, 1 if invalid
-is_valid_repo_url() {
-  local url="$1"
-  
-  # Must start with https:// or http://
-  if [[ ! "$url" =~ ^https?:// ]]; then
-    return 1
+# Parse metadata from comment section.
+# Output format: jdk|subdir|key|name
+parse_repo_metadata() {
+  local comment="$1"
+  local jdk=""
+  local subdir=""
+  local key=""
+  local name=""
+
+  if [[ "$comment" =~ (^|[[:space:],])jdk=([^,[:space:]]+) ]]; then
+    jdk="$(trim_whitespace "${BASH_REMATCH[2]}")"
   fi
-  
-  # Must contain at least one path component after the host
-  if [[ ! "$url" =~ ^https?://[^/]+/.+ ]]; then
-    return 1
+  if [[ "$comment" =~ (^|[[:space:],])subdir=([^,[:space:]]+) ]]; then
+    subdir="$(trim_whitespace "${BASH_REMATCH[2]}")"
   fi
-  
-  return 0
+  if [[ "$comment" =~ (^|[[:space:],])key=([^,[:space:]]+) ]]; then
+    key="$(trim_whitespace "${BASH_REMATCH[2]}")"
+  fi
+  if [[ "$comment" =~ (^|[[:space:],])name=([^,]+) ]]; then
+    name="$(trim_whitespace "${BASH_REMATCH[2]}")"
+  fi
+
+  echo "${jdk}|${subdir}|${key}|${name}"
 }
 
-# Parse repos.txt and output URLs with optional metadata
-# Format: Each line outputs: URL|jdk|subdir
-# Example: https://github.com/org/repo.git|17|backend
+# Parse repos.txt with optional metadata and mixed source types.
+# Output format: source_type|source_ref|jdk|subdir|key|name
 parse_repos_file() {
   local repos_file="${1:-repos.txt}"
-  
+
   if [[ ! -f "$repos_file" ]]; then
     log_error "Repository file not found: $repos_file"
     exit 1
   fi
-  
+
   while IFS= read -r line || [[ -n "$line" ]]; do
     # Skip empty lines
     [[ -z "$line" ]] && continue
     # Skip comment lines (starting with #)
     [[ "$line" =~ ^[[:space:]]*# ]] && continue
-    
-    # Extract URL (everything before # or end of line)
-    local url
-    url="$(echo "$line" | sed -E 's/#.*//' | xargs)"
-    [[ -z "$url" ]] && continue
-    
-    # Validate URL
-    if ! is_valid_repo_url "$url"; then
-      log_warn "Skipping invalid URL: $url"
+
+    # Extract source entry (everything before # or end of line)
+    local entry
+    entry="$(trim_whitespace "$(echo "$line" | sed -E 's/#.*//')")"
+    [[ -z "$entry" ]] && continue
+
+    local parsed_source
+    parsed_source="$(parse_repo_source "$entry" 2>/dev/null || true)"
+    if [[ -z "$parsed_source" ]]; then
+      log_warn "Skipping invalid repo entry: $entry"
       continue
     fi
-    
+
+    local source_type source_ref
+    IFS='|' read -r source_type source_ref <<< "$parsed_source"
+
     # Extract metadata from comment if present
-    local jdk="" subdir=""
-    if [[ "$line" =~ \# ]]; then
+    local jdk="" subdir="" key="" name=""
+    if [[ "$line" == *"#"* ]]; then
       local comment
-      comment="$(echo "$line" | sed -E 's/[^#]*#//')"
-      
-      # Parse jdk=XX
-      if [[ "$comment" =~ jdk=([0-9]+) ]]; then
-        jdk="${BASH_REMATCH[1]}"
-      fi
-      
-      # Parse subdir=path
-      if [[ "$comment" =~ subdir=([^,[:space:]]+) ]]; then
-        subdir="${BASH_REMATCH[1]}"
-      fi
+      comment="$(trim_whitespace "${line#*#}")"
+      local parsed_meta
+      parsed_meta="$(parse_repo_metadata "$comment")"
+      IFS='|' read -r jdk subdir key name <<< "$parsed_meta"
     fi
-    
-    echo "${url}|${jdk}|${subdir}"
+
+    echo "${source_type}|${source_ref}|${jdk}|${subdir}|${key}|${name}"
   done < "$repos_file"
 }
 

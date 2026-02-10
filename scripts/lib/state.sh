@@ -111,11 +111,28 @@ state_set_num() {
   state_write "$new_state"
 }
 
-# Initialize a repository entry with URL
-# Usage: state_init_repo <project_key> <url>
+# Initialize a repository entry with source information
+# Usage (legacy): state_init_repo <project_key> <url>
+# Usage: state_init_repo <project_key> <source_type> <source_ref>
 state_init_repo() {
   local key="$1"
-  local url="$2"
+  local source_type="url"
+  local source_ref=""
+
+  if [[ $# -eq 2 ]]; then
+    # Backward compatibility: second arg is URL.
+    source_ref="$2"
+  else
+    source_type="$2"
+    source_ref="$3"
+  fi
+
+  local url=""
+  if [[ "$source_type" == "url" ]]; then
+    url="$source_ref"
+  else
+    url="path:${source_ref}"
+  fi
   
   local current_state
   current_state="$(state_read)"
@@ -125,14 +142,31 @@ state_init_repo() {
   exists="$(echo "$current_state" | jq -r ".repositories[\"$key\"] != null")"
   
   if [[ "$exists" == "true" ]]; then
-    # Just update the URL in case it changed
-    state_set "$key" "url" "$url"
+    # Update source metadata in case it changed
+    local new_state
+    new_state="$(echo "$current_state" | jq \
+      --arg key "$key" \
+      --arg url "$url" \
+      --arg source_type "$source_type" \
+      --arg source_ref "$source_ref" '
+      .repositories[$key].url = $url |
+      .repositories[$key].source_type = $source_type |
+      .repositories[$key].source_ref = $source_ref
+    ')"
+    state_write "$new_state"
   else
     # Create new entry
     local new_state
-    new_state="$(echo "$current_state" | jq --arg key "$key" --arg url "$url" --arg ts "$(timestamp)" '
+    new_state="$(echo "$current_state" | jq \
+      --arg key "$key" \
+      --arg url "$url" \
+      --arg source_type "$source_type" \
+      --arg source_ref "$source_ref" \
+      --arg ts "$(timestamp)" '
       .repositories[$key] = {
         "url": $url,
+        "source_type": $source_type,
+        "source_ref": $source_ref,
         "status": "pending",
         "build_tool": null,
         "jdk_version": null,

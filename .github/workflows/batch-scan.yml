@@ -15,6 +15,10 @@ on:
         description: 'Stop processing after N minutes (default: 350, max: 360)'
         type: number
         default: 350
+      repos_root:
+        description: 'Base folder for resolving path:<...> entries in repos.txt'
+        type: string
+        default: 'repos'
 
 jobs:
   scan:
@@ -66,14 +70,81 @@ jobs:
         run: |
           echo "::add-mask::${{ secrets.SONAR_TOKEN }}"
 
-      - name: Create projects in SonarCloud
+      - name: Validate local path entries
+        run: |
+          REPOS_ROOT="${{ github.workspace }}/${{ inputs.repos_root || 'repos' }}"
+
+          if [ ! -f repos.txt ]; then
+            echo "::error::repos.txt not found in workspace"
+            exit 1
+          fi
+
+          HAS_PATHS=false
+          while IFS= read -r raw_line; do
+            line="$(echo "$raw_line" | sed -E 's/#.*//' | xargs)"
+            [ -z "$line" ] && continue
+            case "$line" in
+              path:*)
+                HAS_PATHS=true
+                ;;
+            esac
+          done < repos.txt
+
+          if [ "$HAS_PATHS" != "true" ]; then
+            echo "No path: entries detected in repos.txt"
+            exit 0
+          fi
+
+          echo "Detected path: entries. Resolving from repos root: $REPOS_ROOT"
+          if [ ! -d "$REPOS_ROOT" ]; then
+            echo "::error::repos_root does not exist: $REPOS_ROOT"
+            exit 1
+          fi
+
+          MISSING=0
+          while IFS= read -r raw_line; do
+            line="$(echo "$raw_line" | sed -E 's/#.*//' | xargs)"
+            [ -z "$line" ] && continue
+            case "$line" in
+              path:*)
+                path_ref="${line#path:}"
+                path_ref="$(echo "$path_ref" | xargs)"
+                if [ -z "$path_ref" ]; then
+                  echo "::error::Invalid empty path entry: $raw_line"
+                  MISSING=1
+                  continue
+                fi
+
+                if [[ "$path_ref" = /* ]]; then
+                  resolved="$path_ref"
+                else
+                  resolved="$REPOS_ROOT/$path_ref"
+                fi
+
+                if [ ! -d "$resolved" ]; then
+                  echo "::error::Missing local repository path: $resolved (from: $line)"
+                  MISSING=1
+                fi
+                ;;
+            esac
+          done < repos.txt
+
+          if [ "$MISSING" -ne 0 ]; then
+            exit 1
+          fi
+
+          echo "All path entries validated successfully."
+
+      - name: Pre-create projects in SonarCloud (optional)
+        continue-on-error: true
         env:
           SONAR_HOST_URL: https://sonarcloud.io
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
         run: |
           chmod +x scripts/create-projects.sh
-          ./scripts/create-projects.sh
+          ROOT="${{ github.workspace }}/${{ inputs.repos_root || 'repos' }}"
+          ./scripts/create-projects.sh --repos-root "$ROOT"
 
       - name: Run batch scan
         env:
@@ -83,17 +154,18 @@ jobs:
           WORKFLOW_TIME_LIMIT_MINUTES: ${{ inputs.time_limit_minutes || 350 }}
         run: |
           chmod +x scripts/batch-scan.sh
-          CMD="./scripts/batch-scan.sh"
+          ROOT="${{ github.workspace }}/${{ inputs.repos_root || 'repos' }}"
+          CMD=(./scripts/batch-scan.sh --repos-root "$ROOT")
 
           if [ "${{ inputs.force || 'false' }}" = "true" ]; then
-            CMD="$CMD --force"
+            CMD+=(--force)
           fi
           if [ "${{ inputs.cleanup || 'true' }}" = "true" ]; then
-            CMD="$CMD --cleanup"
+            CMD+=(--cleanup)
           fi
 
-          echo "Running: $CMD"
-          $CMD || true
+          echo "Running: ${CMD[*]}"
+          "${CMD[@]}" || true
 
       - name: Upload scan logs
         uses: actions/upload-artifact@v4

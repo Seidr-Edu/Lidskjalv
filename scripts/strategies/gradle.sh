@@ -95,6 +95,9 @@ gradle_sonar() {
   
   # Common sonar args to skip recompilation (already built) and tests
   local sonar_args="-Dsonar.host.url=$SONAR_HOST_URL -Dsonar.token=$SONAR_TOKEN -Dsonar.projectKey=$project_key -Dsonar.organization=$SONAR_ORGANIZATION -Dsonar.gradle.skipCompile=true"
+  if [[ "${SONAR_SCM_EXCLUSIONS_DISABLED:-}" == "true" ]]; then
+    sonar_args="${sonar_args} -Dsonar.scm.exclusions.disabled=true"
+  fi
   
   # Detect Gradle version for SonarQube plugin compatibility
   local gradle_major_version=8
@@ -216,6 +219,9 @@ GRADLE_INIT
       # Only add binaries parameter if we found compiled classes
       if [[ -n "$binary_dirs" ]]; then
         sonar_cmd+=(-Dsonar.java.binaries="$binary_dirs")
+      fi
+      if [[ "${SONAR_SCM_EXCLUSIONS_DISABLED:-}" == "true" ]]; then
+        sonar_cmd+=(-Dsonar.scm.exclusions.disabled=true)
       fi
       
       run_logged "$log_file" "${sonar_cmd[@]}" || exit_code=$?

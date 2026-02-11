@@ -257,7 +257,15 @@ process_repo() {
     state_set_status "$key" "submitting"
     sonar_create_project "$key" "$display_name"
 
-    if ! submit_to_sonar "$key" "$build_dir" "$build_tool"; then
+    # Local path scans may sit under ignored parent paths (e.g. repos/).
+    # Disable SCM exclusions for those runs to avoid 0-file analyses.
+    local sonar_scm_exclusions_disabled=""
+    if [[ "$source_type" == "path" ]]; then
+      sonar_scm_exclusions_disabled="true"
+      log_info "Path source detected: disabling Sonar SCM exclusions"
+    fi
+
+    if ! SONAR_SCM_EXCLUSIONS_DISABLED="$sonar_scm_exclusions_disabled" submit_to_sonar "$key" "$build_dir" "$build_tool"; then
       state_set_status "$key" "sonar_failed" "sonar_submission_failed" "SonarQube analysis failed"
       return 1
     fi

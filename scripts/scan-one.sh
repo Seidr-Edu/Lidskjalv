@@ -250,7 +250,15 @@ else
   state_set_status "$PROJECT_KEY" "submitting"
   sonar_create_project "$PROJECT_KEY" "$DISPLAY_NAME"
 
-  if ! submit_to_sonar "$PROJECT_KEY" "$BUILD_DIR" "$BUILD_TOOL"; then
+  # Local path scans may live under parent repos that ignore the path (e.g. repos/),
+  # which would otherwise make Sonar index 0 files via SCM exclusions.
+  sonar_scm_exclusions_disabled=""
+  if [[ "$SOURCE_TYPE" == "path" ]]; then
+    sonar_scm_exclusions_disabled="true"
+    log_info "Path source detected: disabling Sonar SCM exclusions"
+  fi
+
+  if ! SONAR_SCM_EXCLUSIONS_DISABLED="$sonar_scm_exclusions_disabled" submit_to_sonar "$PROJECT_KEY" "$BUILD_DIR" "$BUILD_TOOL"; then
     state_set_status "$PROJECT_KEY" "failed" "sonar_submission_failed" "SonarQube analysis failed"
     log_error "SonarQube submission failed"
     log_error "See logs in: ${LOG_DIR}/${PROJECT_KEY}/sonar.log"

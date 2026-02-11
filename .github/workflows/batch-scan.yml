@@ -18,7 +18,7 @@ on:
       repos_root:
         description: 'Base folder for resolving path:<...> entries in repos.txt'
         type: string
-        default: 'repos'
+        default: '.'
 
 jobs:
   scan:
@@ -72,7 +72,7 @@ jobs:
 
       - name: Validate local path entries
         run: |
-          REPOS_ROOT="${{ github.workspace }}/${{ inputs.repos_root || 'repos' }}"
+          REPOS_ROOT="${{ inputs.repos_root || '.' }}"
 
           if [ ! -f repos.txt ]; then
             echo "::error::repos.txt not found in workspace"
@@ -143,7 +143,7 @@ jobs:
           SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
         run: |
           chmod +x scripts/create-projects.sh
-          ROOT="${{ github.workspace }}/${{ inputs.repos_root || 'repos' }}"
+          ROOT="${{ inputs.repos_root || '.' }}"
           ./scripts/create-projects.sh --repos-root "$ROOT"
 
       - name: Run batch scan
@@ -154,7 +154,7 @@ jobs:
           WORKFLOW_TIME_LIMIT_MINUTES: ${{ inputs.time_limit_minutes || 350 }}
         run: |
           chmod +x scripts/batch-scan.sh
-          ROOT="${{ github.workspace }}/${{ inputs.repos_root || 'repos' }}"
+          ROOT="${{ inputs.repos_root || '.' }}"
           CMD=(./scripts/batch-scan.sh --repos-root "$ROOT")
 
           if [ "${{ inputs.force || 'false' }}" = "true" ]; then

@@ -162,6 +162,9 @@ GRADLE_INIT
     
     if command -v sonar-scanner &>/dev/null; then
       log_info "Falling back to sonar-scanner CLI"
+      # Reset exit status before fallback; otherwise a successful fallback can still
+      # return the original Gradle failure code.
+      exit_code=0
       
       local source_dirs=""
       local binary_dirs=""
@@ -229,6 +232,8 @@ GRADLE_INIT
       if [[ $exit_code -eq 0 ]]; then
         log_success "SonarQube analysis succeeded via CLI fallback"
         echo "CLI" > "${build_dir}/.sonar-analysis-method"
+      else
+        log_error "sonar-scanner CLI fallback failed (exit code: $exit_code)"
       fi
     else
       log_error "sonar-scanner CLI not available for fallback"

@@ -2,6 +2,9 @@
 
 Andvari runs a local diagram-to-Java reconstruction pipeline using Codex CLI.
 
+This README assumes commands are run from `tools/andvari/`.
+From monorepo root, use `./andvari-run.sh`.
+
 Input: PlantUML (`.puml`)  
 Output: isolated reconstructed repository, gate logs, and run report
 

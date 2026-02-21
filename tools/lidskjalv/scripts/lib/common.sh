@@ -481,12 +481,24 @@ run_logged() {
 # Load .env file if present
 load_env() {
   local env_file="${1:-.env}"
-  if [[ -f "$env_file" ]]; then
-    set -a
-    # shellcheck source=/dev/null
-    source "$env_file"
-    set +a
+  local candidates=("$env_file")
+
+  if [[ "$env_file" == ".env" ]]; then
+    local project_root
+    project_root="$(get_project_root)"
+    candidates+=("${project_root}/.env" "${project_root}/../../.env")
   fi
+
+  local candidate
+  for candidate in "${candidates[@]}"; do
+    if [[ -f "$candidate" ]]; then
+      set -a
+      # shellcheck source=/dev/null
+      source "$candidate"
+      set +a
+      return 0
+    fi
+  done
 }
 
 # Verify required environment variables are set

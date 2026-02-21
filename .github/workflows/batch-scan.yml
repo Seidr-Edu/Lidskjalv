@@ -32,7 +32,7 @@ jobs:
       - name: Restore scan state from cache
         uses: actions/cache/restore@v5
         with:
-          path: state/scan-state.json
+          path: .data/lidskjalv/state/scan-state.json
           key: scan-state-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
             scan-state-master-
@@ -72,10 +72,11 @@ jobs:
 
       - name: Validate local path entries
         run: |
+          REPOS_FILE="tools/lidskjalv/repos.txt"
           REPOS_ROOT="${{ inputs.repos_root || '.' }}"
 
-          if [ ! -f repos.txt ]; then
-            echo "::error::repos.txt not found in workspace"
+          if [ ! -f "$REPOS_FILE" ]; then
+            echo "::error::${REPOS_FILE} not found in workspace"
             exit 1
           fi
 
@@ -88,7 +89,7 @@ jobs:
                 HAS_PATHS=true
                 ;;
             esac
-          done < repos.txt
+          done < "$REPOS_FILE"
 
           if [ "$HAS_PATHS" != "true" ]; then
             echo "No path: entries detected in repos.txt"
@@ -127,7 +128,7 @@ jobs:
                 fi
                 ;;
             esac
-          done < repos.txt
+          done < "$REPOS_FILE"
 
           if [ "$MISSING" -ne 0 ]; then
             exit 1
@@ -172,7 +173,7 @@ jobs:
         if: always()
         with:
           name: scan-logs
-          path: logs/
+          path: .data/lidskjalv/logs/
           retention-days: 30
 
       - name: Upload scan state
@@ -180,38 +181,39 @@ jobs:
         if: always()
         with:
           name: scan-state
-          path: state/scan-state.json
+          path: .data/lidskjalv/state/scan-state.json
           retention-days: 90
 
       - name: Save scan state to cache
         uses: actions/cache/save@v5
         if: always()
         with:
-          path: state/scan-state.json
+          path: .data/lidskjalv/state/scan-state.json
           key: scan-state-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Display summary
         if: always()
         run: |
+          STATE_FILE=".data/lidskjalv/state/scan-state.json"
           echo "## Scan Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          if [ -f state/scan-state.json ]; then
+          if [ -f "$STATE_FILE" ]; then
             echo "### Repository Status" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "| Repository | Status | Cloned | Scanned | Build |" >> $GITHUB_STEP_SUMMARY
             echo "|------------|--------|--------|---------|-------|" >> $GITHUB_STEP_SUMMARY
             
-            jq -r '.repositories | to_entries[] | "| \(.key) | \(.value.status) | \(.value.clone_timestamp // "N/A") | \(.value.scan_timestamp // "N/A") | \(.value.build_tool // "N/A") \(.value.jdk_version // "") |"' state/scan-state.json >> $GITHUB_STEP_SUMMARY
+            jq -r '.repositories | to_entries[] | "| \(.key) | \(.value.status) | \(.value.clone_timestamp // "N/A") | \(.value.scan_timestamp // "N/A") | \(.value.build_tool // "N/A") \(.value.jdk_version // "") |"' "$STATE_FILE" >> $GITHUB_STEP_SUMMARY
             
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "### Summary" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             
-            TOTAL=$(jq '.repositories | length' state/scan-state.json)
-            SUCCESS=$(jq '[.repositories | to_entries[] | select(.value.status == "success")] | length' state/scan-state.json)
-            FAILED=$(jq '[.repositories | to_entries[] | select(.value.status == "failed")] | length' state/scan-state.json)
-            SKIPPED=$(jq '[.repositories | to_entries[] | select(.value.status == "skipped")] | length' state/scan-state.json)
+            TOTAL=$(jq '.repositories | length' "$STATE_FILE")
+            SUCCESS=$(jq '[.repositories | to_entries[] | select(.value.status == "success")] | length' "$STATE_FILE")
+            FAILED=$(jq '[.repositories | to_entries[] | select(.value.status == "failed")] | length' "$STATE_FILE")
+            SKIPPED=$(jq '[.repositories | to_entries[] | select(.value.status == "skipped")] | length' "$STATE_FILE")
             
             echo "- Total: $TOTAL" >> $GITHUB_STEP_SUMMARY
             echo "- Successful: $SUCCESS" >> $GITHUB_STEP_SUMMARY

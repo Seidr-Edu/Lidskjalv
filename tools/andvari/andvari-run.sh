@@ -141,7 +141,7 @@ else
   AGENTS_TEMPLATE_PATH="${ROOT_DIR}/AGENTS.fixed.md"
 fi
 
-RUNS_DIR="${ROOT_DIR}/runs"
+RUNS_DIR="${ANDVARI_RUNS_DIR:-${ROOT_DIR}/runs}"
 RUN_DIR="${RUNS_DIR}/${RUN_ID}"
 INPUT_DIR="${RUN_DIR}/input"
 NEW_REPO_DIR="${RUN_DIR}/new_repo"

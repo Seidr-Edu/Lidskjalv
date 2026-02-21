@@ -12,9 +12,21 @@ set -euo pipefail
 # Configuration defaults
 # ============================================================================
 
-export WORK_DIR="${WORK_DIR:-_work}"
-export LOG_DIR="${LOG_DIR:-logs}"
-export STATE_FILE="${STATE_FILE:-state/scan-state.json}"
+_COMMON_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_COMMON_PROJECT_ROOT="$(cd "${_COMMON_LIB_DIR}/../.." && pwd)"
+_COMMON_MONOREPO_CANDIDATE="$(cd "${_COMMON_PROJECT_ROOT}/../.." 2>/dev/null && pwd -P || true)"
+
+if [[ -n "${_COMMON_MONOREPO_CANDIDATE}" && -d "${_COMMON_MONOREPO_CANDIDATE}/tools/lidskjalv" ]]; then
+  _COMMON_DEFAULT_MONOREPO_ROOT="${_COMMON_MONOREPO_CANDIDATE}"
+else
+  _COMMON_DEFAULT_MONOREPO_ROOT="${_COMMON_PROJECT_ROOT}"
+fi
+
+export LIDSKJALV_MONOREPO_ROOT="${LIDSKJALV_MONOREPO_ROOT:-${_COMMON_DEFAULT_MONOREPO_ROOT}}"
+export LIDSKJALV_DATA_DIR="${LIDSKJALV_DATA_DIR:-${LIDSKJALV_MONOREPO_ROOT}/.data/lidskjalv}"
+export WORK_DIR="${WORK_DIR:-${LIDSKJALV_DATA_DIR}/work}"
+export LOG_DIR="${LOG_DIR:-${LIDSKJALV_DATA_DIR}/logs}"
+export STATE_FILE="${STATE_FILE:-${LIDSKJALV_DATA_DIR}/state/scan-state.json}"
 export BUILD_TIMEOUT="${BUILD_TIMEOUT:-600}"
 
 # ============================================================================
@@ -481,12 +493,30 @@ run_logged() {
 # Load .env file if present
 load_env() {
   local env_file="${1:-.env}"
-  if [[ -f "$env_file" ]]; then
-    set -a
-    # shellcheck source=/dev/null
-    source "$env_file"
-    set +a
+  local candidates=("$env_file")
+
+  if [[ "$env_file" == ".env" ]]; then
+    local project_root
+    project_root="$(get_project_root)"
+    if [[ -n "${LIDSKJALV_ENV_FILE:-}" ]]; then
+      candidates=("${LIDSKJALV_ENV_FILE}" "${candidates[@]}")
+    fi
+    if [[ -n "${LIDSKJALV_MONOREPO_ROOT:-}" ]]; then
+      candidates+=("${LIDSKJALV_MONOREPO_ROOT}/.env")
+    fi
+    candidates+=("${project_root}/.env" "${project_root}/../../.env")
   fi
+
+  local candidate
+  for candidate in "${candidates[@]}"; do
+    if [[ -f "$candidate" ]]; then
+      set -a
+      # shellcheck source=/dev/null
+      source "$candidate"
+      set +a
+      return 0
+    fi
+  done
 }
 
 # Verify required environment variables are set

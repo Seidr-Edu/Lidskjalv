@@ -1,0 +1,236 @@
+#!/usr/bin/env bash
+# scan-one.sh - Quick single-repository scanner
+# A simplified interface for scanning a single repository from URL or local path
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+ORIGINAL_CWD="$(pwd)"
+
+# Change to project root
+cd "$PROJECT_ROOT"
+
+source "${SCRIPT_DIR}/lib/bootstrap.sh"
+lidskjalv_bootstrap "$PROJECT_ROOT" "$ORIGINAL_CWD"
+
+# Source library modules
+source "${SCRIPT_DIR}/lib/common.sh"
+source "${SCRIPT_DIR}/lib/state.sh"
+source "${SCRIPT_DIR}/lib/clone.sh"
+source "${SCRIPT_DIR}/lib/detect-build.sh"
+source "${SCRIPT_DIR}/lib/build.sh"
+source "${SCRIPT_DIR}/lib/submit-sonar.sh"
+source "${SCRIPT_DIR}/lib/pipeline.sh"
+
+# Resolve all config paths to absolute (prevents issues when cwd changes)
+resolve_config_paths
+
+# ============================================================================
+# Argument Parsing
+# ============================================================================
+
+FORCED_JDK=""
+REPO_ARG=""
+PATH_ARG=""
+PROJECT_KEY_OVERRIDE=""
+PROJECT_NAME_OVERRIDE=""
+SKIP_SONAR=false
+FORCE_RERUN=false
+REPOS_ROOT="${REPOS_ROOT:-$PROJECT_ROOT}"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -j|--jdk)
+      FORCED_JDK="$2"
+      shift 2
+      ;;
+    --path)
+      PATH_ARG="$2"
+      shift 2
+      ;;
+    --project-key)
+      PROJECT_KEY_OVERRIDE="$2"
+      shift 2
+      ;;
+    --project-name)
+      PROJECT_NAME_OVERRIDE="$2"
+      shift 2
+      ;;
+    --skip-sonar)
+      SKIP_SONAR=true
+      shift
+      ;;
+    -f|--force)
+      FORCE_RERUN=true
+      shift
+      ;;
+    -h|--help)
+      cat << EOF
+Usage: $(basename "$0") [OPTIONS] [REPO_URL]
+
+Scan a single Java repository with SonarQube.
+
+Arguments:
+  REPO_URL                 Repository URL to scan (optional, uses first from repos.txt)
+
+Options:
+  -j, --jdk <version>      Force specific JDK version
+  --path <dir>             Scan local repository path instead of cloning
+  --project-key <key>      Override derived Sonar project key
+  --project-name <name>    Override Sonar project display name
+  --skip-sonar             Build only, skip SonarQube submission
+  -f, --force              Force rerun even if already successful
+  -h, --help               Show this help
+
+Examples:
+  $(basename "$0")                                        # First entry from repos.txt
+  $(basename "$0") https://github.com/org/repo.git       # Specific URL
+  $(basename "$0") --path repos/PRDownloader             # Local path
+  $(basename "$0") --project-key custom --path repos/x   # Override project key
+EOF
+      exit 0
+      ;;
+    -*)
+      log_error "Unknown option: $1"
+      exit 1
+      ;;
+    *)
+      if [[ -n "$REPO_ARG" ]]; then
+        log_error "Only one repository argument is supported"
+        exit 1
+      fi
+      REPO_ARG="$1"
+      shift
+      ;;
+  esac
+done
+
+if [[ -n "$REPO_ARG" && -n "$PATH_ARG" ]]; then
+  log_error "Use either positional REPO_URL or --path, not both"
+  exit 1
+fi
+
+REPOS_ROOT="$(resolve_repo_path "$REPOS_ROOT" "$ORIGINAL_CWD")"
+
+# ============================================================================
+# Main
+# ============================================================================
+
+# Check dependencies
+check_dependencies
+
+# Verify required env vars (unless skip sonar)
+if ! $SKIP_SONAR; then
+  require_env "SONAR_HOST_URL" "Set in .env file"
+  require_env "SONAR_TOKEN" "Generate in SonarQube UI → My Account → Security"
+fi
+
+SOURCE_TYPE=""
+SOURCE_REF=""
+SOURCE_JDK_HINT=""
+SOURCE_SUBDIR_HINT=""
+SOURCE_KEY_HINT=""
+SOURCE_NAME_HINT=""
+
+if [[ -n "$PATH_ARG" ]]; then
+  SOURCE_TYPE="path"
+  SOURCE_REF="$PATH_ARG"
+elif [[ -n "$REPO_ARG" ]]; then
+  parsed_source="$(parse_repo_source "$REPO_ARG" 2>/dev/null || true)"
+  if [[ -z "$parsed_source" ]]; then
+    log_error "Invalid repository reference: $REPO_ARG"
+    log_error "Use URL, url:<...>, or --path <dir>"
+    exit 1
+  fi
+  IFS='|' read -r SOURCE_TYPE SOURCE_REF <<< "$parsed_source"
+else
+  if [[ ! -f "repos.txt" ]]; then
+    log_error "No repository argument provided and repos.txt not found"
+    exit 1
+  fi
+
+  first_entry="$(parse_repos_file "repos.txt" | head -n 1 | tr -d '\r')"
+  if [[ -z "$first_entry" ]]; then
+    log_error "No valid repository entry found in repos.txt"
+    exit 1
+  fi
+
+  IFS='|' read -r SOURCE_TYPE SOURCE_REF SOURCE_JDK_HINT SOURCE_SUBDIR_HINT SOURCE_KEY_HINT SOURCE_NAME_HINT <<< "$first_entry"
+fi
+
+# Normalize path references now so key derivation and state are stable.
+SOURCE_REF="$(normalize_source_ref "$SOURCE_TYPE" "$SOURCE_REF" "$REPOS_ROOT")"
+
+if [[ -z "$PROJECT_KEY_OVERRIDE" ]]; then
+  PROJECT_KEY_OVERRIDE="$SOURCE_KEY_HINT"
+fi
+if [[ -z "$PROJECT_NAME_OVERRIDE" ]]; then
+  PROJECT_NAME_OVERRIDE="$SOURCE_NAME_HINT"
+fi
+
+PROJECT_KEY="$(derive_source_key "$SOURCE_TYPE" "$SOURCE_REF" "$PROJECT_KEY_OVERRIDE")"
+DISPLAY_NAME="$(derive_source_display_name "$SOURCE_TYPE" "$SOURCE_REF" "$PROJECT_NAME_OVERRIDE")"
+
+EFFECTIVE_JDK_HINT="$FORCED_JDK"
+if [[ -z "$EFFECTIVE_JDK_HINT" ]]; then
+  EFFECTIVE_JDK_HINT="$SOURCE_JDK_HINT"
+fi
+
+log_info "=========================================="
+log_info "Scanning: $DISPLAY_NAME"
+log_info "Project key: $PROJECT_KEY"
+log_info "Source: $SOURCE_TYPE ($SOURCE_REF)"
+log_info "=========================================="
+
+# Initialize state
+state_init
+state_init_repo "$PROJECT_KEY" "$SOURCE_TYPE" "$SOURCE_REF"
+
+# Check if already successful
+if ! $FORCE_RERUN && state_is_success "$PROJECT_KEY"; then
+  log_info "Repository already successfully analyzed"
+  log_info "Use --force to rerun"
+  exit 0
+fi
+
+# Discover JDKs
+discover_jdks
+log_info "Available JDKs: ${AVAILABLE_JDKS[*]:-none}"
+
+if ! run_scan_pipeline \
+  "$PROJECT_KEY" \
+  "$DISPLAY_NAME" \
+  "$SOURCE_TYPE" \
+  "$SOURCE_REF" \
+  "$REPOS_ROOT" \
+  "$EFFECTIVE_JDK_HINT" \
+  "$SOURCE_SUBDIR_HINT" \
+  "$SKIP_SONAR" \
+  "failed" \
+  "false"; then
+  failure_status="$(state_get_status "$PROJECT_KEY")"
+  failure_reason="$(state_get "$PROJECT_KEY" "failure_reason")"
+  failure_message="$(state_get "$PROJECT_KEY" "failure_message")"
+
+  if [[ "$failure_status" == "skipped" ]]; then
+    log_error "${failure_message:-Repository skipped}"
+  else
+    log_error "Scan failed: ${failure_reason:-unknown}"
+    if [[ -n "$failure_message" ]]; then
+      log_error "Message: $failure_message"
+    fi
+  fi
+  log_error "See logs in: ${LOG_DIR}/${PROJECT_KEY}/"
+  exit 1
+fi
+
+log_success "Build succeeded with JDK ${PIPELINE_BUILD_JDK:-unknown}"
+
+log_success "=========================================="
+log_success "Scan complete: $DISPLAY_NAME"
+log_success "Project key: $PROJECT_KEY"
+if ! $SKIP_SONAR; then
+  log_success "View results at: ${SONAR_HOST_URL}/dashboard?id=${PROJECT_KEY}"
+fi
+log_success "=========================================="

@@ -1,7 +1,13 @@
 .env
+tools/lidskjalv/.env
 _work/
 logs/
 state/
 claude.md
 .github/copilot-instructions.md
 repos/
+.data/
+tools/lidskjalv/_work/
+tools/lidskjalv/logs/
+tools/lidskjalv/state/
+tools/lidskjalv/repos/

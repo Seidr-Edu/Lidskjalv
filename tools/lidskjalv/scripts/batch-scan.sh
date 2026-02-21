@@ -64,7 +64,6 @@ should_continue_processing() {
 FORCE_RERUN=false
 DRY_RUN=false
 SINGLE_REPO=""
-CONTINUE_MODE=false
 REPOS_FILE="repos.txt"
 REPOS_ROOT="${REPOS_ROOT:-$PROJECT_ROOT}"
 SKIP_SONAR=false
@@ -81,7 +80,6 @@ Options:
   -f, --force              Reprocess all repos (ignore previous success and sonar failures)
   -n, --dry-run            Show what would be processed without running
   -r, --repo <ref>         Process only this repository (URL, url:<...>, or path:<...>)
-  -c, --continue           Resume from last incomplete run
   -i, --input <file>       Use specified repos file (default: repos.txt)
   --repos-root <dir>       Base directory for resolving relative path:<...> entries
   --skip-sonar             Build only, skip SonarQube submission
@@ -115,10 +113,6 @@ parse_args() {
       -r|--repo)
         SINGLE_REPO="$2"
         shift 2
-        ;;
-      -c|--continue)
-        CONTINUE_MODE=true
-        shift
         ;;
       -i|--input)
         REPOS_FILE="$2"

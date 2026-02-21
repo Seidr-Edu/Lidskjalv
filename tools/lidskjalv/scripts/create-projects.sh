@@ -6,6 +6,9 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 ORIGINAL_CWD="$(pwd)"
 cd "$PROJECT_ROOT"
 
+source "${SCRIPT_DIR}/lib/bootstrap.sh"
+lidskjalv_bootstrap "$PROJECT_ROOT" "$ORIGINAL_CWD"
+
 source "${SCRIPT_DIR}/lib/common.sh"
 
 SINGLE_SOURCE=""
@@ -57,16 +60,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 REPOS_ROOT="$(resolve_repo_path "$REPOS_ROOT" "$ORIGINAL_CWD")"
-
-for env_candidate in ".env" "${PROJECT_ROOT}/.env" "${PROJECT_ROOT}/../../.env"; do
-  if [[ -f "$env_candidate" ]]; then
-    set -a
-    # shellcheck source=/dev/null
-    source "$env_candidate"
-    set +a
-    break
-  fi
-done
+load_env
 
 : "${SONAR_HOST_URL:?Missing SONAR_HOST_URL (set it in .env)}"
 : "${SONAR_TOKEN:?Missing SONAR_TOKEN (set it in .env)}"

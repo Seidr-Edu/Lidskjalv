@@ -11,6 +11,9 @@ ORIGINAL_CWD="$(pwd)"
 # Change to project root
 cd "$PROJECT_ROOT"
 
+source "${SCRIPT_DIR}/lib/bootstrap.sh"
+lidskjalv_bootstrap "$PROJECT_ROOT" "$ORIGINAL_CWD"
+
 # Source library modules
 source "${SCRIPT_DIR}/lib/common.sh"
 source "${SCRIPT_DIR}/lib/state.sh"
@@ -18,6 +21,7 @@ source "${SCRIPT_DIR}/lib/clone.sh"
 source "${SCRIPT_DIR}/lib/detect-build.sh"
 source "${SCRIPT_DIR}/lib/build.sh"
 source "${SCRIPT_DIR}/lib/submit-sonar.sh"
+source "${SCRIPT_DIR}/lib/pipeline.sh"
 
 # Resolve all config paths to absolute (prevents issues when cwd changes)
 resolve_config_paths
@@ -113,9 +117,6 @@ REPOS_ROOT="$(resolve_repo_path "$REPOS_ROOT" "$ORIGINAL_CWD")"
 # Main
 # ============================================================================
 
-# Load environment
-load_env
-
 # Check dependencies
 check_dependencies
 
@@ -197,84 +198,34 @@ fi
 discover_jdks
 log_info "Available JDKs: ${AVAILABLE_JDKS[*]:-none}"
 
-# ---- PREPARE SOURCE ----
-state_set_status "$PROJECT_KEY" "cloning"
+if ! run_scan_pipeline \
+  "$PROJECT_KEY" \
+  "$DISPLAY_NAME" \
+  "$SOURCE_TYPE" \
+  "$SOURCE_REF" \
+  "$REPOS_ROOT" \
+  "$EFFECTIVE_JDK_HINT" \
+  "$SOURCE_SUBDIR_HINT" \
+  "$SKIP_SONAR" \
+  "failed" \
+  "false"; then
+  failure_status="$(state_get_status "$PROJECT_KEY")"
+  failure_reason="$(state_get "$PROJECT_KEY" "failure_reason")"
+  failure_message="$(state_get "$PROJECT_KEY" "failure_message")"
 
-if ! REPO_DIR="$(prepare_repo_source "$SOURCE_TYPE" "$SOURCE_REF" "$PROJECT_KEY" "$REPOS_ROOT")"; then
-  state_set_status "$PROJECT_KEY" "failed" "source_prepare_failed" "Failed to prepare source"
-  log_error "Failed to prepare repository source"
-  exit 1
-fi
-
-# ---- DETECT BUILD SYSTEM ----
-BUILD_RESULT="$(detect_build_system "$REPO_DIR" "$PROJECT_KEY" || true)"
-
-if [[ "$BUILD_RESULT" == "unknown" ]]; then
-  state_set_status "$PROJECT_KEY" "skipped" "no_build_file" "No supported build marker found (pom.xml, build.gradle(.kts), mvnw, gradlew)"
-  log_error "No build system detected (expected pom.xml, build.gradle(.kts), mvnw, or gradlew)"
-  exit 1
-fi
-
-parse_build_result "$BUILD_RESULT"
-BUILD_SUBDIR="${SOURCE_SUBDIR_HINT:-$BUILD_SUBDIR}"
-log_info "Detected: $BUILD_TOOL${BUILD_SUBDIR:+ (subdir: $BUILD_SUBDIR)}"
-
-BUILD_DIR="$REPO_DIR"
-if [[ -n "$BUILD_SUBDIR" ]]; then
-  BUILD_DIR="${REPO_DIR}/${BUILD_SUBDIR}"
-fi
-
-# Check if this is an Android project
-if is_android_project "$BUILD_DIR"; then
-  log_info "Detected Android project (may require special handling)"
-fi
-
-# ---- BUILD ----
-state_set_status "$PROJECT_KEY" "building"
-state_increment_attempts "$PROJECT_KEY"
-
-if ! build_project "$PROJECT_KEY" "$BUILD_DIR" "$BUILD_TOOL" "$EFFECTIVE_JDK_HINT"; then
-  state_set_status "$PROJECT_KEY" "failed" "$BUILD_RESULT_REASON" "$BUILD_RESULT_MESSAGE"
-  log_error "Build failed: $BUILD_RESULT_REASON"
-  log_error "Message: $BUILD_RESULT_MESSAGE"
+  if [[ "$failure_status" == "skipped" ]]; then
+    log_error "${failure_message:-Repository skipped}"
+  else
+    log_error "Scan failed: ${failure_reason:-unknown}"
+    if [[ -n "$failure_message" ]]; then
+      log_error "Message: $failure_message"
+    fi
+  fi
   log_error "See logs in: ${LOG_DIR}/${PROJECT_KEY}/"
   exit 1
 fi
 
-state_set_build_info "$PROJECT_KEY" "$BUILD_TOOL" "$BUILD_RESULT_JDK"
-log_success "Build succeeded with JDK $BUILD_RESULT_JDK"
-
-# ---- SONARQUBE ----
-if $SKIP_SONAR; then
-  log_info "Skipping SonarQube submission (--skip-sonar)"
-  state_set_status "$PROJECT_KEY" "success"
-  state_set_scan_timestamp "$PROJECT_KEY"
-else
-  state_set_status "$PROJECT_KEY" "submitting"
-  sonar_create_project "$PROJECT_KEY" "$DISPLAY_NAME"
-
-  # Local path scans may live under parent repos that ignore the path (e.g. repos/),
-  # which would otherwise make Sonar index 0 files via SCM exclusions.
-  sonar_scm_exclusions_disabled=""
-  if [[ "$SOURCE_TYPE" == "path" ]]; then
-    sonar_scm_exclusions_disabled="true"
-    log_info "Path source detected: disabling Sonar SCM exclusions"
-  fi
-
-  if ! SONAR_SCM_EXCLUSIONS_DISABLED="$sonar_scm_exclusions_disabled" submit_to_sonar "$PROJECT_KEY" "$BUILD_DIR" "$BUILD_TOOL"; then
-    state_set_status "$PROJECT_KEY" "failed" "sonar_submission_failed" "SonarQube analysis failed"
-    log_error "SonarQube submission failed"
-    log_error "See logs in: ${LOG_DIR}/${PROJECT_KEY}/sonar.log"
-    exit 1
-  fi
-
-  if [[ -n "$SONAR_TASK_ID" ]]; then
-    state_set_sonar_task "$PROJECT_KEY" "$SONAR_TASK_ID"
-  fi
-
-  state_set_status "$PROJECT_KEY" "success"
-  state_set_scan_timestamp "$PROJECT_KEY"
-fi
+log_success "Build succeeded with JDK ${PIPELINE_BUILD_JDK:-unknown}"
 
 log_success "=========================================="
 log_success "Scan complete: $DISPLAY_NAME"

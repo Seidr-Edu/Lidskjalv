@@ -14,12 +14,16 @@ ORIGINAL_CWD="$(pwd)"
 
 cd "$PROJECT_ROOT"
 
+source "${SCRIPT_DIR}/lib/bootstrap.sh"
+lidskjalv_bootstrap "$PROJECT_ROOT" "$ORIGINAL_CWD"
+
 source "${SCRIPT_DIR}/lib/common.sh"
 source "${SCRIPT_DIR}/lib/state.sh"
 source "${SCRIPT_DIR}/lib/clone.sh"
 source "${SCRIPT_DIR}/lib/detect-build.sh"
 source "${SCRIPT_DIR}/lib/build.sh"
 source "${SCRIPT_DIR}/lib/submit-sonar.sh"
+source "${SCRIPT_DIR}/lib/pipeline.sh"
 
 resolve_config_paths
 
@@ -192,91 +196,18 @@ process_repo() {
     log_info "Retrying SonarQube-failed repository"
   fi
 
-  state_increment_attempts "$key"
-
-  local cached_jdk
-  cached_jdk="$(state_get_successful_build_version "$key")"
-
-  # ---- SOURCE PREP STAGE ----
-  state_set_status "$key" "cloning"
-
-  local repo_dir
-  if ! repo_dir="$(prepare_repo_source "$source_type" "$normalized_ref" "$key" "$REPOS_ROOT")"; then
-    state_set_status "$key" "failed" "source_prepare_failed" "Failed to prepare repository source"
+  if ! run_scan_pipeline \
+    "$key" \
+    "$display_name" \
+    "$source_type" \
+    "$normalized_ref" \
+    "$REPOS_ROOT" \
+    "$jdk_hint" \
+    "$subdir_hint" \
+    "$SKIP_SONAR" \
+    "sonar_failed" \
+    "true"; then
     return 1
-  fi
-
-  # ---- DETECT STAGE ----
-  local build_result
-  build_result="$(detect_build_system "$repo_dir" "$key" || true)"
-
-  if [[ "$build_result" == "unknown" ]]; then
-    state_set_status "$key" "skipped" "no_build_file" "No supported build marker found (pom.xml, build.gradle(.kts), mvnw, gradlew)"
-    log_warn "No build system detected (expected pom.xml, build.gradle(.kts), mvnw, or gradlew), skipping"
-    return 1
-  fi
-
-  parse_build_result "$build_result"
-  local build_tool="$BUILD_TOOL"
-  local build_subdir="${subdir_hint:-$BUILD_SUBDIR}"
-
-  log_info "Detected build system: $build_tool${build_subdir:+ (subdir: $build_subdir)}"
-
-  local build_dir="$repo_dir"
-  if [[ -n "$build_subdir" ]]; then
-    build_dir="${repo_dir}/${build_subdir}"
-  fi
-
-  # Check if this is an Android project
-  if is_android_project "$build_dir"; then
-    log_info "Detected Android project (may require special handling)"
-  fi
-
-  # Use cached successful build version if available, otherwise fall back to hints
-  local effective_jdk="${cached_jdk:-$jdk_hint}"
-  if [[ -n "$cached_jdk" ]]; then
-    log_info "Using cached successful build version: JDK $cached_jdk"
-  fi
-
-  # ---- BUILD STAGE ----
-  state_set_status "$key" "building"
-  state_set_build_info "$key" "$build_tool" ""
-
-  if ! build_project "$key" "$build_dir" "$build_tool" "$effective_jdk"; then
-    state_set_status "$key" "failed" "$BUILD_RESULT_REASON" "$BUILD_RESULT_MESSAGE"
-    return 1
-  fi
-
-  state_set_successful_build "$key" "$build_tool" "$BUILD_RESULT_JDK"
-
-  # ---- SONAR STAGE ----
-  if $SKIP_SONAR; then
-    log_info "Skipping SonarQube submission (--skip-sonar)"
-    state_set_status "$key" "success"
-    state_set_scan_timestamp "$key"
-  else
-    state_set_status "$key" "submitting"
-    sonar_create_project "$key" "$display_name"
-
-    # Local path scans may sit under ignored parent paths (e.g. repos/).
-    # Disable SCM exclusions for those runs to avoid 0-file analyses.
-    local sonar_scm_exclusions_disabled=""
-    if [[ "$source_type" == "path" ]]; then
-      sonar_scm_exclusions_disabled="true"
-      log_info "Path source detected: disabling Sonar SCM exclusions"
-    fi
-
-    if ! SONAR_SCM_EXCLUSIONS_DISABLED="$sonar_scm_exclusions_disabled" submit_to_sonar "$key" "$build_dir" "$build_tool"; then
-      state_set_status "$key" "sonar_failed" "sonar_submission_failed" "SonarQube analysis failed"
-      return 1
-    fi
-
-    if [[ -n "$SONAR_TASK_ID" ]]; then
-      state_set_sonar_task "$key" "$SONAR_TASK_ID"
-    fi
-
-    state_set_status "$key" "success"
-    state_set_scan_timestamp "$key"
   fi
 
   # ---- CLEANUP ----
@@ -341,8 +272,6 @@ generate_summary() {
 main() {
   parse_args "$@"
   REPOS_ROOT="$(resolve_repo_path "$REPOS_ROOT" "$ORIGINAL_CWD")"
-
-  load_env
 
   check_dependencies
 

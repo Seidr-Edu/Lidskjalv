@@ -45,5 +45,5 @@ Root wrappers write generated data into:
 
 You can override with env vars:
 
-- `WORK_DIR`, `LOG_DIR`, `STATE_FILE`, `REPOS_ROOT` for Lidskjalv
+- `LIDSKJALV_DATA_DIR` (or `WORK_DIR`, `LOG_DIR`, `STATE_FILE`, `REPOS_ROOT`) for Lidskjalv
 - `ANDVARI_RUNS_DIR` for Andvari

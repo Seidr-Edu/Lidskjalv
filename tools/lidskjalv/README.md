@@ -5,6 +5,7 @@ Batch scanning tool for analyzing Java repositories with SonarCloud.
 
 This README assumes commands are run from `tools/lidskjalv/`.
 From monorepo root, use wrapper commands in `scripts/`.
+Runtime data defaults to `<monorepo>/.data/lidskjalv/` in both cases.
 
 ## Architecture
 
@@ -142,8 +143,8 @@ This is optional - projects are auto-created during the first scan.
 
 The scanner maintains state to enable resumable runs:
 
-- **State file**: `state/scan-state.json` - Tracks status of each repository
-- **Logs**: `logs/{project-key}/` - Detailed logs for each repository
+- **State file**: `.data/lidskjalv/state/scan-state.json` - Tracks status of each repository
+- **Logs**: `.data/lidskjalv/logs/{project-key}/` - Detailed logs for each repository
   - `clone.log` - Git clone output
   - `detect.log` - Build system detection
   - `build-attempt-*.log` - Build attempts with different strategies
@@ -153,13 +154,13 @@ The scanner maintains state to enable resumable runs:
 
 ```bash
 # View scan state
-cat state/scan-state.json | jq '.repositories | to_entries[] | {key: .key, status: .value.status}'
+cat .data/lidskjalv/state/scan-state.json | jq '.repositories | to_entries[] | {key: .key, status: .value.status}'
 
 # View failed repos
-cat state/scan-state.json | jq '.repositories | to_entries[] | select(.value.status == "failed")'
+cat .data/lidskjalv/state/scan-state.json | jq '.repositories | to_entries[] | select(.value.status == "failed")'
 
 # Reset state (start fresh)
-rm -f state/scan-state.json
+rm -f .data/lidskjalv/state/scan-state.json
 ```
 
 ## Configuration
@@ -182,6 +183,12 @@ path:repos/org4-repo4 # subdir=backend, jdk=17, key=custom_key, name=Custom Name
 - `subdir=path` - Build from subdirectory
 - `key=value` - Override Sonar project key
 - `name=value` - Override Sonar project name
+
+### Runtime paths
+
+Default runtime root is `.data/lidskjalv/`. Override with:
+- `LIDSKJALV_DATA_DIR` (recommended single override)
+- or `WORK_DIR`, `LOG_DIR`, `STATE_FILE`, `REPOS_ROOT` for fine-grained control
 
 ### Quality Profiles
 

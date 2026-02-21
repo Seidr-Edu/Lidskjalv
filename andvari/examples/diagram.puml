@@ -1,0 +1,15 @@
+@startuml
+
+title Andvari Reconstruction Example
+
+class DiagramRunner {
+  +run(path: String): void
+}
+
+class ReconstructionService {
+  +reconstruct(diagramPath: String): Path
+}
+
+DiagramRunner --> ReconstructionService
+
+@enduml

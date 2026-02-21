@@ -1,0 +1,611 @@
+@startuml diagram
+
+hide empty members
+
+package com.downloader {
+  +enum Priority {
+    +{static} LOW : Priority
+    +{static} MEDIUM : Priority
+    +{static} HIGH : Priority
+    +{static} IMMEDIATE : Priority
+}
+
+  +enum Status {
+    +{static} QUEUED : Status
+    +{static} RUNNING : Status
+    +{static} PAUSED : Status
+    +{static} COMPLETED : Status
+    +{static} CANCELLED : Status
+    +{static} FAILED : Status
+    +{static} UNKNOWN : Status
+}
+
+  +class PRDownloaderConfig {
+    -readTimeout : int
+    -connectTimeout : int
+    -userAgent : String
+    -httpClient : HttpClient
+    -databaseEnabled : boolean
+    +getReadTimeout() : int
+    +setReadTimeout(readTimeout: int) : void
+    +getConnectTimeout() : int
+    +setConnectTimeout(connectTimeout: int) : void
+    +getUserAgent() : String
+    +setUserAgent(userAgent: String) : void
+    +getHttpClient() : HttpClient
+    +setHttpClient(httpClient: HttpClient) : void
+    +isDatabaseEnabled() : boolean
+    +setDatabaseEnabled(databaseEnabled: boolean) : void
+    +{static} newBuilder() : Builder
+    -PRDownloaderConfig(builder: Builder)
+}
+
+  +class PRDownloaderConfig$Builder <<static>> {
+    ~readTimeout : int
+    ~connectTimeout : int
+    ~userAgent : String
+    ~httpClient : HttpClient
+    ~databaseEnabled : boolean
+    +setReadTimeout(readTimeout: int) : Builder
+    +setConnectTimeout(connectTimeout: int) : Builder
+    +setUserAgent(userAgent: String) : Builder
+    +setHttpClient(httpClient: HttpClient) : Builder
+    +setDatabaseEnabled(databaseEnabled: boolean) : Builder
+    +build() : PRDownloaderConfig
+}
+
+  +interface OnProgressListener {
+    ~{abstract} onProgress(progress: Progress) : void
+}
+
+  +class Error {
+    -isServerError : boolean
+    -isConnectionError : boolean
+    -serverErrorMessage : String
+    -headerFields : Map<String, List<String>>
+    -connectionException : Throwable
+    -responseCode : int
+    +isServerError() : boolean
+    +setServerError(serverError: boolean) : void
+    +isConnectionError() : boolean
+    +setConnectionError(connectionError: boolean) : void
+    +setServerErrorMessage(serverErrorMessage: String) : void
+    +getServerErrorMessage() : String
+    +setHeaderFields(headerFields: Map<String, List<String>>) : void
+    +getHeaderFields() : Map<String, List<String>>
+    +setConnectionException(connectionException: Throwable) : void
+    +getConnectionException() : Throwable
+    +setResponseCode(responseCode: int) : void
+    +getResponseCode() : int
+}
+
+  +interface OnPauseListener {
+    ~{abstract} onPause() : void
+}
+
+  +interface OnCancelListener {
+    ~{abstract} onCancel() : void
+}
+
+  +interface OnDownloadListener {
+    ~{abstract} onDownloadComplete() : void
+    ~{abstract} onError(error: Error) : void
+}
+
+  +interface OnStartOrResumeListener {
+    ~{abstract} onStartOrResume() : void
+}
+
+  +class PRDownloader {
+    +{static} initialize(context: Context) : void
+    +{static} initialize(context: Context, config: PRDownloaderConfig) : void
+    +{static} download(url: String, dirPath: String, fileName: String) : DownloadRequestBuilder
+    +{static} pause(downloadId: int) : void
+    +{static} resume(downloadId: int) : void
+    +{static} cancel(downloadId: int) : void
+    +{static} cancel(tag: Object) : void
+    +{static} cancelAll() : void
+    +{static} getStatus(downloadId: int) : Status
+    +{static} cleanUp(days: int) : void
+    +{static} shutDown() : void
+    -PRDownloader()
+}
+
+  +class Response {
+    -error : Error
+    -isSuccessful : boolean
+    -isPaused : boolean
+    -isCancelled : boolean
+    +getError() : Error
+    +setError(error: Error) : void
+    +isSuccessful() : boolean
+    +setSuccessful(successful: boolean) : void
+    +isPaused() : boolean
+    +setPaused(paused: boolean) : void
+    +isCancelled() : boolean
+    +setCancelled(cancelled: boolean) : void
+}
+
+  +class Progress {
+    +currentBytes : long
+    +totalBytes : long
+    +toString() : String
+    +Progress(currentBytes: long, totalBytes: long)
+}
+
+  +class Constants {
+    +{static} UPDATE : int {readOnly}
+    +{static} RANGE : String {readOnly}
+    +{static} ETAG : String {readOnly}
+    +{static} USER_AGENT : String {readOnly}
+    +{static} DEFAULT_USER_AGENT : String {readOnly}
+    +{static} DEFAULT_READ_TIMEOUT_IN_MILLS : int {readOnly}
+    +{static} DEFAULT_CONNECT_TIMEOUT_IN_MILLS : int {readOnly}
+    +{static} HTTP_RANGE_NOT_SATISFIABLE : int {readOnly}
+    +{static} HTTP_TEMPORARY_REDIRECT : int {readOnly}
+    +{static} HTTP_PERMANENT_REDIRECT : int {readOnly}
+    -Constants()
+}
+
+}
+
+package com.downloader.core {
+  +class MainThreadExecutor {
+    -handler : Handler {readOnly}
+    +execute(runnable: Runnable) : void
+}
+
+  +class PriorityThreadFactory {
+    -mThreadPriority : int {readOnly}
+    +newThread(runnable: Runnable) : Thread
+    ~PriorityThreadFactory(threadPriority: int)
+}
+
+  +class DownloadFutureTask {
+    -runnable : DownloadRunnable {readOnly}
+    +compareTo(other: DownloadFutureTask) : int
+    ~DownloadFutureTask(downloadRunnable: DownloadRunnable)
+}
+
+  +class Core {
+    -{static} instance : Core
+    -executorSupplier : ExecutorSupplier {readOnly}
+    +{static} getInstance() : Core
+    +getExecutorSupplier() : ExecutorSupplier
+    +{static} shutDown() : void
+    -Core()
+}
+
+  +class DownloadExecutor {
+    +submit(task: Runnable) : Future<?>
+    ~DownloadExecutor(maxNumThreads: int, threadFactory: ThreadFactory)
+}
+
+  +interface ExecutorSupplier {
+    ~{abstract} forDownloadTasks() : DownloadExecutor
+    ~{abstract} forBackgroundTasks() : Executor
+    ~{abstract} forMainThreadTasks() : Executor
+}
+
+  +class DefaultExecutorSupplier {
+    -{static} DEFAULT_MAX_NUM_THREADS : int {readOnly}
+    -networkExecutor : DownloadExecutor {readOnly}
+    -backgroundExecutor : Executor {readOnly}
+    -mainThreadExecutor : Executor {readOnly}
+    +forDownloadTasks() : DownloadExecutor
+    +forBackgroundTasks() : Executor
+    +forMainThreadTasks() : Executor
+    ~DefaultExecutorSupplier()
+}
+
+}
+
+package com.downloader.database {
+  +class DatabaseOpenHelper {
+    -{static} DATABASE_NAME : String {readOnly}
+    -{static} DATABASE_VERSION : int {readOnly}
+    +onCreate(db: SQLiteDatabase) : void
+    +onUpgrade(db: SQLiteDatabase, i: int, i1: int) : void
+    ~DatabaseOpenHelper(context: Context)
+}
+
+  +class NoOpsDbHelper {
+    +find(id: int) : DownloadModel
+    +insert(model: DownloadModel) : void
+    +update(model: DownloadModel) : void
+    +updateProgress(id: int, downloadedBytes: long, lastModifiedAt: long) : void
+    +remove(id: int) : void
+    +getUnwantedModels(days: int) : List<DownloadModel>
+    +clear() : void
+    +NoOpsDbHelper()
+}
+
+  +class AppDbHelper {
+    +{static} TABLE_NAME : String {readOnly}
+    -db : SQLiteDatabase {readOnly}
+    +find(id: int) : DownloadModel
+    +insert(model: DownloadModel) : void
+    +update(model: DownloadModel) : void
+    +updateProgress(id: int, downloadedBytes: long, lastModifiedAt: long) : void
+    +remove(id: int) : void
+    +getUnwantedModels(days: int) : List<DownloadModel>
+    +clear() : void
+    +AppDbHelper(context: Context)
+}
+
+  +class DownloadModel {
+    ~{static} ID : String {readOnly}
+    ~{static} URL : String {readOnly}
+    ~{static} ETAG : String {readOnly}
+    ~{static} DIR_PATH : String {readOnly}
+    ~{static} FILE_NAME : String {readOnly}
+    ~{static} TOTAL_BYTES : String {readOnly}
+    ~{static} DOWNLOADED_BYTES : String {readOnly}
+    ~{static} LAST_MODIFIED_AT : String {readOnly}
+    -id : int
+    -url : String
+    -eTag : String
+    -dirPath : String
+    -fileName : String
+    -totalBytes : long
+    -downloadedBytes : long
+    -lastModifiedAt : long
+    +getId() : int
+    +setId(id: int) : void
+    +getUrl() : String
+    +setUrl(url: String) : void
+    +getETag() : String
+    +setETag(eTag: String) : void
+    +getDirPath() : String
+    +setDirPath(dirPath: String) : void
+    +getFileName() : String
+    +setFileName(fileName: String) : void
+    +getTotalBytes() : long
+    +setTotalBytes(totalBytes: long) : void
+    +getDownloadedBytes() : long
+    +setDownloadedBytes(downloadedBytes: long) : void
+    +getLastModifiedAt() : long
+    +setLastModifiedAt(lastModifiedAt: long) : void
+}
+
+  +interface DbHelper {
+    ~{abstract} find(id: int) : DownloadModel
+    ~{abstract} insert(model: DownloadModel) : void
+    ~{abstract} update(model: DownloadModel) : void
+    ~{abstract} updateProgress(id: int, downloadedBytes: long, lastModifiedAt: long) : void
+    ~{abstract} remove(id: int) : void
+    ~{abstract} getUnwantedModels(days: int) : List<DownloadModel>
+    ~{abstract} clear() : void
+}
+
+}
+
+package com.downloader.handler {
+  +class ProgressHandler {
+    -listener : OnProgressListener {readOnly}
+    +handleMessage(msg: Message) : void
+    +ProgressHandler(listener: OnProgressListener)
+}
+
+}
+
+package com.downloader.httpclient {
+  +interface HttpClient {
+    ~{abstract} clone() : HttpClient
+    ~{abstract} connect(request: DownloadRequest) : void
+    ~{abstract} getResponseCode() : int
+    ~{abstract} getInputStream() : InputStream
+    ~{abstract} getContentLength() : long
+    ~{abstract} getResponseHeader(name: String) : String
+    ~{abstract} close() : void
+    ~{abstract} getHeaderFields() : Map<String, List<String>>
+    ~{abstract} getErrorStream() : InputStream
+}
+
+  +class DefaultHttpClient {
+    -connection : URLConnection
+    +clone() : HttpClient
+    +connect(request: DownloadRequest) : void
+    +getResponseCode() : int
+    +getInputStream() : InputStream
+    +getContentLength() : long
+    +getResponseHeader(name: String) : String
+    +close() : void
+    +getHeaderFields() : Map<String, List<String>>
+    +getErrorStream() : InputStream
+    -addHeaders(request: DownloadRequest) : void
+    +DefaultHttpClient()
+}
+
+}
+
+package com.downloader.internal {
+  +class DownloadRequestQueue {
+    -{static} instance : DownloadRequestQueue
+    -currentRequestMap : Map<Integer, DownloadRequest> {readOnly}
+    -sequenceGenerator : AtomicInteger {readOnly}
+    +{static} initialize() : void
+    +{static} getInstance() : DownloadRequestQueue
+    -getSequenceNumber() : int
+    +pause(downloadId: int) : void
+    +resume(downloadId: int) : void
+    -cancelAndRemoveFromMap(request: DownloadRequest) : void
+    +cancel(downloadId: int) : void
+    +cancel(tag: Object) : void
+    +cancelAll() : void
+    +getStatus(downloadId: int) : Status
+    +addRequest(request: DownloadRequest) : void
+    +finish(request: DownloadRequest) : void
+    -DownloadRequestQueue()
+}
+
+  +class SynchronousCall {
+    +request : DownloadRequest {readOnly}
+    +execute() : Response
+    +SynchronousCall(request: DownloadRequest)
+}
+
+  +class DownloadTask {
+    -{static} BUFFER_SIZE : int {readOnly}
+    -{static} TIME_GAP_FOR_SYNC : long {readOnly}
+    -{static} MIN_BYTES_FOR_SYNC : long {readOnly}
+    -request : DownloadRequest {readOnly}
+    -progressHandler : ProgressHandler
+    -lastSyncTime : long
+    -lastSyncBytes : long
+    -inputStream : InputStream
+    -outputStream : FileDownloadOutputStream
+    -httpClient : HttpClient
+    -totalBytes : long
+    -responseCode : int
+    -eTag : String
+    -isResumeSupported : boolean
+    -tempPath : String
+    ~{static} create(request: DownloadRequest) : DownloadTask
+    ~run() : Response
+    -deleteTempFile() : void
+    -isSuccessful() : boolean
+    -setResumeSupportedOrNot() : void
+    -checkIfFreshStartRequiredAndStart(model: DownloadModel) : boolean
+    -isETagChanged(model: DownloadModel) : boolean
+    -getDownloadModelIfAlreadyPresentInDatabase() : DownloadModel
+    -createAndInsertNewModel() : void
+    -removeNoMoreNeededModelFromDatabase() : void
+    -sendProgress() : void
+    -syncIfRequired(outputStream: FileDownloadOutputStream) : void
+    -sync(outputStream: FileDownloadOutputStream) : void
+    -closeAllSafely(outputStream: FileDownloadOutputStream) : void
+    -convertStreamToString(stream: InputStream) : String
+    -DownloadTask(request: DownloadRequest)
+}
+
+  +class ComponentHolder {
+    -{static} INSTANCE : ComponentHolder {readOnly}
+    -readTimeout : int
+    -connectTimeout : int
+    -userAgent : String
+    -httpClient : HttpClient
+    -dbHelper : DbHelper
+    +{static} getInstance() : ComponentHolder
+    +init(context: Context, config: PRDownloaderConfig) : void
+    +getReadTimeout() : int
+    +getConnectTimeout() : int
+    +getUserAgent() : String
+    +getDbHelper() : DbHelper
+    +getHttpClient() : HttpClient
+}
+
+  +class DownloadRunnable {
+    +priority : Priority {readOnly}
+    +sequence : int {readOnly}
+    +request : DownloadRequest {readOnly}
+    +run() : void
+    ~DownloadRunnable(request: DownloadRequest)
+}
+
+}
+
+package com.downloader.internal.stream {
+  +interface FileDownloadOutputStream {
+    ~{abstract} write(b: byte[], off: int, len: int) : void
+    ~{abstract} flushAndSync() : void
+    ~{abstract} close() : void
+    ~{abstract} seek(offset: long) : void
+    ~{abstract} setLength(newLength: long) : void
+}
+
+  +class FileDownloadRandomAccessFile {
+    -out : BufferedOutputStream {readOnly}
+    -fd : FileDescriptor {readOnly}
+    -randomAccess : RandomAccessFile {readOnly}
+    +write(b: byte[], off: int, len: int) : void
+    +flushAndSync() : void
+    +close() : void
+    +seek(offset: long) : void
+    +setLength(totalBytes: long) : void
+    +{static} create(file: File) : FileDownloadOutputStream
+    -FileDownloadRandomAccessFile(file: File)
+}
+
+}
+
+package com.downloader.request {
+  +interface RequestBuilder {
+    ~{abstract} setHeader(name: String, value: String) : RequestBuilder
+    ~{abstract} setPriority(priority: Priority) : RequestBuilder
+    ~{abstract} setTag(tag: Object) : RequestBuilder
+    ~{abstract} setReadTimeout(readTimeout: int) : RequestBuilder
+    ~{abstract} setConnectTimeout(connectTimeout: int) : RequestBuilder
+    ~{abstract} setUserAgent(userAgent: String) : RequestBuilder
+}
+
+  +class DownloadRequest {
+    -priority : Priority
+    -tag : Object
+    -url : String
+    -dirPath : String
+    -fileName : String
+    -sequenceNumber : int
+    -future : Future
+    -downloadedBytes : long
+    -totalBytes : long
+    -readTimeout : int
+    -connectTimeout : int
+    -userAgent : String
+    -onProgressListener : OnProgressListener
+    -onDownloadListener : OnDownloadListener
+    -onStartOrResumeListener : OnStartOrResumeListener
+    -onPauseListener : OnPauseListener
+    -onCancelListener : OnCancelListener
+    -downloadId : int
+    -headerMap : HashMap<String, List<String>>
+    -status : Status
+    +getPriority() : Priority
+    +setPriority(priority: Priority) : void
+    +getTag() : Object
+    +setTag(tag: Object) : void
+    +getUrl() : String
+    +setUrl(url: String) : void
+    +getDirPath() : String
+    +setDirPath(dirPath: String) : void
+    +getFileName() : String
+    +setFileName(fileName: String) : void
+    +getSequenceNumber() : int
+    +setSequenceNumber(sequenceNumber: int) : void
+    +getHeaders() : HashMap<String, List<String>>
+    +getFuture() : Future
+    +setFuture(future: Future) : void
+    +getDownloadedBytes() : long
+    +setDownloadedBytes(downloadedBytes: long) : void
+    +getTotalBytes() : long
+    +setTotalBytes(totalBytes: long) : void
+    +getReadTimeout() : int
+    +setReadTimeout(readTimeout: int) : void
+    +getConnectTimeout() : int
+    +setConnectTimeout(connectTimeout: int) : void
+    +getUserAgent() : String
+    +setUserAgent(userAgent: String) : void
+    +getDownloadId() : int
+    +setDownloadId(downloadId: int) : void
+    +getStatus() : Status
+    +setStatus(status: Status) : void
+    +getOnProgressListener() : OnProgressListener
+    +setOnStartOrResumeListener(onStartOrResumeListener: OnStartOrResumeListener) : DownloadRequest
+    +setOnProgressListener(onProgressListener: OnProgressListener) : DownloadRequest
+    +setOnPauseListener(onPauseListener: OnPauseListener) : DownloadRequest
+    +setOnCancelListener(onCancelListener: OnCancelListener) : DownloadRequest
+    +start(onDownloadListener: OnDownloadListener) : int
+    +executeSync() : Response
+    +deliverError(error: Error) : void
+    +deliverSuccess() : void
+    +deliverStartEvent() : void
+    +deliverPauseEvent() : void
+    -deliverCancelEvent() : void
+    +cancel() : void
+    -finish() : void
+    -destroy() : void
+    -getReadTimeoutFromConfig() : int
+    -getConnectTimeoutFromConfig() : int
+    ~DownloadRequest(builder: DownloadRequestBuilder)
+}
+
+  +class DownloadRequestBuilder {
+    ~url : String
+    ~dirPath : String
+    ~fileName : String
+    ~priority : Priority
+    ~tag : Object
+    ~readTimeout : int
+    ~connectTimeout : int
+    ~userAgent : String
+    ~headerMap : HashMap<String, List<String>>
+    +setHeader(name: String, value: String) : DownloadRequestBuilder
+    +setPriority(priority: Priority) : DownloadRequestBuilder
+    +setTag(tag: Object) : DownloadRequestBuilder
+    +setReadTimeout(readTimeout: int) : DownloadRequestBuilder
+    +setConnectTimeout(connectTimeout: int) : DownloadRequestBuilder
+    +setUserAgent(userAgent: String) : DownloadRequestBuilder
+    +build() : DownloadRequest
+    +DownloadRequestBuilder(url: String, dirPath: String, fileName: String)
+}
+
+}
+
+package com.downloader.utils {
+  +class Utils {
+    -{static} MAX_REDIRECTION : int {readOnly}
+    +{static} getPath(dirPath: String, fileName: String) : String
+    +{static} getTempPath(dirPath: String, fileName: String) : String
+    +{static} renameFileName(oldPath: String, newPath: String) : void
+    +{static} deleteTempFileAndDatabaseEntryInBackground(path: String, downloadId: int) : void
+    +{static} deleteUnwantedModelsAndTempFiles(days: int) : void
+    +{static} getUniqueId(url: String, dirPath: String, fileName: String) : int
+    +{static} getRedirectedConnectionIfAny(httpClient: HttpClient, request: DownloadRequest) : HttpClient
+    -{static} isRedirection(code: int) : boolean
+    -Utils()
+}
+
+}
+
+
+DownloadFutureTask *-- "1" DownloadRunnable
+PRDownloader ..> PRDownloaderConfig
+DownloadRequest ..> Error
+DownloadRequestQueue -- "0..1" DownloadRequestQueue
+AppDbHelper ..> DownloadModel
+DownloadRequest -- "0..1" Status
+PRDownloader ..> Status
+DownloadTask -- "0..1" HttpClient
+DbHelper ..> DownloadModel
+HttpClient ..> DownloadRequest
+OnDownloadListener ..> Error
+ComponentHolder *-- "1" ComponentHolder
+DefaultHttpClient ..> DownloadRequest
+DownloadRunnable *-- "1" Priority
+DefaultExecutorSupplier *-- "1" DownloadExecutor
+DownloadRequest -- "0..1" OnStartOrResumeListener
+HttpClient <|.. DefaultHttpClient
+ComponentHolder ..> PRDownloaderConfig
+DownloadRequest -- "0..1" OnDownloadListener
+DownloadRequest ..> DownloadRequestBuilder
+ExecutorSupplier <|.. DefaultExecutorSupplier
+ExecutorSupplier ..> DownloadExecutor
+DownloadRequestQueue ..> Status
+OnProgressListener ..> Progress
+DbHelper <|.. NoOpsDbHelper
+DownloadRequest -- "0..1" OnProgressListener
+DownloadRequest -- "0..1" OnPauseListener
+Response -- "0..1" Error
+RequestBuilder ..> Priority
+DownloadRequest -- "0..1" OnCancelListener
+ComponentHolder -- "0..1" HttpClient
+Utils ..> DownloadRequest
+DownloadRequestBuilder -- "0..1" Priority
+DownloadRequestQueue ..> DownloadRequest
+SynchronousCall *-- "1" DownloadRequest
+ProgressHandler *-- "1" OnProgressListener
+DownloadRequest ..> Response
+PRDownloaderConfig$Builder -- "0..1" HttpClient
+PRDownloaderConfig$Builder ..> PRDownloaderConfig
+DownloadTask *-- "1" DownloadRequest
+PRDownloaderConfig +-- PRDownloaderConfig$Builder : nested
+NoOpsDbHelper ..> DownloadModel
+ComponentHolder -- "0..1" DbHelper
+DownloadTask -- "0..1" ProgressHandler
+DownloadTask -- "0..1" FileDownloadOutputStream
+DownloadTask ..> Response
+DownloadTask ..> DownloadModel
+Utils ..> HttpClient
+DownloadRequestBuilder ..> DownloadRequest
+PRDownloader ..> DownloadRequestBuilder
+FileDownloadOutputStream <|.. FileDownloadRandomAccessFile
+Core -- "0..1" Core
+PRDownloaderConfig -- "0..1" HttpClient
+Core *-- "1" ExecutorSupplier
+DownloadRequest -- "0..1" Priority
+DownloadRunnable *-- "1" DownloadRequest
+RequestBuilder <|.. DownloadRequestBuilder
+DbHelper <|.. AppDbHelper
+SynchronousCall ..> Response
+
+@enduml

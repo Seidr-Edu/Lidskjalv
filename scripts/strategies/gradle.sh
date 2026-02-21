@@ -59,10 +59,20 @@ gradle_build() {
   # Save and restore working directory
   pushd "$build_dir" >/dev/null || return 1
   
-  # Run the build
+  # Run the build.
+  # Prefer --stacktrace for standard Gradle, but retry without it for custom
+  # wrapper scripts that only accept task names.
   # shellcheck disable=SC2086
   local exit_code=0
   run_logged "$log_file" $gradle_cmd $strategy_args --stacktrace || exit_code=$?
+
+  if [[ $exit_code -ne 0 ]] && [[ "$gradle_cmd" == "./gradlew" ]]; then
+    if grep -q "Unsupported task: --stacktrace" "$log_file" 2>/dev/null; then
+      log_warn "Custom gradlew detected (no --stacktrace support), retrying without --stacktrace"
+      exit_code=0
+      run_logged "$log_file" $gradle_cmd $strategy_args || exit_code=$?
+    fi
+  fi
   
   popd >/dev/null
   return $exit_code
@@ -85,6 +95,9 @@ gradle_sonar() {
   
   # Common sonar args to skip recompilation (already built) and tests
   local sonar_args="-Dsonar.host.url=$SONAR_HOST_URL -Dsonar.token=$SONAR_TOKEN -Dsonar.projectKey=$project_key -Dsonar.organization=$SONAR_ORGANIZATION -Dsonar.gradle.skipCompile=true"
+  if [[ "${SONAR_SCM_EXCLUSIONS_DISABLED:-}" == "true" ]]; then
+    sonar_args="${sonar_args} -Dsonar.scm.exclusions.disabled=true"
+  fi
   
   # Detect Gradle version for SonarQube plugin compatibility
   local gradle_major_version=8
@@ -149,6 +162,9 @@ GRADLE_INIT
     
     if command -v sonar-scanner &>/dev/null; then
       log_info "Falling back to sonar-scanner CLI"
+      # Reset exit status before fallback; otherwise a successful fallback can still
+      # return the original Gradle failure code.
+      exit_code=0
       
       local source_dirs=""
       local binary_dirs=""
@@ -207,12 +223,17 @@ GRADLE_INIT
       if [[ -n "$binary_dirs" ]]; then
         sonar_cmd+=(-Dsonar.java.binaries="$binary_dirs")
       fi
+      if [[ "${SONAR_SCM_EXCLUSIONS_DISABLED:-}" == "true" ]]; then
+        sonar_cmd+=(-Dsonar.scm.exclusions.disabled=true)
+      fi
       
       run_logged "$log_file" "${sonar_cmd[@]}" || exit_code=$?
       
       if [[ $exit_code -eq 0 ]]; then
         log_success "SonarQube analysis succeeded via CLI fallback"
         echo "CLI" > "${build_dir}/.sonar-analysis-method"
+      else
+        log_error "sonar-scanner CLI fallback failed (exit code: $exit_code)"
       fi
     else
       log_error "sonar-scanner CLI not available for fallback"
@@ -234,6 +255,7 @@ parse_gradle_error() {
   local log_file="$1"
   
   if grep -q "SDK location not found" "$log_file" 2>/dev/null; then
+    echo "sdk_not_found"
   elif grep -q "com/android/build/gradle" "$log_file" 2>/dev/null; then
     echo "android_plugin_incompatibility"
   elif grep -q "Task .* not found in root project" "$log_file" 2>/dev/null; then

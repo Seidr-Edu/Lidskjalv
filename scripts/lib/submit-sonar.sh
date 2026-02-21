@@ -71,6 +71,38 @@ sonar_wait_ready() {
 # Global variable for task ID
 SONAR_TASK_ID=""
 
+# Remove stale report-task files so a previous analysis cannot be mistaken for current success.
+sonar_cleanup_report_files() {
+  local build_dir="$1"
+
+  find "$build_dir" -type f \
+    \( -path "*/.scannerwork/report-task.txt" -o -path "*/target/sonar/report-task.txt" -o -path "*/build/sonar/report-task.txt" \) \
+    -delete 2>/dev/null || true
+}
+
+# Extract compute engine task ID from Sonar report-task artifacts.
+sonar_extract_task_id_from_report() {
+  local build_dir="$1"
+  local report_file=""
+
+  report_file="$(find "$build_dir" -type f \
+    \( -path "*/.scannerwork/report-task.txt" -o -path "*/target/sonar/report-task.txt" -o -path "*/build/sonar/report-task.txt" \) \
+    -print 2>/dev/null | head -1 || true)"
+
+  if [[ -z "$report_file" ]]; then
+    echo ""
+    return 0
+  fi
+
+  sed -n 's/^ceTaskId=\(.*\)$/\1/p' "$report_file" | tail -1 || true
+}
+
+# Extract compute engine task ID from scanner logs.
+sonar_extract_task_id_from_log() {
+  local log_file="$1"
+  sed -n 's/.*api\/ce\/task?id=\([A-Za-z0-9_-]*\).*/\1/p' "$log_file" 2>/dev/null | tail -1 || true
+}
+
 # Submit a project to SonarQube for analysis
 # Usage: submit_to_sonar <project_key> <build_dir> <build_tool>
 # Returns: 0 on success, 1 on failure
@@ -97,6 +129,9 @@ submit_to_sonar() {
     log_error "SonarQube is not available, skipping submission"
     return 1
   fi
+
+  # Ensure task ID we extract belongs to this run, not a previous submission.
+  sonar_cleanup_report_files "$build_dir"
   
   # Run analysis based on build tool
   local exit_code=0
@@ -127,14 +162,20 @@ submit_to_sonar() {
     rm -f "${build_dir}/.sonar-analysis-method"
   fi
   
-  # Extract task ID from log if possible
-  SONAR_TASK_ID="$(sed -n 's/.*task?id=\([A-Za-z0-9_-]*\).*/\1/p' "$log_file" 2>/dev/null | tail -1 || echo "")"
-  
-  if [[ -n "$SONAR_TASK_ID" ]]; then
-    log_success "Analysis submitted. Task ID: $SONAR_TASK_ID"
-  else
-    log_success "Analysis submitted for $key"
+  # Extract task ID; without it we cannot verify a real SonarQube submission happened.
+  SONAR_TASK_ID="$(sonar_extract_task_id_from_report "$build_dir")"
+  if [[ -z "$SONAR_TASK_ID" ]]; then
+    SONAR_TASK_ID="$(sonar_extract_task_id_from_log "$log_file")"
   fi
+
+  if [[ -z "$SONAR_TASK_ID" ]]; then
+    log_error "SonarQube command exited but produced no task ID for $key"
+    log_error "Likely no analysis was submitted (for example, a custom wrapper ignored the sonar task)"
+    log_error "See log: $log_file"
+    return 1
+  fi
+
+  log_success "Analysis submitted. Task ID: $SONAR_TASK_ID"
   
   return 0
 }
@@ -237,6 +278,9 @@ sonar_create_project() {
   
   require_env "SONAR_HOST_URL"
   require_env "SONAR_TOKEN"
+  if [[ "$SONAR_HOST_URL" == *"sonarcloud.io"* ]]; then
+    require_env "SONAR_ORGANIZATION" "Required for SonarCloud project creation"
+  fi
   
   # Check if already exists
   if sonar_project_exists "$key"; then
@@ -245,11 +289,18 @@ sonar_create_project() {
   fi
   
   log_info "Creating SonarQube project: $key ($name)"
-  
+
+  local -a create_args=(
+    --data-urlencode "project=${key}"
+    --data-urlencode "name=${name}"
+  )
+  if [[ -n "${SONAR_ORGANIZATION:-}" ]]; then
+    create_args+=(--data-urlencode "organization=${SONAR_ORGANIZATION}")
+  fi
+
   curl -sf -u "${SONAR_TOKEN}:" \
     -X POST "${SONAR_HOST_URL}/api/projects/create" \
-    --data-urlencode "project=${key}" \
-    --data-urlencode "name=${name}" \
+    "${create_args[@]}" \
     >/dev/null 2>&1 || true
   
   return 0

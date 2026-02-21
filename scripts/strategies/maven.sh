@@ -78,14 +78,20 @@ maven_sonar() {
   
   # Run sonar analysis (classes should already be compiled)
   local exit_code=0
-  run_logged "$log_file" $mvn_cmd \
-    org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
-    -Dsonar.host.url="$SONAR_HOST_URL" \
-    -Dsonar.token="$SONAR_TOKEN" \
-    -Dsonar.projectKey="$project_key" \
-    -Dsonar.organization="$SONAR_ORGANIZATION" \
-    -DskipTests=true \
-    -B || exit_code=$?
+  local -a sonar_cmd=(
+    "$mvn_cmd"
+    org.sonarsource.scanner.maven:sonar-maven-plugin:sonar
+    "-Dsonar.host.url=$SONAR_HOST_URL"
+    "-Dsonar.token=$SONAR_TOKEN"
+    "-Dsonar.projectKey=$project_key"
+    "-Dsonar.organization=$SONAR_ORGANIZATION"
+    -DskipTests=true
+    -B
+  )
+  if [[ "${SONAR_SCM_EXCLUSIONS_DISABLED:-}" == "true" ]]; then
+    sonar_cmd+=(-Dsonar.scm.exclusions.disabled=true)
+  fi
+  run_logged "$log_file" "${sonar_cmd[@]}" || exit_code=$?
   
   popd >/dev/null
   return $exit_code

@@ -14,6 +14,9 @@ fi
 # Detect the build system for a repository
 # Usage: detect_build_system <repo_dir> [project_key]
 # Output format: maven | gradle | maven:subdir | gradle:subdir | unknown
+# Detection markers:
+# - Maven: pom.xml or mvnw
+# - Gradle: build.gradle(.kts) or gradlew
 # Returns: 0 if detected, 1 if unknown
 detect_build_system() {
   local repo_dir="$1"
@@ -44,17 +47,27 @@ detect_build_system() {
   elif [[ -f "${repo_dir}/build.gradle" ]] || [[ -f "${repo_dir}/build.gradle.kts" ]]; then
     result="gradle"
     _log_detect "$log_file" "Found build.gradle at root -> gradle"
+  elif [[ -f "${repo_dir}/mvnw" ]]; then
+    result="maven"
+    _log_detect "$log_file" "Found mvnw at root -> maven"
+  elif [[ -f "${repo_dir}/gradlew" ]]; then
+    result="gradle"
+    _log_detect "$log_file" "Found gradlew at root -> gradle"
   else
     # Search subdirectories (max depth 2)
     _log_detect "$log_file" "No build file at root, searching subdirectories..."
     
-    local subdir_pom subdir_gradle
+    local subdir_pom subdir_gradle subdir_mvnw subdir_gradlew
     
     # Find pom.xml in subdirectories
     subdir_pom="$(find "$repo_dir" -maxdepth 2 -name "pom.xml" -type f 2>/dev/null | head -1)"
     
     # Find build.gradle in subdirectories
     subdir_gradle="$(find "$repo_dir" -maxdepth 2 \( -name "build.gradle" -o -name "build.gradle.kts" \) -type f 2>/dev/null | head -1)"
+    
+    # Find wrapper scripts in subdirectories
+    subdir_mvnw="$(find "$repo_dir" -maxdepth 2 -name "mvnw" -type f 2>/dev/null | head -1)"
+    subdir_gradlew="$(find "$repo_dir" -maxdepth 2 -name "gradlew" -type f 2>/dev/null | head -1)"
     
     if [[ -n "$subdir_pom" ]]; then
       local subdir
@@ -68,8 +81,20 @@ detect_build_system() {
       subdir="${subdir#$repo_dir/}"
       result="gradle:${subdir}"
       _log_detect "$log_file" "Found build.gradle in subdir: $subdir -> gradle:$subdir"
+    elif [[ -n "$subdir_mvnw" ]]; then
+      local subdir
+      subdir="$(dirname "$subdir_mvnw")"
+      subdir="${subdir#$repo_dir/}"
+      result="maven:${subdir}"
+      _log_detect "$log_file" "Found mvnw in subdir: $subdir -> maven:$subdir"
+    elif [[ -n "$subdir_gradlew" ]]; then
+      local subdir
+      subdir="$(dirname "$subdir_gradlew")"
+      subdir="${subdir#$repo_dir/}"
+      result="gradle:${subdir}"
+      _log_detect "$log_file" "Found gradlew in subdir: $subdir -> gradle:$subdir"
     else
-      _log_detect "$log_file" "No build files found"
+      _log_detect "$log_file" "No build markers found (pom.xml/build.gradle/mvnw/gradlew)"
     fi
   fi
   

@@ -108,18 +108,21 @@ Scan all repositories from `repos.txt` with automatic build detection and JDK se
 ./scripts/batch-scan.sh --help           # Show all options
 ./scripts/batch-scan.sh --dry-run        # Preview what would run
 ./scripts/batch-scan.sh --force          # Reprocess all repos
-./scripts/batch-scan.sh --jdk 17         # Force specific JDK
+./scripts/batch-scan.sh --repo path:repos/my-repo
+./scripts/batch-scan.sh --repos-root /opt/repos
 ./scripts/batch-scan.sh --skip-sonar     # Build only, skip analysis
 ```
 
 ### Single Repository Scan
 
-Scan a single repository:
+Scan a single repository (URL or local path):
 
 ```bash
 ./scripts/scan-one.sh                                    # First repo from repos.txt
 ./scripts/scan-one.sh https://github.com/org/repo.git   # Specific repo
+./scripts/scan-one.sh --path repos/PRDownloader         # Local path
 ./scripts/scan-one.sh --jdk 17 https://github.com/...   # Force JDK 17
+./scripts/scan-one.sh --project-key my_key --path repos/PRDownloader
 ```
 
 ### Pre-create Projects (Optional)
@@ -164,15 +167,18 @@ Edit `repos.txt` to specify repositories to scan (one per line):
 
 ```
 https://github.com/org1/repo1.git
-https://github.com/org2/repo2.git
+url:https://github.com/org2/repo2.git
+path:repos/local-repo
 # Comments are supported
 https://github.com/org3/repo3.git # jdk=11
-https://github.com/org4/repo4.git # subdir=backend, jdk=17
+path:repos/org4-repo4 # subdir=backend, jdk=17, key=custom_key, name=Custom Name
 ```
 
 **Per-repo hints** (optional):
 - `jdk=XX` - Force specific JDK version
 - `subdir=path` - Build from subdirectory
+- `key=value` - Override Sonar project key
+- `name=value` - Override Sonar project name
 
 ### Quality Profiles
 
@@ -207,4 +213,3 @@ The batch scanner automatically skips successful repos:
 ## Documentation
 
 - `docs/scanning-considerations.md` - Common build failures and solutions
-

@@ -107,6 +107,16 @@ Model-mode generated repo artifacts (inside `new_repo`):
 
 The runner fails fast with actionable errors if Codex CLI is missing, unauthenticated, or cannot write its local session directory.
 
+## Runner modules
+
+- `andvari-run.sh`: thin entrypoint that wires config parsing, workspace init, mode dispatch, and final report/exit.
+- `scripts/lib/runner_common.sh`: shared helpers (usage, error handling, timestamping, sha256, validators).
+- `scripts/lib/runner_cli.sh`: CLI parsing and configuration validation.
+- `scripts/lib/runner_workspace.sh`: run workspace creation and artifact/log path initialization.
+- `scripts/lib/runner_gates.sh`: fixed/model gate execution plus gate failure summarization and outcome locking.
+- `scripts/lib/runner_flows.sh`: fixed-mode and model-mode orchestration flows with unchanged adapter call order.
+- `scripts/lib/runner_report.sh`: run report rendering and final pass/fail exit handling.
+
 ## Adapter design
 
 The runner uses an adapter entrypoint:

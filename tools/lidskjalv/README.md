@@ -12,6 +12,14 @@ Runtime data defaults to `<monorepo>/.data/lidskjalv/` in both cases.
 - **SonarCloud**: Cloud-hosted static code analysis with persistent storage
 - **Batch Scanner**: Shell scripts for automated multi-repository scanning
 
+### Orchestrator modules
+
+- `scripts/batch-scan.sh`: thin entrypoint that initializes environment, sources libs, and dispatches orchestration.
+- `scripts/lib/batch_cli.sh`: CLI defaults, usage, and argument parsing.
+- `scripts/lib/batch_repo_selection.sh`: repository input loading and dry-run planning output.
+- `scripts/lib/batch_execution.sh`: per-repository processing loop, time-limit checks, and counters.
+- `scripts/lib/batch_summary.sh`: post-run summary generation.
+
 ## Prerequisites
 
 **Required tools:**

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# batch_repo_selection.sh - Repository input collection and dry-run planning
+# Handles loading repos from file or single-repo flag and formatting dry-run output
 
 batch_collect_repos() {
   BATCH_REPOS_TO_PROCESS=()

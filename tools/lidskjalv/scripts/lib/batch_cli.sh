@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# batch_cli.sh - CLI argument parsing and defaults for batch scanner
+# Handles command-line option parsing and default initialization
 
 batch_init_defaults() {
   FORCE_RERUN=false

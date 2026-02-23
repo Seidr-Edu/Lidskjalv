@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# runner_flows.sh - Fixed and model mode orchestration flows
+# Implements fixed-gate and model-gate execution flows with repair iteration loops
 
 andvari_execute_fixed_flow() {
   echo "[andvari] starting fixed-gate reconstruction..."

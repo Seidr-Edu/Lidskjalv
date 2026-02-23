@@ -1,11 +1,21 @@
 #!/usr/bin/env bash
+# batch_execution.sh - Main processing loop and time-limit checks
+# Orchestrates per-repository processing with workflow time-limit enforcement
 
-WORKFLOW_START_TIME=$(date +%s)
+WORKFLOW_START_TIME=""
 WORKFLOW_TIME_LIMIT_MINUTES=${WORKFLOW_TIME_LIMIT_MINUTES:-0}
+
+batch_init_timer() {
+  WORKFLOW_START_TIME=$(date +%s)
+}
 
 batch_should_continue_processing() {
   if [[ "$WORKFLOW_TIME_LIMIT_MINUTES" -eq 0 ]]; then
     return 0
+  fi
+
+  if [[ -z "${WORKFLOW_START_TIME:-}" ]]; then
+    batch_init_timer
   fi
 
   local current_time
@@ -94,6 +104,7 @@ batch_run_loop() {
   BATCH_SKIPPED=0
   BATCH_STOPPED_EARLY=false
 
+  batch_init_timer
   log_info "Starting main processing loop..."
 
   for entry in "${BATCH_REPOS_TO_PROCESS[@]}"; do

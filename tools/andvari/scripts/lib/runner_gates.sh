@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# runner_gates.sh - Gate execution and failure summarization
+# Runs fixed and model acceptance gates, summarizes failures, and manages outcome locking
 
 andvari_run_fixed_gate() {
   local label="$1"

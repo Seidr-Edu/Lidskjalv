@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# runner_workspace.sh - Workspace and artifact path initialization
+# Creates run directories, copies required files, and initializes artifact/log paths
 
 andvari_init_workspace() {
   RUNS_DIR="${ANDVARI_RUNS_DIR:-${ROOT_DIR}/runs}"

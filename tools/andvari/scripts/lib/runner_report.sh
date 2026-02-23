@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# runner_report.sh - Run report generation and final exit handling
+# Creates markdown run reports and prints final status messages
 
 andvari_write_run_report() {
   END_TIME="$(andvari_timestamp_utc)"

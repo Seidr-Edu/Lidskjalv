@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# runner_common.sh - Shared utilities for Andvari runner
+# Provides common helper functions for usage output, error handling, timestamps, validation, and SHA256 computation
 
 andvari_usage() {
   cat <<'USAGE'

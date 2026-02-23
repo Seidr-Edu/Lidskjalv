@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# batch_summary.sh - Post-run summary generation
+# Creates timestamped summary files with success/failure/skipped repository lists
 
 batch_generate_summary() {
   local summary_file="${LOG_DIR}/summary-$(date +%Y%m%d-%H%M%S).txt"

@@ -9,6 +9,7 @@
 # Each strategy is: "JDK_VERSION|BUILD_ARGS"
 # Strategies are tried in order until one succeeds
 
+# shellcheck disable=SC2034  # Referenced by build.sh after sourcing this file.
 MAVEN_STRATEGIES=(
   # Modern JDKs with standard test skipping
   "21|-DskipTests=true -Dmaven.test.skip=true"
@@ -55,11 +56,11 @@ maven_build() {
   pushd "$build_dir" >/dev/null || return 1
   
   # Run the build
-  # shellcheck disable=SC2086
   local exit_code=0
+  # shellcheck disable=SC2086
   run_logged "$log_file" $mvn_cmd $base_args $strategy_args -B || exit_code=$?
   
-  popd >/dev/null
+  popd >/dev/null || return 1
   return $exit_code
 }
 
@@ -93,7 +94,7 @@ maven_sonar() {
   fi
   run_logged "$log_file" "${sonar_cmd[@]}" || exit_code=$?
   
-  popd >/dev/null
+  popd >/dev/null || return 1
   return $exit_code
 }
 

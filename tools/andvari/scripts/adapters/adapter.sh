@@ -31,34 +31,34 @@ _adapter_load() {
 
 adapter_check_prereqs() {
   local adapter="$1"
-  _adapter_load "$adapter"
+  _adapter_load "$adapter" || return 1
   "${adapter}_check_prereqs"
 }
 
 adapter_run_initial_reconstruction() {
   local adapter="$1"
   shift
-  _adapter_load "$adapter"
+  _adapter_load "$adapter" || return 1
   "${adapter}_run_initial_reconstruction" "$@"
 }
 
 adapter_run_fix_iteration() {
   local adapter="$1"
   shift
-  _adapter_load "$adapter"
+  _adapter_load "$adapter" || return 1
   "${adapter}_run_fix_iteration" "$@"
 }
 
 adapter_run_gate_declaration() {
   local adapter="$1"
   shift
-  _adapter_load "$adapter"
+  _adapter_load "$adapter" || return 1
   "${adapter}_run_gate_declaration" "$@"
 }
 
 adapter_run_implementation_iteration() {
   local adapter="$1"
   shift
-  _adapter_load "$adapter"
+  _adapter_load "$adapter" || return 1
   "${adapter}_run_implementation_iteration" "$@"
 }

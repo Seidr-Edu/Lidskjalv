@@ -23,7 +23,7 @@ _codex_prompts_dir() {
 
 # _codex_render_template TEMPLATE_NAME [VAR=VALUE ...]
 # Reads the named template from the prompts directory and substitutes
-# any VAR=VALUE pairs supplied as extra arguments using sed.
+# any VAR=VALUE pairs supplied as extra arguments.
 # Prints the rendered content to stdout; returns 1 if the file is missing.
 _codex_render_template() {
   local template_name="$1"
@@ -38,7 +38,10 @@ _codex_render_template() {
   }
 
   local content
-  content="$(cat "$template_path")"
+  # Preserve trailing newlines from the template. Command substitution would
+  # strip them and can accidentally join the next appended section onto the
+  # final template line.
+  IFS= read -r -d '' content < "$template_path" || true
 
   # Callers only pass pre-validated integer values; substitution is safe.
   local pair key val
@@ -48,7 +51,7 @@ _codex_render_template() {
     content="${content//\$\{${key}\}/${val}}"
   done
 
-  # Use printf '%s' to avoid adding an extra newline beyond what the template provides.
+  # Use printf '%s' so output matches the template's existing newline layout.
   printf '%s' "$content"
 }
 

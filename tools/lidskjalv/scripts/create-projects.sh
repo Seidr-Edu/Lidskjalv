@@ -117,7 +117,7 @@ else
 
   while IFS= read -r entry; do
     [[ -z "$entry" ]] && continue
-    IFS='|' read -r source_type source_ref jdk subdir key_override name_override <<< "$entry"
+    IFS='|' read -r source_type source_ref _jdk _subdir key_override name_override <<< "$entry"
     create_project "$source_type" "$source_ref" "$key_override" "$name_override"
   done < <(parse_repos_file "$REPOS_FILE")
 fi

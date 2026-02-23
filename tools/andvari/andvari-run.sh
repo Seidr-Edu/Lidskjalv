@@ -25,10 +25,16 @@ main() {
   andvari_init_workspace
   andvari_init_artifact_paths
 
+  # Shared run state globals are updated/read by sourced runner_* modules.
+  # shellcheck disable=SC2034
   START_TIME="$(andvari_timestamp_utc)"
+  # shellcheck disable=SC2034
   START_EPOCH="$(date -u +%s)"
+  # shellcheck disable=SC2034
   STATUS="failed"
+  # shellcheck disable=SC2034
   REPAIR_ITERATIONS_USED=0
+  # shellcheck disable=SC2034
   ADAPTER_FAILURES=0
 
   echo "[andvari] run id: ${RUN_ID}"

@@ -9,6 +9,7 @@
 # Each strategy is: "JDK_VERSION|BUILD_ARGS"
 # Strategies are tried in order until one succeeds
 
+# shellcheck disable=SC2034  # Referenced by build.sh after sourcing this file.
 GRADLE_STRATEGIES=(
   # Modern JDKs with test skipping (no -x integrationTest: Gradle 8.9+ fails on non-existent tasks)
   "21|build -x test -x check"
@@ -62,19 +63,20 @@ gradle_build() {
   # Run the build.
   # Prefer --stacktrace for standard Gradle, but retry without it for custom
   # wrapper scripts that only accept task names.
-  # shellcheck disable=SC2086
   local exit_code=0
+  # shellcheck disable=SC2086
   run_logged "$log_file" $gradle_cmd $strategy_args --stacktrace || exit_code=$?
 
   if [[ $exit_code -ne 0 ]] && [[ "$gradle_cmd" == "./gradlew" ]]; then
     if grep -q "Unsupported task: --stacktrace" "$log_file" 2>/dev/null; then
       log_warn "Custom gradlew detected (no --stacktrace support), retrying without --stacktrace"
       exit_code=0
+      # shellcheck disable=SC2086
       run_logged "$log_file" $gradle_cmd $strategy_args || exit_code=$?
     fi
   fi
   
-  popd >/dev/null
+  popd >/dev/null || return 1
   return $exit_code
 }
 
@@ -103,7 +105,8 @@ gradle_sonar() {
   local gradle_major_version=8
   local gradle_full_version="unknown"
   if [[ -f "${build_dir}/gradle/wrapper/gradle-wrapper.properties" ]]; then
-    local gradle_dist_url=$(grep -E "distributionUrl" "${build_dir}/gradle/wrapper/gradle-wrapper.properties" 2>/dev/null | cut -d'=' -f2)
+    local gradle_dist_url
+    gradle_dist_url="$(grep -E "distributionUrl" "${build_dir}/gradle/wrapper/gradle-wrapper.properties" 2>/dev/null | cut -d'=' -f2)"
     if [[ -n "$gradle_dist_url" ]]; then
       gradle_full_version=$(echo "$gradle_dist_url" | grep -oE '[0-9]+\.[0-9]+\.?[0-9]*' | head -1)
       gradle_major_version=$(echo "$gradle_full_version" | cut -d'.' -f1)
@@ -130,6 +133,7 @@ gradle_sonar() {
   
   if grep -qE "sonarqube|org.sonarqube" build.gradle* 2>/dev/null; then
     log_info "Project has SonarQube plugin configured, using 'sonar' task"
+    # shellcheck disable=SC2086
     run_logged "$log_file" $gradle_cmd sonar $sonar_args -x test || exit_code=$?
   else
     log_info "No SonarQube plugin found, injecting via init script"
@@ -148,6 +152,7 @@ allprojects {
 }
 GRADLE_INIT
     
+    # shellcheck disable=SC2086
     run_logged "$log_file" $gradle_cmd --init-script "$init_script" sonar $sonar_args -x test || exit_code=$?
     
     rm -f "$init_script"
@@ -173,7 +178,7 @@ GRADLE_INIT
         if [[ -n "$source_dirs" ]]; then
           source_dirs="${source_dirs},"
         fi
-        local rel_path="${src_dir#$build_dir/}"
+        local rel_path="${src_dir#"$build_dir"/}"
         source_dirs="${source_dirs}${rel_path}"
       done < <(find "$build_dir" -type d -path "*/src/main/java" 2>/dev/null)
       
@@ -182,7 +187,7 @@ GRADLE_INIT
           if [[ -n "$source_dirs" ]]; then
             source_dirs="${source_dirs},"
           fi
-          local rel_path="${src_dir#$build_dir/}"
+          local rel_path="${src_dir#"$build_dir"/}"
           source_dirs="${source_dirs}${rel_path}"
         done < <(find "$build_dir" -type d -name "src" -maxdepth 3 2>/dev/null)
       fi
@@ -191,7 +196,7 @@ GRADLE_INIT
         if [[ -n "$binary_dirs" ]]; then
           binary_dirs="${binary_dirs},"
         fi
-        local rel_path="${class_dir#$build_dir/}"
+        local rel_path="${class_dir#"$build_dir"/}"
         binary_dirs="${binary_dirs}${rel_path}"
       done < <(find "$build_dir" -type d \( -path "*/build/*/classes" -o -path "*/build/classes" \) 2>/dev/null)
       
@@ -244,7 +249,7 @@ GRADLE_INIT
     echo "GRADLE" > "${build_dir}/.sonar-analysis-method"
   fi
   
-  popd >/dev/null
+  popd >/dev/null || return 1
   return $exit_code
 }
 

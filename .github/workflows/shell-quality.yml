@@ -1,0 +1,71 @@
+name: Shell Quality and Entrypoint Smoke
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+jobs:
+  shell-quality:
+    name: Shell syntax and lint (entrypoints + executables)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install shell tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+
+      - name: Validate Bash syntax for all tracked shell scripts
+        run: |
+          git ls-files -z '*.sh' | xargs -0 -n1 bash -n
+
+      - name: Run shellcheck on monorepo entrypoints and executable scripts
+        run: |
+          shopt -s globstar nullglob
+
+          # Lint scripts that are intended to be executed directly.
+          # Sourced helper modules are covered by bash syntax checks above and
+          # can be added to shellcheck later with targeted annotations.
+          files=(
+            andvari-run.sh
+            scripts/*.sh
+            tools/lidskjalv/scripts/*.sh
+            tools/lidskjalv/scripts/strategies/*.sh
+            tools/andvari/andvari-run.sh
+            tools/andvari/gate_*.sh
+            tools/andvari/scripts/verify_outcome_coverage.sh
+          )
+
+          shellcheck -x -e SC1090,SC1091 "${files[@]}"
+
+  entrypoint-smoke:
+    name: Entrypoint smoke (--help and wrapper routing)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Ensure entrypoints are executable
+        run: |
+          chmod +x andvari-run.sh
+          chmod +x scripts/*.sh
+          chmod +x tools/lidskjalv/scripts/*.sh
+          chmod +x tools/andvari/andvari-run.sh
+
+      - name: Smoke test root wrappers with --help
+        run: |
+          ./scripts/batch-scan.sh --help >/dev/null
+          ./scripts/scan-one.sh --help >/dev/null
+          ./scripts/create-projects.sh --help >/dev/null
+          ./andvari-run.sh --help >/dev/null
+
+      - name: Smoke test tool-local entrypoints with --help
+        run: |
+          ./tools/lidskjalv/scripts/batch-scan.sh --help >/dev/null
+          ./tools/lidskjalv/scripts/scan-one.sh --help >/dev/null
+          ./tools/lidskjalv/scripts/create-projects.sh --help >/dev/null
+          ./tools/andvari/andvari-run.sh --help >/dev/null

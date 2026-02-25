@@ -35,6 +35,7 @@ REPO_ARG=""
 PATH_ARG=""
 PROJECT_KEY_OVERRIDE=""
 PROJECT_NAME_OVERRIDE=""
+SUBDIR_OVERRIDE=""
 SKIP_SONAR=false
 FORCE_RERUN=false
 REPOS_ROOT="${REPOS_ROOT:-$PROJECT_ROOT}"
@@ -55,6 +56,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --project-name)
       PROJECT_NAME_OVERRIDE="$2"
+      shift 2
+      ;;
+    --subdir)
+      SUBDIR_OVERRIDE="$2"
       shift 2
       ;;
     --skip-sonar)
@@ -79,6 +84,7 @@ Options:
   --path <dir>             Scan local repository path instead of cloning
   --project-key <key>      Override derived Sonar project key
   --project-name <name>    Override Sonar project display name
+  --subdir <path>          Scan only this subdirectory within repository
   --skip-sonar             Build only, skip SonarQube submission
   -f, --force              Force rerun even if already successful
   -h, --help               Show this help
@@ -87,6 +93,7 @@ Examples:
   $(basename "$0")                                        # First entry from repos.txt
   $(basename "$0") https://github.com/org/repo.git       # Specific URL
   $(basename "$0") --path repos/PRDownloader             # Local path
+  $(basename "$0") --path repos/monorepo --subdir app    # Subdirectory scan
   $(basename "$0") --project-key custom --path repos/x   # Override project key
 EOF
       exit 0
@@ -167,6 +174,9 @@ if [[ -z "$PROJECT_KEY_OVERRIDE" ]]; then
 fi
 if [[ -z "$PROJECT_NAME_OVERRIDE" ]]; then
   PROJECT_NAME_OVERRIDE="$SOURCE_NAME_HINT"
+fi
+if [[ -n "$SUBDIR_OVERRIDE" ]]; then
+  SOURCE_SUBDIR_HINT="$SUBDIR_OVERRIDE"
 fi
 
 PROJECT_KEY="$(derive_source_key "$SOURCE_TYPE" "$SOURCE_REF" "$PROJECT_KEY_OVERRIDE")"

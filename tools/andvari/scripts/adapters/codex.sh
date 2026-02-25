@@ -97,6 +97,8 @@ PREREQ_EOF
     "fix_iteration.md"
     "gate_declaration.md"
     "implementation_iteration.md"
+    "test_port_initial.md"
+    "test_port_iteration.md"
   )
   local tpl
   for tpl in "${required_templates[@]}"; do
@@ -114,6 +116,8 @@ run_codex_prompt() {
   local events_log="$4"
   local stderr_log="$5"
   local output_last_message="$6"
+  shift 6
+  local -a extra_args=("$@")
 
   local input_dir
   input_dir="$(cd "$(dirname "$input_diagram_path")" && pwd)"
@@ -121,17 +125,87 @@ run_codex_prompt() {
   set +e
   (
     cd "$new_repo_dir"
-    codex exec \
-      --skip-git-repo-check \
-      --full-auto \
-      --add-dir "$input_dir" \
-      --json \
-      --output-last-message "$output_last_message" \
-      - < "$prompt_file"
+    local -a cmd=(
+      codex exec
+      --skip-git-repo-check
+      --full-auto
+      --add-dir "$input_dir"
+    )
+    if [[ ${#extra_args[@]} -gt 0 ]]; then
+      cmd+=("${extra_args[@]}")
+    fi
+    cmd+=(
+      --json
+      --output-last-message "$output_last_message"
+      -
+    )
+    "${cmd[@]}" < "$prompt_file"
   ) >> "$events_log" 2>> "$stderr_log"
   local status=$?
   set -e
 
+  return "$status"
+}
+
+codex_run_test_port_initial() {
+  local working_repo_dir="$1"
+  local input_diagram_path="$2"
+  local original_repo_path="$3"
+  local events_log="$4"
+  local stderr_log="$5"
+  local output_last_message="$6"
+
+  local prompt_file
+  prompt_file="$(mktemp)"
+  _codex_render_template "test_port_initial.md" > "$prompt_file"
+
+  append_adapter_event "$events_log" "test-port-initial" "0"
+  local status
+  set +e
+  run_codex_prompt \
+    "$working_repo_dir" \
+    "$input_diagram_path" \
+    "$prompt_file" \
+    "$events_log" \
+    "$stderr_log" \
+    "$output_last_message" \
+    --add-dir "$original_repo_path"
+  status=$?
+  set -e
+  rm -f "$prompt_file"
+  return "$status"
+}
+
+codex_run_test_port_iteration() {
+  local working_repo_dir="$1"
+  local input_diagram_path="$2"
+  local original_repo_path="$3"
+  local failure_summary_file="$4"
+  local events_log="$5"
+  local stderr_log="$6"
+  local output_last_message="$7"
+  local iteration="$8"
+
+  local prompt_file
+  prompt_file="$(mktemp)"
+  _codex_render_template "test_port_iteration.md" \
+    "FAILURE_SUMMARY=$(cat "$failure_summary_file" 2>/dev/null || true)" \
+    > "$prompt_file"
+
+  append_adapter_event "$events_log" "test-port-iter" "$iteration"
+  local status
+  set +e
+  run_codex_prompt \
+    "$working_repo_dir" \
+    "$input_diagram_path" \
+    "$prompt_file" \
+    "$events_log" \
+    "$stderr_log" \
+    "$output_last_message" \
+    --add-dir "$original_repo_path"
+  status=$?
+  set -e
+  rm -f "$prompt_file"
   return "$status"
 }
 

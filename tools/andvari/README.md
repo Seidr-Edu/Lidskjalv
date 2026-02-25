@@ -124,4 +124,4 @@ The runner uses an adapter entrypoint:
 - `scripts/adapters/adapter.sh`
 - `scripts/adapters/codex.sh`
 
-Codex adapter supports both fixed mode (legacy initial/fix prompts) and model mode (declaration + implementation prompts).
+Codex adapter supports fixed mode (legacy initial/fix prompts), model mode (declaration + implementation prompts), and experiment test-port adaptation prompts.

@@ -4,6 +4,7 @@ This repository contains two tools:
 
 - `tools/lidskjalv`: batch scanning of Java repositories with SonarCloud
 - `tools/andvari`: local diagram-to-Java reconstruction pipeline
+- `tools/experiments`: orchestrated Andvari + Lidskjalv experiment harness
 
 ## Layout
 
@@ -29,12 +30,16 @@ From repo root:
 
 # Andvari
 ./andvari-run.sh --help
+
+# Experiments
+./experiment-run.sh --help
 ```
 
 ## Tool Docs
 
 - Lidskjalv docs: `tools/lidskjalv/README.md`
 - Andvari docs: `tools/andvari/README.md`
+- Experiments docs: `tools/experiments/README.md`
 
 ## Runtime Data
 

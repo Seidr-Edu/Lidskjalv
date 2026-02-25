@@ -135,6 +135,7 @@ Scan a single repository (URL or local path):
 ./scripts/scan-one.sh --path repos/PRDownloader         # Local path
 ./scripts/scan-one.sh --jdk 17 https://github.com/...   # Force JDK 17
 ./scripts/scan-one.sh --project-key my_key --path repos/PRDownloader
+./scripts/scan-one.sh --path repos/monorepo --subdir service-a
 ```
 
 ### Pre-create Projects (Optional)

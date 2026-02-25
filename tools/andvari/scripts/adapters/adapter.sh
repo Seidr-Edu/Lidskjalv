@@ -62,3 +62,17 @@ adapter_run_implementation_iteration() {
   _adapter_load "$adapter" || return 1
   "${adapter}_run_implementation_iteration" "$@"
 }
+
+adapter_run_test_port_initial() {
+  local adapter="$1"
+  shift
+  _adapter_load "$adapter" || return 1
+  "${adapter}_run_test_port_initial" "$@"
+}
+
+adapter_run_test_port_iteration() {
+  local adapter="$1"
+  shift
+  _adapter_load "$adapter" || return 1
+  "${adapter}_run_test_port_iteration" "$@"
+}

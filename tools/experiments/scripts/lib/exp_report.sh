@@ -89,12 +89,16 @@ def read_change_set_stats(path):
     return stats
 
 def is_allowed_test_rel(rel):
-    return (
+    if (
         rel.startswith("./src/test/") or
         rel.startswith("./test/") or
-        rel.startswith("./tests/") or
-        (rel.startswith("./src/") and "Test" in rel.split("/", 4)[2] if len(rel.split("/", 4)) > 2 else False)
-    )
+        rel.startswith("./tests/")
+    ):
+        return True
+    if rel.startswith("./src/"):
+        parts = rel.split("/", 4)
+        return len(parts) > 2 and "Test" in parts[2]
+    return False
 
 def count_allowed_test_files(repo_dir):
     if not repo_dir or not os.path.isdir(repo_dir):

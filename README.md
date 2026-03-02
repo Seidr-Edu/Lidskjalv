@@ -1,10 +1,11 @@
 # Lidskjalv
 
-This repository contains two tools:
+This repository contains four primary tools:
 
 - `tools/lidskjalv`: batch scanning of Java repositories with SonarCloud
 - `tools/andvari`: local diagram-to-Java reconstruction pipeline
 - `tools/experiments`: orchestrated Andvari + Lidskjalv experiment harness
+- `tools/test_port`: test-porting helper pipeline for experiment runs
 
 ## Layout
 
@@ -12,9 +13,12 @@ This repository contains two tools:
 .
 ├── tools/
 │   ├── lidskjalv/
-│   └── andvari/
+│   ├── andvari/
+│   ├── experiments/
+│   └── test_port/
 ├── scripts/                 # root wrappers for Lidskjalv commands
 ├── andvari-run.sh           # root wrapper for Andvari runner
+├── experiment-run.sh        # root wrapper for experiment harness
 └── .data/                   # generated runtime artifacts (ignored)
 ```
 
@@ -47,6 +51,7 @@ Root wrappers write generated data into:
 
 - Lidskjalv: `.data/lidskjalv/`
 - Andvari: `.data/andvari/`
+- Experiments: `.data/experiments/`
 
 You can override with env vars:
 

@@ -32,9 +32,10 @@ Runtime data defaults to `<monorepo>/.data/lidskjalv/` in both cases.
 - Gradle projects typically include a wrapper (`./gradlew`)
 
 **JDKs (at least one, more is better):**
-- JDK 17 (recommended - widely compatible)
-- JDK 21 (for modern projects)
-- JDK 11, 8 (for legacy projects)
+- JDK 21 (recommended default for modern projects)
+- JDK 17 (widely compatible fallback)
+- JDK 25 (for newest projects/toolchains)
+- JDK 11, 8 (legacy compatibility)
 
 ### Installation
 
@@ -47,7 +48,7 @@ brew install jq
 brew install maven
 
 # JDKs (install what you need)
-brew install openjdk@21 openjdk@17 openjdk@11 openjdk@8
+brew install openjdk openjdk@21 openjdk@17 openjdk@11 openjdk@8
 ```
 
 **Linux (apt):**
@@ -59,7 +60,7 @@ sudo apt install jq curl git
 sudo apt install maven
 
 # JDKs (install what you need)
-sudo apt install openjdk-21-jdk openjdk-17-jdk openjdk-11-jdk openjdk-8-jdk
+sudo apt install openjdk-25-jdk openjdk-21-jdk openjdk-17-jdk openjdk-11-jdk openjdk-8-jdk
 ```
 
 **Verify setup:**
@@ -110,10 +111,13 @@ Scan all repositories from `repos.txt` with automatic build detection and JDK se
 
 **Features:**
 - Automatic Maven/Gradle detection
-- Multi-JDK support (tries JDK 21, 17, 11, 8)
+- Multi-JDK support (tries JDK 25, 21, 17, 11, 8 based on strategy)
+- Wrapper safety checks (ignores non-standard `mvnw`/`gradlew` scripts)
+- Subdirectory-aware wrapper discovery (can use wrapper from parent directories)
 - State persistence (resume where you left off)
 - Detailed logging per repository
 - Failure classification and reporting
+- SonarCloud project visibility enforcement (`public`)
 
 **Options:**
 ```bash
@@ -193,6 +197,10 @@ path:repos/org4-repo4 # subdir=backend, jdk=17, key=custom_key, name=Custom Name
 - `key=value` - Override Sonar project key
 - `name=value` - Override Sonar project name
 
+`subdir` behavior:
+- If the hinted subdir has build markers, it is used.
+- If the hinted subdir is missing or has no build markers, Lidskjalv falls back to detected build path.
+
 ### Runtime paths
 
 Default runtime root is `.data/lidskjalv/`. Override with:
@@ -213,9 +221,17 @@ Default runtime root is `.data/lidskjalv/`. Override with:
 - Check that `SONAR_ORGANIZATION` matches your organization key
 
 ### Build failures
-- Check logs: `cat logs/{project-key}/build-attempt-*.log`
+- Check logs: `cat .data/lidskjalv/logs/{project-key}/build-attempt-*.log`
 - Try forcing a specific JDK: `./scripts/scan-one.sh --jdk 17 <url>`
 - Common issues documented in `docs/scanning-considerations.md`
+
+Common guarded failures:
+- `invalid_project_layout` for Maven `packaging=pom` projects with `src/main` sources but no `<modules>`
+- `invalid_project_layout` for Gradle projects without build markers and without a valid wrapper
+
+### Sonar submission succeeds but indexes no main code
+Lidskjalv fails submission when Sonar reports `No "Main" source files to scan` but `src/main` contains source files.
+This usually indicates a mismatched build model (for example aggregator-style `pom.xml` with real sources in module root).
 
 ### Missing JDK versions
 The scanner automatically discovers installed JDKs. Install additional versions:

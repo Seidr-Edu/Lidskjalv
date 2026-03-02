@@ -37,6 +37,44 @@ get_maven_command() {
   fi
 }
 
+maven_has_pom_packaging() {
+  local pom_path="$1"
+  [[ -f "$pom_path" ]] || return 1
+  grep -Eiq '<packaging>[[:space:]]*pom[[:space:]]*</packaging>' "$pom_path"
+}
+
+maven_has_modules_declared() {
+  local pom_path="$1"
+  [[ -f "$pom_path" ]] || return 1
+  grep -Eiq '<module>[[:space:]]*[^<[:space:]][^<]*</module>' "$pom_path"
+}
+
+maven_has_main_sources() {
+  local build_dir="$1"
+  find "$build_dir" -type f \
+    \( -name "*.java" -o -name "*.kt" -o -name "*.groovy" -o -name "*.scala" \) \
+    -path "*/src/main/*" -print -quit 2>/dev/null | grep -q .
+}
+
+maven_validate_project_layout() {
+  local build_dir="$1"
+  local log_file="${2:-}"
+  local pom_path="${build_dir}/pom.xml"
+
+  [[ -f "$pom_path" ]] || return 0
+
+  if maven_has_pom_packaging "$pom_path" && ! maven_has_modules_declared "$pom_path" && maven_has_main_sources "$build_dir"; then
+    local msg="Invalid Maven layout: pom.xml uses <packaging>pom</packaging> with no <modules>, but main sources exist under src/main. Use <packaging>jar</packaging> (or declare modules)."
+    if [[ -n "$log_file" ]]; then
+      printf '[ERROR] %s\n' "$msg" >> "$log_file"
+    fi
+    log_error "$msg"
+    return 1
+  fi
+
+  return 0
+}
+
 # Build Maven project with specific strategy
 # Usage: maven_build <build_dir> <strategy_args> <log_file>
 # Returns: 0 on success, non-zero on failure
@@ -44,6 +82,10 @@ maven_build() {
   local build_dir="$1"
   local strategy_args="$2"
   local log_file="$3"
+
+  if ! maven_validate_project_layout "$build_dir" "$log_file"; then
+    return 1
+  fi
   
   local mvn_cmd
   mvn_cmd="$(get_maven_command "$build_dir")"
@@ -70,6 +112,10 @@ maven_sonar() {
   local build_dir="$1"
   local project_key="$2"
   local log_file="$3"
+
+  if ! maven_validate_project_layout "$build_dir" "$log_file"; then
+    return 1
+  fi
   
   local mvn_cmd
   mvn_cmd="$(get_maven_command "$build_dir")"
@@ -104,7 +150,9 @@ maven_sonar() {
 parse_maven_error() {
   local log_file="$1"
   
-  if grep -q "release version .* not supported" "$log_file" 2>/dev/null; then
+  if grep -q "Invalid Maven layout: pom.xml uses <packaging>pom</packaging>" "$log_file" 2>/dev/null; then
+    echo "invalid_project_layout"
+  elif grep -q "release version .* not supported" "$log_file" 2>/dev/null; then
     echo "jdk_mismatch"
   elif grep -q "Unsupported class file major version" "$log_file" 2>/dev/null; then
     echo "jdk_mismatch"

@@ -103,6 +103,30 @@ sonar_extract_task_id_from_log() {
   sed -n 's/.*api\/ce\/task?id=\([A-Za-z0-9_-]*\).*/\1/p' "$log_file" 2>/dev/null | tail -1 || true
 }
 
+sonar_repo_has_main_sources() {
+  local build_dir="$1"
+  find "$build_dir" -type f \
+    \( -name "*.java" -o -name "*.kt" -o -name "*.groovy" -o -name "*.scala" \) \
+    -path "*/src/main/*" -print -quit 2>/dev/null | grep -q .
+}
+
+sonar_validate_main_source_indexing() {
+  local build_dir="$1"
+  local log_file="$2"
+
+  [[ -f "$log_file" ]] || return 0
+  sonar_repo_has_main_sources "$build_dir" || return 0
+
+  if grep -Fq 'No "Main" source files to scan.' "$log_file"; then
+    log_error "SonarScanner reported no main source files, but src/main contains source files."
+    log_error "Likely build-model mismatch (for example Maven <packaging>pom</packaging> without modules)."
+    log_error "See log: $log_file"
+    return 1
+  fi
+
+  return 0
+}
+
 # Submit a project to SonarQube for analysis
 # Usage: submit_to_sonar <project_key> <build_dir> <build_tool>
 # Returns: 0 on success, 1 on failure
@@ -150,6 +174,10 @@ submit_to_sonar() {
   
   if [[ $exit_code -ne 0 ]]; then
     log_error "SonarQube analysis failed for $key"
+    return 1
+  fi
+
+  if ! sonar_validate_main_source_indexing "$build_dir" "$log_file"; then
     return 1
   fi
   

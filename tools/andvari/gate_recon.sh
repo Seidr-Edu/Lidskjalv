@@ -28,6 +28,30 @@ run_demo_with_optional_timeout() {
   fi
 }
 
+has_maven_pom_packaging() {
+  local pom_path="$1"
+  [[ -f "$pom_path" ]] || return 1
+  grep -Eiq '<packaging>[[:space:]]*pom[[:space:]]*</packaging>' "$pom_path"
+}
+
+has_maven_modules() {
+  local pom_path="$1"
+  [[ -f "$pom_path" ]] || return 1
+  grep -Eiq '<module>[[:space:]]*[^<[:space:]][^<]*</module>' "$pom_path"
+}
+
+cleanup_test_reports() {
+  find . -type d \
+    \( -path "*/target/surefire-reports" -o -path "*/target/failsafe-reports" -o -path "*/build/test-results/test" \) \
+    -prune -exec rm -rf {} + 2>/dev/null || true
+}
+
+count_test_report_files() {
+  find . -type f \
+    \( -path "*/target/surefire-reports/TEST-*.xml" -o -path "*/target/failsafe-reports/TEST-*.xml" -o -path "*/build/test-results/test/*.xml" \) \
+    -print 2>/dev/null | wc -l | tr -d ' '
+}
+
 # --- Required files ---
 info "Checking required docs..."
 [[ -f README.md ]] || fail "Missing README.md"
@@ -112,16 +136,8 @@ if [[ "$HAS_MAVEN_FILES" == "true" ]]; then
   USE_MAVEN="true"
 fi
 
-# --- Run tests ---
-if [[ "$USE_GRADLE" == "true" ]]; then
-  info "Running: ./gradlew test"
-  ./gradlew test
-fi
-
-if [[ "$USE_MAVEN" == "true" ]]; then
-  command -v mvn >/dev/null 2>&1 || fail "Maven build detected but 'mvn' not found."
-  info "Running: mvn -q test"
-  mvn -q test
+if [[ "$USE_MAVEN" == "true" ]] && has_maven_pom_packaging "pom.xml" && ! has_maven_modules "pom.xml" && find src/main/java -type f -name "*.java" -print -quit 2>/dev/null | grep -q .; then
+  fail "Invalid Maven layout: pom.xml uses <packaging>pom</packaging> with no <modules>, but src/main/java contains sources. Use <packaging>jar</packaging> (or define modules)."
 fi
 
 # --- Minimal test presence sanity check ---
@@ -142,6 +158,24 @@ fi
 [[ "$TEST_FILES_COUNT" -ge 1 ]] || fail "No test files found (expected at least one *Test.java under src/test)."
 
 info "Found $TEST_FILES_COUNT test file(s)."
+
+cleanup_test_reports
+
+# --- Run tests ---
+if [[ "$USE_GRADLE" == "true" ]]; then
+  info "Running: ./gradlew test"
+  ./gradlew test
+  GRADLE_REPORT_COUNT="$(count_test_report_files)"
+  [[ "$GRADLE_REPORT_COUNT" -ge 1 ]] || fail "Gradle test command succeeded but produced no JUnit XML reports. Ensure tests are actually executed."
+fi
+
+if [[ "$USE_MAVEN" == "true" ]]; then
+  command -v mvn >/dev/null 2>&1 || fail "Maven build detected but 'mvn' not found."
+  info "Running: mvn -q test"
+  mvn -q test
+  MAVEN_REPORT_COUNT="$(count_test_report_files)"
+  [[ "$MAVEN_REPORT_COUNT" -ge 1 ]] || fail "Maven test command succeeded but produced no Surefire/Failsafe XML reports. This usually indicates a no-op test phase."
+fi
 
 # --- Demo execution ---
 info "Running demo smoke command: ./run_demo.sh"

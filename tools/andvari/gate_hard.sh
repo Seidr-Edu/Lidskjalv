@@ -28,6 +28,30 @@ run_demo_with_optional_timeout() {
   fi
 }
 
+has_maven_pom_packaging() {
+  local pom_path="$1"
+  [[ -f "$pom_path" ]] || return 1
+  grep -Eiq '<packaging>[[:space:]]*pom[[:space:]]*</packaging>' "$pom_path"
+}
+
+has_maven_modules() {
+  local pom_path="$1"
+  [[ -f "$pom_path" ]] || return 1
+  grep -Eiq '<module>[[:space:]]*[^<[:space:]][^<]*</module>' "$pom_path"
+}
+
+cleanup_test_reports() {
+  find . -type d \
+    \( -path "*/target/surefire-reports" -o -path "*/target/failsafe-reports" -o -path "*/build/test-results/test" \) \
+    -prune -exec rm -rf {} + 2>/dev/null || true
+}
+
+count_test_report_files() {
+  find . -type f \
+    \( -path "*/target/surefire-reports/TEST-*.xml" -o -path "*/target/failsafe-reports/TEST-*.xml" -o -path "*/build/test-results/test/*.xml" \) \
+    -print 2>/dev/null | wc -l | tr -d ' '
+}
+
 # --- Required docs/artifacts ---
 info "Checking required docs..."
 [[ -f README.md ]] || fail "Missing README.md"
@@ -109,6 +133,10 @@ if [[ "$HAS_MAVEN_FILES" == "true" ]]; then
   USE_MAVEN="true"
 fi
 
+if [[ "$USE_MAVEN" == "true" ]] && has_maven_pom_packaging "pom.xml" && ! has_maven_modules "pom.xml" && [[ "$JAVA_FILE_COUNT" -gt 0 ]]; then
+  fail "Invalid Maven layout: pom.xml uses <packaging>pom</packaging> with no <modules>, but src/main/java contains sources. Use <packaging>jar</packaging> (or define modules)."
+fi
+
 info "Checking tests exist..."
 TEST_FILES_COUNT=0
 if [[ -d src/test ]]; then
@@ -122,15 +150,21 @@ fi
 [[ "$TEST_FILES_COUNT" -ge 1 ]] || fail "No Java test files found under src/test"
 info "Found $TEST_FILES_COUNT test file(s)."
 
+cleanup_test_reports
+
 if [[ "$USE_GRADLE" == "true" ]]; then
   info "Running: ./gradlew test"
   ./gradlew test
+  GRADLE_REPORT_COUNT="$(count_test_report_files)"
+  [[ "$GRADLE_REPORT_COUNT" -ge 1 ]] || fail "Gradle test command succeeded but produced no JUnit XML reports. Ensure tests are actually executed."
 fi
 
 if [[ "$USE_MAVEN" == "true" ]]; then
   command -v mvn >/dev/null 2>&1 || fail "Maven build detected but 'mvn' not found."
   info "Running: mvn -q test"
   mvn -q test
+  MAVEN_REPORT_COUNT="$(count_test_report_files)"
+  [[ "$MAVEN_REPORT_COUNT" -ge 1 ]] || fail "Maven test command succeeded but produced no Surefire/Failsafe XML reports. This usually indicates a no-op test phase."
 fi
 
 # --- Runnable demo ---

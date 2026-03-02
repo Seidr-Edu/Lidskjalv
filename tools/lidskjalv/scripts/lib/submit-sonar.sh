@@ -297,6 +297,9 @@ sonar_create_project() {
   if [[ -n "${SONAR_ORGANIZATION:-}" ]]; then
     create_args+=(--data-urlencode "organization=${SONAR_ORGANIZATION}")
   fi
+  if [[ "$SONAR_HOST_URL" == *"sonarcloud.io"* ]]; then
+    create_args+=(--data-urlencode "visibility=public")
+  fi
 
   curl -sf -u "${SONAR_TOKEN}:" \
     -X POST "${SONAR_HOST_URL}/api/projects/create" \

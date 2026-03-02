@@ -1,0 +1,1332 @@
+@startuml diagram
+
+hide empty members
+
+package org.java_websocket {
+  +interface WebSocketListener {
+    ~{abstract} onWebsocketHandshakeReceivedAsServer(conn: WebSocket, draft: Draft, request: ClientHandshake) : ServerHandshakeBuilder
+    ~{abstract} onWebsocketHandshakeReceivedAsClient(conn: WebSocket, request: ClientHandshake, response: ServerHandshake) : void
+    ~{abstract} onWebsocketHandshakeSentAsClient(conn: WebSocket, request: ClientHandshake) : void
+    ~{abstract} onWebsocketMessage(conn: WebSocket, message: String) : void
+    ~{abstract} onWebsocketMessage(conn: WebSocket, blob: ByteBuffer) : void
+    ~{abstract} onWebsocketOpen(conn: WebSocket, d: Handshakedata) : void
+    ~{abstract} onWebsocketClose(ws: WebSocket, code: int, reason: String, remote: boolean) : void
+    ~{abstract} onWebsocketClosing(ws: WebSocket, code: int, reason: String, remote: boolean) : void
+    ~{abstract} onWebsocketCloseInitiated(ws: WebSocket, code: int, reason: String) : void
+    ~{abstract} onWebsocketError(conn: WebSocket, ex: Exception) : void
+    ~{abstract} onWebsocketPing(conn: WebSocket, f: Framedata) : void
+    ~{abstract} onPreparePing(conn: WebSocket) : PingFrame
+    ~{abstract} onWebsocketPong(conn: WebSocket, f: Framedata) : void
+    ~{abstract} onWriteDemand(conn: WebSocket) : void
+    ~{abstract} getLocalSocketAddress(conn: WebSocket) : InetSocketAddress
+    ~{abstract} getRemoteSocketAddress(conn: WebSocket) : InetSocketAddress
+}
+
+  +class SSLSocketChannel2 {
+    #{static} emptybuffer : ByteBuffer
+    -log : Logger {readOnly}
+    #exec : ExecutorService
+    #tasks : List<Future<?>>
+    #inData : ByteBuffer
+    #outCrypt : ByteBuffer
+    #inCrypt : ByteBuffer
+    #socketChannel : SocketChannel
+    #selectionKey : SelectionKey
+    #sslEngine : SSLEngine
+    #readEngineResult : SSLEngineResult
+    #writeEngineResult : SSLEngineResult
+    #bufferallocations : int
+    -saveCryptData : byte[]
+    -consumeFutureUninterruptible(f: Future<?>) : void
+    -processHandshake(isReading: boolean) : void
+    -wrap(b: ByteBuffer) : ByteBuffer
+    -unwrap() : ByteBuffer
+    #consumeDelegatedTasks() : void
+    #createBuffers(session: SSLSession) : void
+    +write(src: ByteBuffer) : int
+    +read(dst: ByteBuffer) : int
+    -readRemaining(dst: ByteBuffer) : int
+    +isConnected() : boolean
+    +close() : void
+    -isHandShakeComplete() : boolean
+    +configureBlocking(b: boolean) : SelectableChannel
+    +connect(remote: SocketAddress) : boolean
+    +finishConnect() : boolean
+    +socket() : Socket
+    +isInboundDone() : boolean
+    +isOpen() : boolean
+    +isNeedWrite() : boolean
+    +writeMore() : void
+    +isNeedRead() : boolean
+    +readMore(dst: ByteBuffer) : int
+    -transfereTo(from: ByteBuffer, to: ByteBuffer) : int
+    +isBlocking() : boolean
+    +getSSLEngine() : SSLEngine
+    -saveCryptedData() : void
+    -tryRestoreCryptedData() : void
+    +SSLSocketChannel2(channel: SocketChannel, sslEngine: SSLEngine, exec: ExecutorService, key: SelectionKey)
+}
+
+  +class SSLSocketChannel {
+    -log : Logger {readOnly}
+    -socketChannel : SocketChannel {readOnly}
+    -engine : SSLEngine {readOnly}
+    -myAppData : ByteBuffer
+    -myNetData : ByteBuffer
+    -peerAppData : ByteBuffer
+    -peerNetData : ByteBuffer
+    -executor : ExecutorService
+    +read(dst: ByteBuffer) : int
+    +write(output: ByteBuffer) : int
+    -doHandshake() : boolean
+    -enlargePacketBuffer(buffer: ByteBuffer) : ByteBuffer
+    -enlargeApplicationBuffer(buffer: ByteBuffer) : ByteBuffer
+    -enlargeBuffer(buffer: ByteBuffer, sessionProposedCapacity: int) : ByteBuffer
+    -handleBufferUnderflow(buffer: ByteBuffer) : ByteBuffer
+    -closeConnection() : void
+    -handleEndOfStream() : void
+    +isNeedWrite() : boolean
+    +writeMore() : void
+    +isNeedRead() : boolean
+    +readMore(dst: ByteBuffer) : int
+    +isBlocking() : boolean
+    +isOpen() : boolean
+    +close() : void
+    +getSSLEngine() : SSLEngine
+    +SSLSocketChannel(inputSocketChannel: SocketChannel, inputEngine: SSLEngine, inputExecutor: ExecutorService, key: SelectionKey)
+}
+
+  +class AbstractWebSocket <<abstract>> {
+    -log : Logger {readOnly}
+    -tcpNoDelay : boolean
+    -reuseAddr : boolean
+    -connectionLostCheckerService : ScheduledExecutorService
+    -connectionLostCheckerFuture : ScheduledFuture<?>
+    -connectionLostTimeout : long
+    -websocketRunning : boolean
+    -daemon : boolean
+    -syncConnectionLost : Object {readOnly}
+    -receiveBufferSize : int
+    #{static} DEFAULT_READ_BUFFER_SIZE : int
+    +getConnectionLostTimeout() : int
+    +setConnectionLostTimeout(connectionLostTimeout: int) : void
+    #stopConnectionLostTimer() : void
+    #startConnectionLostTimer() : void
+    -restartConnectionLostTimer() : void
+    -executeConnectionLostDetection(webSocket: WebSocket, minimumPongTime: long) : void
+    #{abstract} getConnections() : Collection<WebSocket>
+    -cancelConnectionLostTimer() : void
+    +isTcpNoDelay() : boolean
+    +setTcpNoDelay(tcpNoDelay: boolean) : void
+    +isReuseAddr() : boolean
+    +setReuseAddr(reuseAddr: boolean) : void
+    +isDaemon() : boolean
+    +setDaemon(daemon: boolean) : void
+    +getReceiveBufferSize() : int
+    +setReceiveBufferSize(receiveBufferSize: int) : void
+}
+
+  +interface WebSocketFactory {
+    ~{abstract} createWebSocket(a: WebSocketAdapter, d: Draft) : WebSocket
+    ~{abstract} createWebSocket(a: WebSocketAdapter, drafts: List<Draft>) : WebSocket
+}
+
+  +class SocketChannelIOHelper {
+    +{static} read(buf: ByteBuffer, ws: WebSocketImpl, channel: ByteChannel) : boolean
+    +{static} readMore(buf: ByteBuffer, ws: WebSocketImpl, channel: WrappedByteChannel) : boolean
+    +{static} batch(ws: WebSocketImpl, sockchannel: ByteChannel) : boolean
+    -SocketChannelIOHelper()
+}
+
+  +interface WebSocketServerFactory {
+    ~{abstract} createWebSocket(a: WebSocketAdapter, d: Draft) : WebSocketImpl
+    ~{abstract} createWebSocket(a: WebSocketAdapter, drafts: List<Draft>) : WebSocketImpl
+    ~{abstract} wrapChannel(channel: SocketChannel, key: SelectionKey) : ByteChannel
+    ~{abstract} close() : void
+}
+
+  +class AbstractWrappedByteChannel <<Deprecated>> {
+    -channel : ByteChannel {readOnly}
+    +read(dst: ByteBuffer) : int
+    +isOpen() : boolean
+    +close() : void
+    +write(src: ByteBuffer) : int
+    +isNeedWrite() : boolean
+    +writeMore() : void
+    +isNeedRead() : boolean
+    +readMore(dst: ByteBuffer) : int
+    +isBlocking() : boolean
+    +AbstractWrappedByteChannel(towrap: ByteChannel)
+    +AbstractWrappedByteChannel(towrap: WrappedByteChannel)
+}
+
+  +class WebSocketImpl {
+    +{static} DEFAULT_PORT : int {readOnly}
+    +{static} DEFAULT_WSS_PORT : int {readOnly}
+    -log : Logger {readOnly}
+    +outQueue : BlockingQueue<ByteBuffer> {readOnly}
+    +inQueue : BlockingQueue<ByteBuffer> {readOnly}
+    -wsl : WebSocketListener {readOnly}
+    -key : SelectionKey
+    -channel : ByteChannel
+    -workerThread : WebSocketWorker
+    -flushandclosestate : boolean
+    -readyState : ReadyState
+    -knownDrafts : List<Draft>
+    -draft : Draft
+    -role : Role
+    -tmpHandshakeBytes : ByteBuffer
+    -handshakerequest : ClientHandshake
+    -closemessage : String
+    -closecode : Integer
+    -closedremotely : Boolean
+    -resourceDescriptor : String
+    -lastPong : long
+    -synchronizeWriteObject : Object {readOnly}
+    -attachment : Object
+    +decode(socketBuffer: ByteBuffer) : void
+    -decodeHandshake(socketBufferNew: ByteBuffer) : boolean
+    -decodeFrames(socketBuffer: ByteBuffer) : void
+    -closeConnectionDueToWrongHandshake(exception: InvalidDataException) : void
+    -closeConnectionDueToInternalServerError(exception: RuntimeException) : void
+    -generateHttpResponseDueToError(errorCode: int) : ByteBuffer
+    +close(code: int, message: String, remote: boolean) : void
+    +close(code: int, message: String) : void
+    +closeConnection(code: int, message: String, remote: boolean) : void
+    #closeConnection(code: int, remote: boolean) : void
+    +closeConnection() : void
+    +closeConnection(code: int, message: String) : void
+    +flushAndClose(code: int, message: String, remote: boolean) : void
+    +eot() : void
+    +close(code: int) : void
+    +close(e: InvalidDataException) : void
+    +send(text: String) : void
+    +send(bytes: ByteBuffer) : void
+    +send(bytes: byte[]) : void
+    -send(frames: Collection<Framedata>) : void
+    +sendFragmentedFrame(op: Opcode, buffer: ByteBuffer, fin: boolean) : void
+    +sendFrame(frames: Collection<Framedata>) : void
+    +sendFrame(framedata: Framedata) : void
+    +sendPing() : void
+    +hasBufferedData() : boolean
+    +startHandshake(handshakedata: ClientHandshakeBuilder) : void
+    -write(buf: ByteBuffer) : void
+    -write(bufs: List<ByteBuffer>) : void
+    -open(d: Handshakedata) : void
+    +isOpen() : boolean
+    +isClosing() : boolean
+    +isFlushAndClose() : boolean
+    +isClosed() : boolean
+    +getReadyState() : ReadyState
+    +setSelectionKey(key: SelectionKey) : void
+    +getSelectionKey() : SelectionKey
+    +toString() : String
+    +getRemoteSocketAddress() : InetSocketAddress
+    +getLocalSocketAddress() : InetSocketAddress
+    +getDraft() : Draft
+    +close() : void
+    +getResourceDescriptor() : String
+    ~getLastPong() : long
+    +updateLastPong() : void
+    +getWebSocketListener() : WebSocketListener
+    +getAttachment() : T
+    +hasSSLSupport() : boolean
+    +getSSLSession() : SSLSession
+    +getProtocol() : IProtocol
+    +setAttachment(attachment: T) : void
+    +getChannel() : ByteChannel
+    +setChannel(channel: ByteChannel) : void
+    +getWorkerThread() : WebSocketWorker
+    +setWorkerThread(workerThread: WebSocketWorker) : void
+    +WebSocketImpl(listener: WebSocketListener, drafts: List<Draft>)
+    +WebSocketImpl(listener: WebSocketListener, draft: Draft)
+}
+
+  +interface WebSocket {
+    ~{abstract} close(code: int, message: String) : void
+    ~{abstract} close(code: int) : void
+    ~{abstract} close() : void
+    ~{abstract} closeConnection(code: int, message: String) : void
+    ~{abstract} send(text: String) : void
+    ~{abstract} send(bytes: ByteBuffer) : void
+    ~{abstract} send(bytes: byte[]) : void
+    ~{abstract} sendFrame(framedata: Framedata) : void
+    ~{abstract} sendFrame(frames: Collection<Framedata>) : void
+    ~{abstract} sendPing() : void
+    ~{abstract} sendFragmentedFrame(op: Opcode, buffer: ByteBuffer, fin: boolean) : void
+    ~{abstract} hasBufferedData() : boolean
+    ~{abstract} getRemoteSocketAddress() : InetSocketAddress
+    ~{abstract} getLocalSocketAddress() : InetSocketAddress
+    ~{abstract} isOpen() : boolean
+    ~{abstract} isClosing() : boolean
+    ~{abstract} isFlushAndClose() : boolean
+    ~{abstract} isClosed() : boolean
+    ~{abstract} getDraft() : Draft
+    ~{abstract} getReadyState() : ReadyState
+    ~{abstract} getResourceDescriptor() : String
+    ~{abstract} setAttachment(attachment: T) : void
+    ~{abstract} getAttachment() : T
+    ~{abstract} hasSSLSupport() : boolean
+    ~{abstract} getSSLSession() : SSLSession
+    ~{abstract} getProtocol() : IProtocol
+}
+
+  +class WebSocketAdapter <<abstract>> {
+    -pingFrame : PingFrame
+    +onWebsocketHandshakeReceivedAsServer(conn: WebSocket, draft: Draft, request: ClientHandshake) : ServerHandshakeBuilder
+    +onWebsocketHandshakeReceivedAsClient(conn: WebSocket, request: ClientHandshake, response: ServerHandshake) : void
+    +onWebsocketHandshakeSentAsClient(conn: WebSocket, request: ClientHandshake) : void
+    +onWebsocketPing(conn: WebSocket, f: Framedata) : void
+    +onWebsocketPong(conn: WebSocket, f: Framedata) : void
+    +onPreparePing(conn: WebSocket) : PingFrame
+}
+
+  +interface WrappedByteChannel {
+    ~{abstract} isNeedWrite() : boolean
+    ~{abstract} writeMore() : void
+    ~{abstract} isNeedRead() : boolean
+    ~{abstract} readMore(dst: ByteBuffer) : int
+    ~{abstract} isBlocking() : boolean
+}
+
+}
+
+package org.java_websocket.client {
+  +interface DnsResolver {
+    ~{abstract} resolve(uri: URI) : InetAddress
+}
+
+  -class WebSocketClient$WebsocketWriteThread {
+    -webSocketClient : WebSocketClient {readOnly}
+    +run() : void
+    -runWriteData() : void
+    -closeSocket() : void
+    ~WebsocketWriteThread(webSocketClient: WebSocketClient)
+}
+
+  +class WebSocketClient <<abstract>> {
+    #uri : URI
+    -engine : WebSocketImpl
+    -socket : Socket
+    -socketFactory : SocketFactory
+    -ostream : OutputStream
+    -proxy : Proxy
+    -writeThread : Thread
+    -connectReadThread : Thread
+    -draft : Draft
+    -headers : Map<String, String>
+    -connectLatch : CountDownLatch
+    -closeLatch : CountDownLatch
+    -connectTimeout : int
+    -dnsResolver : DnsResolver
+    +getURI() : URI
+    +getDraft() : Draft
+    +getSocket() : Socket
+    +addHeader(key: String, value: String) : void
+    +removeHeader(key: String) : String
+    +clearHeaders() : void
+    +setDnsResolver(dnsResolver: DnsResolver) : void
+    +reconnect() : void
+    +reconnectBlocking() : boolean
+    +reconnectBlocking(timeout: long, timeUnit: TimeUnit) : boolean
+    -reset() : void
+    +connect() : void
+    +connectBlocking() : boolean
+    +connectBlocking(timeout: long, timeUnit: TimeUnit) : boolean
+    +close() : void
+    +closeBlocking() : void
+    +send(text: String) : void
+    +send(data: byte[]) : void
+    +getAttachment() : T
+    +setAttachment(attachment: T) : void
+    #getConnections() : Collection<WebSocket>
+    +sendPing() : void
+    +run() : void
+    -upgradeSocketToSSL() : void
+    -prepareSocket() : boolean
+    #onSetSSLParameters(sslParameters: SSLParameters) : void
+    -getPort() : int
+    -sendHandshake() : void
+    +getReadyState() : ReadyState
+    +onWebsocketMessage(conn: WebSocket, message: String) : void
+    +onWebsocketMessage(conn: WebSocket, blob: ByteBuffer) : void
+    +onWebsocketOpen(conn: WebSocket, handshake: Handshakedata) : void
+    +onWebsocketClose(conn: WebSocket, code: int, reason: String, remote: boolean) : void
+    +onWebsocketError(conn: WebSocket, ex: Exception) : void
+    +onWriteDemand(conn: WebSocket) : void
+    +onWebsocketCloseInitiated(conn: WebSocket, code: int, reason: String) : void
+    +onWebsocketClosing(conn: WebSocket, code: int, reason: String, remote: boolean) : void
+    +onCloseInitiated(code: int, reason: String) : void
+    +onClosing(code: int, reason: String, remote: boolean) : void
+    +getConnection() : WebSocket
+    +getLocalSocketAddress(conn: WebSocket) : InetSocketAddress
+    +getRemoteSocketAddress(conn: WebSocket) : InetSocketAddress
+    +{abstract} onOpen(handshakedata: ServerHandshake) : void
+    +{abstract} onMessage(message: String) : void
+    +{abstract} onClose(code: int, reason: String, remote: boolean) : void
+    +{abstract} onError(ex: Exception) : void
+    +onMessage(bytes: ByteBuffer) : void
+    +setProxy(proxy: Proxy) : void
+    +setSocket(socket: Socket) : void
+    +setSocketFactory(socketFactory: SocketFactory) : void
+    +sendFragmentedFrame(op: Opcode, buffer: ByteBuffer, fin: boolean) : void
+    +isOpen() : boolean
+    +isFlushAndClose() : boolean
+    +isClosed() : boolean
+    +isClosing() : boolean
+    +hasBufferedData() : boolean
+    +close(code: int) : void
+    +close(code: int, message: String) : void
+    +closeConnection(code: int, message: String) : void
+    +send(bytes: ByteBuffer) : void
+    +sendFrame(framedata: Framedata) : void
+    +sendFrame(frames: Collection<Framedata>) : void
+    +getLocalSocketAddress() : InetSocketAddress
+    +getRemoteSocketAddress() : InetSocketAddress
+    +getResourceDescriptor() : String
+    +hasSSLSupport() : boolean
+    +getSSLSession() : SSLSession
+    +getProtocol() : IProtocol
+    -handleIOException(e: IOException) : void
+    +WebSocketClient(serverUri: URI)
+    +WebSocketClient(serverUri: URI, protocolDraft: Draft)
+    +WebSocketClient(serverUri: URI, httpHeaders: Map<String, String>)
+    +WebSocketClient(serverUri: URI, protocolDraft: Draft, httpHeaders: Map<String, String>)
+    +WebSocketClient(serverUri: URI, protocolDraft: Draft, httpHeaders: Map<String, String>, connectTimeout: int)
+}
+
+}
+
+package org.java_websocket.drafts {
+  +class Draft <<abstract>> {
+    #role : Role
+    #continuousFrameType : Opcode
+    +{static} readLine(buf: ByteBuffer) : ByteBuffer
+    +{static} readStringLine(buf: ByteBuffer) : String
+    +{static} translateHandshakeHttp(buf: ByteBuffer, role: Role) : HandshakeBuilder
+    -{static} translateHandshakeHttpServer(firstLineTokens: String[], line: String) : HandshakeBuilder
+    -{static} translateHandshakeHttpClient(firstLineTokens: String[], line: String) : HandshakeBuilder
+    +{abstract} acceptHandshakeAsClient(request: ClientHandshake, response: ServerHandshake) : HandshakeState
+    +{abstract} acceptHandshakeAsServer(handshakedata: ClientHandshake) : HandshakeState
+    #basicAccept(handshakedata: Handshakedata) : boolean
+    +{abstract} createBinaryFrame(framedata: Framedata) : ByteBuffer
+    +{abstract} createFrames(binary: ByteBuffer, mask: boolean) : List<Framedata>
+    +{abstract} createFrames(text: String, mask: boolean) : List<Framedata>
+    +{abstract} processFrame(webSocketImpl: WebSocketImpl, frame: Framedata) : void
+    +continuousFrame(op: Opcode, buffer: ByteBuffer, fin: boolean) : List<Framedata>
+    +{abstract} reset() : void
+    +createHandshake(handshakedata: Handshakedata, ownrole: Role) : List<ByteBuffer>
+    +createHandshake(handshakedata: Handshakedata) : List<ByteBuffer>
+    +createHandshake(handshakedata: Handshakedata, ownrole: Role, withcontent: boolean) : List<ByteBuffer>
+    +createHandshake(handshakedata: Handshakedata, withcontent: boolean) : List<ByteBuffer>
+    +{abstract} postProcessHandshakeRequestAsClient(request: ClientHandshakeBuilder) : ClientHandshakeBuilder
+    +{abstract} postProcessHandshakeResponseAsServer(request: ClientHandshake, response: ServerHandshakeBuilder) : HandshakeBuilder
+    +{abstract} translateFrame(buffer: ByteBuffer) : List<Framedata>
+    +{abstract} getCloseHandshakeType() : CloseHandshakeType
+    +{abstract} copyInstance() : Draft
+    +translateHandshake(buf: ByteBuffer) : Handshakedata
+    +checkAlloc(bytecount: int) : int
+    ~readVersion(handshakedata: Handshakedata) : int
+    +setParseMode(role: Role) : void
+    +getRole() : Role
+    +toString() : String
+}
+
+  +class Draft_6455 {
+    -{static} SEC_WEB_SOCKET_KEY : String {readOnly}
+    -{static} SEC_WEB_SOCKET_PROTOCOL : String {readOnly}
+    -{static} SEC_WEB_SOCKET_EXTENSIONS : String {readOnly}
+    -{static} SEC_WEB_SOCKET_ACCEPT : String {readOnly}
+    -{static} UPGRADE : String {readOnly}
+    -{static} CONNECTION : String {readOnly}
+    -log : Logger {readOnly}
+    -negotiatedExtension : IExtension
+    -defaultExtension : IExtension
+    -knownExtensions : List<IExtension>
+    -currentDecodingExtension : IExtension
+    -protocol : IProtocol
+    -knownProtocols : List<IProtocol>
+    -currentContinuousFrame : Framedata
+    -byteBufferList : List<ByteBuffer> {readOnly}
+    -incompleteframe : ByteBuffer
+    -reuseableRandom : SecureRandom {readOnly}
+    -maxFrameSize : int
+    +acceptHandshakeAsServer(handshakedata: ClientHandshake) : HandshakeState
+    -containsRequestedProtocol(requestedProtocol: String) : HandshakeState
+    +acceptHandshakeAsClient(request: ClientHandshake, response: ServerHandshake) : HandshakeState
+    +getExtension() : IExtension
+    +getKnownExtensions() : List<IExtension>
+    +getProtocol() : IProtocol
+    +getMaxFrameSize() : int
+    +getKnownProtocols() : List<IProtocol>
+    +postProcessHandshakeRequestAsClient(request: ClientHandshakeBuilder) : ClientHandshakeBuilder
+    +postProcessHandshakeResponseAsServer(request: ClientHandshake, response: ServerHandshakeBuilder) : HandshakeBuilder
+    +copyInstance() : Draft
+    +createBinaryFrame(framedata: Framedata) : ByteBuffer
+    -createByteBufferFromFramedata(framedata: Framedata) : ByteBuffer
+    -translateSingleFrame(buffer: ByteBuffer) : Framedata
+    -translateSingleFramePayloadLength(buffer: ByteBuffer, optcode: Opcode, oldPayloadlength: int, maxpacketsize: int, oldRealpacketsize: int) : TranslatedPayloadMetaData
+    -translateSingleFrameCheckLengthLimit(length: long) : void
+    -translateSingleFrameCheckPacketSize(maxpacketsize: int, realpacketsize: int) : void
+    -getRSVByte(rsv: int) : byte
+    -getMaskByte(mask: boolean) : byte
+    -getSizeBytes(mes: ByteBuffer) : int
+    +translateFrame(buffer: ByteBuffer) : List<Framedata>
+    +createFrames(binary: ByteBuffer, mask: boolean) : List<Framedata>
+    +createFrames(text: String, mask: boolean) : List<Framedata>
+    +reset() : void
+    -getServerTime() : String
+    -generateFinalKey(in: String) : String
+    -toByteArray(val: long, bytecount: int) : byte[]
+    -fromOpcode(opcode: Opcode) : byte
+    -toOpcode(opcode: byte) : Opcode
+    +processFrame(webSocketImpl: WebSocketImpl, frame: Framedata) : void
+    -processFrameContinuousAndNonFin(webSocketImpl: WebSocketImpl, frame: Framedata, curop: Opcode) : void
+    -processFrameBinary(webSocketImpl: WebSocketImpl, frame: Framedata) : void
+    -logRuntimeException(webSocketImpl: WebSocketImpl, e: RuntimeException) : void
+    -processFrameText(webSocketImpl: WebSocketImpl, frame: Framedata) : void
+    -processFrameIsFin(webSocketImpl: WebSocketImpl, frame: Framedata) : void
+    -processFrameIsNotFin(frame: Framedata) : void
+    -processFrameClosing(webSocketImpl: WebSocketImpl, frame: Framedata) : void
+    -clearBufferList() : void
+    -addToBufferList(payloadData: ByteBuffer) : void
+    -checkBufferLimit() : void
+    +getCloseHandshakeType() : CloseHandshakeType
+    +toString() : String
+    +equals(o: Object) : boolean
+    +hashCode() : int
+    -getPayloadFromByteBufferList() : ByteBuffer
+    -getByteBufferListSize() : long
+    +Draft_6455()
+    +Draft_6455(inputExtension: IExtension)
+    +Draft_6455(inputExtensions: List<IExtension>)
+    +Draft_6455(inputExtensions: List<IExtension>, inputProtocols: List<IProtocol>)
+    +Draft_6455(inputExtensions: List<IExtension>, inputMaxFrameSize: int)
+    +Draft_6455(inputExtensions: List<IExtension>, inputProtocols: List<IProtocol>, inputMaxFrameSize: int)
+}
+
+  -class Draft_6455$TranslatedPayloadMetaData {
+    -payloadLength : int
+    -realPackageSize : int
+    -getPayloadLength() : int
+    -getRealPackageSize() : int
+    ~TranslatedPayloadMetaData(newPayloadLength: int, newRealPackageSize: int)
+}
+
+}
+
+package org.java_websocket.enums {
+  +enum ReadyState {
+    +{static} NOT_YET_CONNECTED : ReadyState
+    +{static} OPEN : ReadyState
+    +{static} CLOSING : ReadyState
+    +{static} CLOSED : ReadyState
+}
+
+  +enum Opcode {
+    +{static} CONTINUOUS : Opcode
+    +{static} TEXT : Opcode
+    +{static} BINARY : Opcode
+    +{static} PING : Opcode
+    +{static} PONG : Opcode
+    +{static} CLOSING : Opcode
+}
+
+  +enum CloseHandshakeType {
+    +{static} NONE : CloseHandshakeType
+    +{static} ONEWAY : CloseHandshakeType
+    +{static} TWOWAY : CloseHandshakeType
+}
+
+  +enum HandshakeState {
+    +{static} MATCHED : HandshakeState
+    +{static} NOT_MATCHED : HandshakeState
+}
+
+  +enum Role {
+    +{static} CLIENT : Role
+    +{static} SERVER : Role
+}
+
+}
+
+package org.java_websocket.exceptions {
+  +class LimitExceededException {
+    -{static} serialVersionUID : long {readOnly}
+    -limit : int {readOnly}
+    +getLimit() : int
+    +LimitExceededException()
+    +LimitExceededException(limit: int)
+    +LimitExceededException(s: String, limit: int)
+    +LimitExceededException(s: String)
+}
+
+  +class InvalidFrameException {
+    -{static} serialVersionUID : long {readOnly}
+    +InvalidFrameException()
+    +InvalidFrameException(s: String)
+    +InvalidFrameException(t: Throwable)
+    +InvalidFrameException(s: String, t: Throwable)
+}
+
+  +class WrappedIOException {
+    -connection : WebSocket {readOnly}
+    -ioException : IOException {readOnly}
+    +getConnection() : WebSocket
+    +getIOException() : IOException
+    +WrappedIOException(connection: WebSocket, ioException: IOException)
+}
+
+  +class IncompleteHandshakeException {
+    -{static} serialVersionUID : long {readOnly}
+    -preferredSize : int {readOnly}
+    +getPreferredSize() : int
+    +IncompleteHandshakeException(preferredSize: int)
+    +IncompleteHandshakeException()
+}
+
+  +class InvalidHandshakeException {
+    -{static} serialVersionUID : long {readOnly}
+    +InvalidHandshakeException()
+    +InvalidHandshakeException(s: String, t: Throwable)
+    +InvalidHandshakeException(s: String)
+    +InvalidHandshakeException(t: Throwable)
+}
+
+  +class NotSendableException {
+    -{static} serialVersionUID : long {readOnly}
+    +NotSendableException(s: String)
+    +NotSendableException(t: Throwable)
+    +NotSendableException(s: String, t: Throwable)
+}
+
+  +class WebsocketNotConnectedException {
+    -{static} serialVersionUID : long {readOnly}
+}
+
+  +class InvalidEncodingException {
+    -encodingException : UnsupportedEncodingException {readOnly}
+    +getEncodingException() : UnsupportedEncodingException
+    +InvalidEncodingException(encodingException: UnsupportedEncodingException)
+}
+
+  +class IncompleteException {
+    -{static} serialVersionUID : long {readOnly}
+    -preferredSize : int {readOnly}
+    +getPreferredSize() : int
+    +IncompleteException(preferredSize: int)
+}
+
+  +class InvalidDataException {
+    -{static} serialVersionUID : long {readOnly}
+    -closecode : int {readOnly}
+    +getCloseCode() : int
+    +InvalidDataException(closecode: int)
+    +InvalidDataException(closecode: int, s: String)
+    +InvalidDataException(closecode: int, t: Throwable)
+    +InvalidDataException(closecode: int, s: String, t: Throwable)
+}
+
+}
+
+package org.java_websocket.extensions {
+  +class DefaultExtension {
+    +decodeFrame(inputFrame: Framedata) : void
+    +encodeFrame(inputFrame: Framedata) : void
+    +acceptProvidedExtensionAsServer(inputExtension: String) : boolean
+    +acceptProvidedExtensionAsClient(inputExtension: String) : boolean
+    +isFrameValid(inputFrame: Framedata) : void
+    +getProvidedExtensionAsClient() : String
+    +getProvidedExtensionAsServer() : String
+    +copyInstance() : IExtension
+    +reset() : void
+    +toString() : String
+    +hashCode() : int
+    +equals(o: Object) : boolean
+}
+
+  +class ExtensionRequestData {
+    +{static} EMPTY_VALUE : String {readOnly}
+    -extensionParameters : Map<String, String>
+    -extensionName : String
+    +{static} parseExtensionRequest(extensionRequest: String) : ExtensionRequestData
+    +getExtensionName() : String
+    +getExtensionParameters() : Map<String, String>
+    -ExtensionRequestData()
+}
+
+  +interface IExtension {
+    ~{abstract} decodeFrame(inputFrame: Framedata) : void
+    ~{abstract} encodeFrame(inputFrame: Framedata) : void
+    ~{abstract} acceptProvidedExtensionAsServer(inputExtensionHeader: String) : boolean
+    ~{abstract} acceptProvidedExtensionAsClient(inputExtensionHeader: String) : boolean
+    ~{abstract} isFrameValid(inputFrame: Framedata) : void
+    ~{abstract} getProvidedExtensionAsClient() : String
+    ~{abstract} getProvidedExtensionAsServer() : String
+    ~{abstract} copyInstance() : IExtension
+    ~{abstract} reset() : void
+    ~{abstract} toString() : String
+}
+
+  +class CompressionExtension <<abstract>> {
+    +isFrameValid(inputFrame: Framedata) : void
+}
+
+}
+
+package org.java_websocket.extensions.permessage_deflate {
+  +class PerMessageDeflateExtension {
+    +{static} EXTENSION_COMMON_NAME : String {readOnly}
+    +{static} EXTENSION_IDENTIFIER : String {readOnly}
+    +{static} PARAMETER_CLIENT_NO_CONTEXT_TAKEOVER : String {readOnly}
+    +{static} PARAMETER_SERVER_NO_CONTEXT_TAKEOVER : String {readOnly}
+    +{static} PARAMETER_CLIENT_MAX_WINDOW_BITS : String {readOnly}
+    +{static} MINIMUM_CLIENT_MAX_WINDOW_BITS : int {readOnly}
+    +{static} MAXIMUM_CLIENT_MAX_WINDOW_BITS : int {readOnly}
+    +{static} PARAMETER_SERVER_MAX_WINDOW_BITS : String {readOnly}
+    +{static} MINIMUM_SERVER_MAX_WINDOW_BITS : int {readOnly}
+    +{static} MAXIMUM_SERVER_MAX_WINDOW_BITS : int {readOnly}
+    +{static} DEFAULT_CLIENT_NO_CONTEXT_TAKEOVER : boolean
+    +{static} DEFAULT_SERVER_NO_CONTEXT_TAKEOVER : boolean
+    +{static} DEFAULT_CLIENT_MAX_WINDOW_BITS : int
+    +{static} DEFAULT_SERVER_MAX_WINDOW_BITS : int
+    +{static} DEFAULT_COMPRESSION_THRESHOLD : int
+    +{static} EMPTY_DEFLATE_BLOCK : byte[] {readOnly}
+    +{static} EMPTY_UNCOMPRESSED_DEFLATE_BLOCK : byte[] {readOnly}
+    -{static} TRANSFER_CHUNK_SIZE : int {readOnly}
+    -compressionLevel : int {readOnly}
+    -maxFragmentSize : int {readOnly}
+    -compressor : Deflater {readOnly}
+    -decompressor : Inflater {readOnly}
+    -compressionThreshold : int
+    -clientNoContextTakeover : boolean
+    -serverNoContextTakeover : boolean
+    -clientMaxWindowBits : int
+    -serverMaxWindowBits : int
+    -isCompressorResetRequired : boolean
+    -isDecompressorResetAllowed : boolean
+    -isCompressing : boolean
+    -isDecompressing : boolean
+    -compressedBytes : long
+    -decompressedBytes : long
+    +getCompressionLevel() : int
+    +getMaxFragmentSize() : int
+    +getThreshold() : int
+    +setThreshold(threshold: int) : void
+    +isClientNoContextTakeover() : boolean
+    +setClientNoContextTakeover(clientNoContextTakeover: boolean) : void
+    +isServerNoContextTakeover() : boolean
+    +setServerNoContextTakeover(serverNoContextTakeover: boolean) : void
+    +getCompressionRatio() : double
+    +isFrameValid(inputFrame: Framedata) : void
+    +decodeFrame(inputFrame: Framedata) : void
+    -decompress(buffer: ByteBuffer, isFinal: boolean) : byte[]
+    -decompress(buffer: ByteBuffer, decompressed: ByteArrayOutputStream) : void
+    +encodeFrame(inputFrame: Framedata) : void
+    -compress(buffer: ByteBuffer, isFinal: boolean) : byte[]
+    -removeTail(input: byte[], tail: byte[]) : byte[]
+    -hasTail(input: byte[], tail: byte[]) : boolean
+    +acceptProvidedExtensionAsServer(inputExtension: String) : boolean
+    -acceptExtensionParametersAsServer(extensionRequestData: ExtensionRequestData) : boolean
+    +acceptProvidedExtensionAsClient(inputExtension: String) : boolean
+    -acceptExtensionParametersAsClient(extensionRequestData: ExtensionRequestData) : boolean
+    +getProvidedExtensionAsClient() : String
+    +getProvidedExtensionAsServer() : String
+    +copyInstance() : IExtension
+    +reset() : void
+    +toString() : String
+    +PerMessageDeflateExtension()
+    +PerMessageDeflateExtension(compressionLevel: int)
+    +PerMessageDeflateExtension(compressionLevel: int, maxFragmentSize: int)
+}
+
+}
+
+package org.java_websocket.framing {
+  +class DataFrame <<abstract>> {
+    +isValid() : void
+    +DataFrame(opcode: Opcode)
+}
+
+  +class PongFrame {
+    +PongFrame()
+    +PongFrame(pingFrame: PingFrame)
+}
+
+  +class PingFrame {
+    +PingFrame()
+}
+
+  +class BinaryFrame {
+    +BinaryFrame()
+}
+
+  +interface Framedata {
+    ~{abstract} isFin() : boolean
+    ~{abstract} isRSV1() : boolean
+    ~{abstract} isRSV2() : boolean
+    ~{abstract} isRSV3() : boolean
+    ~{abstract} getTransfereMasked() : boolean
+    ~{abstract} getOpcode() : Opcode
+    ~{abstract} getPayloadData() : ByteBuffer
+    ~{abstract} append(nextframe: Framedata) : void
+}
+
+  +class CloseFrame {
+    +{static} NORMAL : int {readOnly}
+    +{static} GOING_AWAY : int {readOnly}
+    +{static} PROTOCOL_ERROR : int {readOnly}
+    +{static} REFUSE : int {readOnly}
+    +{static} NOCODE : int {readOnly}
+    +{static} ABNORMAL_CLOSE : int {readOnly}
+    +{static} NO_UTF8 : int {readOnly}
+    +{static} POLICY_VALIDATION : int {readOnly}
+    +{static} TOOBIG : int {readOnly}
+    +{static} EXTENSION : int {readOnly}
+    +{static} UNEXPECTED_CONDITION : int {readOnly}
+    +{static} SERVICE_RESTART : int {readOnly}
+    +{static} TRY_AGAIN_LATER : int {readOnly}
+    +{static} BAD_GATEWAY : int {readOnly}
+    +{static} TLS_ERROR : int {readOnly}
+    +{static} NEVER_CONNECTED : int {readOnly}
+    +{static} BUGGYCLOSE : int {readOnly}
+    +{static} FLASHPOLICY : int {readOnly}
+    -code : int
+    -reason : String
+    +setCode(code: int) : void
+    +setReason(reason: String) : void
+    +getCloseCode() : int
+    +getMessage() : String
+    +toString() : String
+    +isValid() : void
+    +setPayload(payload: ByteBuffer) : void
+    -validateUtf8(payload: ByteBuffer, mark: int) : void
+    -updatePayload() : void
+    +getPayloadData() : ByteBuffer
+    +equals(o: Object) : boolean
+    +hashCode() : int
+    +CloseFrame()
+}
+
+  +class TextFrame {
+    +isValid() : void
+    +TextFrame()
+}
+
+  +class ControlFrame <<abstract>> {
+    +isValid() : void
+    +ControlFrame(opcode: Opcode)
+}
+
+  +class ContinuousFrame {
+    +ContinuousFrame()
+}
+
+  +class FramedataImpl1 <<abstract>> {
+    -fin : boolean
+    -optcode : Opcode
+    -unmaskedpayload : ByteBuffer
+    -transferemasked : boolean
+    -rsv1 : boolean
+    -rsv2 : boolean
+    -rsv3 : boolean
+    +{abstract} isValid() : void
+    +isRSV1() : boolean
+    +isRSV2() : boolean
+    +isRSV3() : boolean
+    +isFin() : boolean
+    +getOpcode() : Opcode
+    +getTransfereMasked() : boolean
+    +getPayloadData() : ByteBuffer
+    +append(nextframe: Framedata) : void
+    +toString() : String
+    +setPayload(payload: ByteBuffer) : void
+    +setFin(fin: boolean) : void
+    +setRSV1(rsv1: boolean) : void
+    +setRSV2(rsv2: boolean) : void
+    +setRSV3(rsv3: boolean) : void
+    +setTransferemasked(transferemasked: boolean) : void
+    +{static} get(opcode: Opcode) : FramedataImpl1
+    +equals(o: Object) : boolean
+    +hashCode() : int
+    +FramedataImpl1(op: Opcode)
+}
+
+}
+
+package org.java_websocket.handshake {
+  +class HandshakedataImpl1 {
+    -content : byte[]
+    -map : TreeMap<String, String>
+    +iterateHttpFields() : Iterator<String>
+    +getFieldValue(name: String) : String
+    +getContent() : byte[]
+    +setContent(content: byte[]) : void
+    +put(name: String, value: String) : void
+    +hasFieldValue(name: String) : boolean
+    +HandshakedataImpl1()
+}
+
+  +interface ServerHandshake {
+    ~{abstract} getHttpStatus() : short
+    ~{abstract} getHttpStatusMessage() : String
+}
+
+  +interface Handshakedata {
+    ~{abstract} iterateHttpFields() : Iterator<String>
+    ~{abstract} getFieldValue(name: String) : String
+    ~{abstract} hasFieldValue(name: String) : boolean
+    ~{abstract} getContent() : byte[]
+}
+
+  +interface ServerHandshakeBuilder {
+    ~{abstract} setHttpStatus(status: short) : void
+    ~{abstract} setHttpStatusMessage(message: String) : void
+}
+
+  +class HandshakeImpl1Client {
+    -resourceDescriptor : String
+    +setResourceDescriptor(resourceDescriptor: String) : void
+    +getResourceDescriptor() : String
+}
+
+  +interface ClientHandshake {
+    ~{abstract} getResourceDescriptor() : String
+}
+
+  +class HandshakeImpl1Server {
+    -httpstatus : short
+    -httpstatusmessage : String
+    +getHttpStatusMessage() : String
+    +getHttpStatus() : short
+    +setHttpStatusMessage(message: String) : void
+    +setHttpStatus(status: short) : void
+}
+
+  +interface ClientHandshakeBuilder {
+    ~{abstract} setResourceDescriptor(resourceDescriptor: String) : void
+}
+
+  +interface HandshakeBuilder {
+    ~{abstract} setContent(content: byte[]) : void
+    ~{abstract} put(name: String, value: String) : void
+}
+
+}
+
+package org.java_websocket.interfaces {
+  +interface ISSLChannel {
+    ~{abstract} getSSLEngine() : SSLEngine
+}
+
+}
+
+package org.java_websocket.protocols {
+  +interface IProtocol {
+    ~{abstract} acceptProvidedProtocol(inputProtocolHeader: String) : boolean
+    ~{abstract} getProvidedProtocol() : String
+    ~{abstract} copyInstance() : IProtocol
+    ~{abstract} toString() : String
+}
+
+  +class Protocol {
+    -{static} patternSpace : Pattern {readOnly}
+    -{static} patternComma : Pattern {readOnly}
+    -providedProtocol : String {readOnly}
+    +acceptProvidedProtocol(inputProtocolHeader: String) : boolean
+    +getProvidedProtocol() : String
+    +copyInstance() : IProtocol
+    +toString() : String
+    +equals(o: Object) : boolean
+    +hashCode() : int
+    +Protocol(providedProtocol: String)
+}
+
+}
+
+package org.java_websocket.server {
+  +class WebSocketServer <<abstract>> {
+    -{static} AVAILABLE_PROCESSORS : int {readOnly}
+    -log : Logger {readOnly}
+    -connections : Collection<WebSocket> {readOnly}
+    -address : InetSocketAddress {readOnly}
+    -server : ServerSocketChannel
+    -selector : Selector
+    -drafts : List<Draft>
+    -selectorthread : Thread
+    -isclosed : AtomicBoolean {readOnly}
+    #decoders : List<WebSocketWorker>
+    -iqueue : List<WebSocketImpl>
+    -buffers : BlockingQueue<ByteBuffer>
+    -queueinvokes : int
+    -queuesize : AtomicInteger {readOnly}
+    -wsf : WebSocketServerFactory
+    -maxPendingConnections : int
+    -{static} checkAddressOfExistingChannel(existingChannel: ServerSocketChannel) : InetSocketAddress
+    +start() : void
+    +stop(timeout: int) : void
+    +stop(timeout: int, closeMessage: String) : void
+    +stop() : void
+    +getConnections() : Collection<WebSocket>
+    +getAddress() : InetSocketAddress
+    +getPort() : int
+    +setDaemon(daemon: boolean) : void
+    +getDraft() : List<Draft>
+    +setMaxPendingConnections(numberOfConnections: int) : void
+    +getMaxPendingConnections() : int
+    +run() : void
+    -doAdditionalRead() : void
+    -doAccept(key: SelectionKey, i: Iterator<SelectionKey>) : void
+    -doRead(key: SelectionKey, i: Iterator<SelectionKey>) : boolean
+    -doWrite(key: SelectionKey) : void
+    -doSetupSelectorAndServerThread() : boolean
+    -doEnsureSingleThread() : boolean
+    -doServerShutdown() : void
+    #allocateBuffers(c: WebSocket) : void
+    #releaseBuffers(c: WebSocket) : void
+    +createBuffer() : ByteBuffer
+    #queue(ws: WebSocketImpl) : void
+    -takeBuffer() : ByteBuffer
+    -pushBuffer(buf: ByteBuffer) : void
+    -handleIOException(key: SelectionKey, conn: WebSocket, ex: IOException) : void
+    -handleFatal(conn: WebSocket, e: Exception) : void
+    +onWebsocketMessage(conn: WebSocket, message: String) : void
+    +onWebsocketMessage(conn: WebSocket, blob: ByteBuffer) : void
+    +onWebsocketOpen(conn: WebSocket, handshake: Handshakedata) : void
+    +onWebsocketClose(conn: WebSocket, code: int, reason: String, remote: boolean) : void
+    #removeConnection(ws: WebSocket) : boolean
+    #addConnection(ws: WebSocket) : boolean
+    +onWebsocketError(conn: WebSocket, ex: Exception) : void
+    +onWriteDemand(w: WebSocket) : void
+    +onWebsocketCloseInitiated(conn: WebSocket, code: int, reason: String) : void
+    +onWebsocketClosing(conn: WebSocket, code: int, reason: String, remote: boolean) : void
+    +onCloseInitiated(conn: WebSocket, code: int, reason: String) : void
+    +onClosing(conn: WebSocket, code: int, reason: String, remote: boolean) : void
+    +setWebSocketFactory(wsf: WebSocketServerFactory) : void
+    +getWebSocketFactory() : WebSocketFactory
+    #onConnect(key: SelectionKey) : boolean
+    -getSocket(conn: WebSocket) : Socket
+    +getLocalSocketAddress(conn: WebSocket) : InetSocketAddress
+    +getRemoteSocketAddress(conn: WebSocket) : InetSocketAddress
+    +{abstract} onOpen(conn: WebSocket, handshake: ClientHandshake) : void
+    +{abstract} onClose(conn: WebSocket, code: int, reason: String, remote: boolean) : void
+    +{abstract} onMessage(conn: WebSocket, message: String) : void
+    +{abstract} onError(conn: WebSocket, ex: Exception) : void
+    +{abstract} onStart() : void
+    +onMessage(conn: WebSocket, message: ByteBuffer) : void
+    +broadcast(text: String) : void
+    +broadcast(data: byte[]) : void
+    +broadcast(data: ByteBuffer) : void
+    +broadcast(data: byte[], clients: Collection<WebSocket>) : void
+    +broadcast(data: ByteBuffer, clients: Collection<WebSocket>) : void
+    +broadcast(text: String, clients: Collection<WebSocket>) : void
+    -doBroadcast(data: Object, clients: Collection<WebSocket>) : void
+    -fillFrames(draft: Draft, draftFrames: Map<Draft, List<Framedata>>, strData: String, byteData: ByteBuffer) : void
+    +WebSocketServer()
+    +WebSocketServer(address: InetSocketAddress)
+    +WebSocketServer(address: InetSocketAddress, decodercount: int)
+    +WebSocketServer(address: InetSocketAddress, drafts: List<Draft>)
+    +WebSocketServer(address: InetSocketAddress, decodercount: int, drafts: List<Draft>)
+    +WebSocketServer(existingChannel: ServerSocketChannel)
+    +WebSocketServer(address: InetSocketAddress, decodercount: int, drafts: List<Draft>, connectionscontainer: Collection<WebSocket>)
+}
+
+  +class WebSocketServer$WebSocketWorker {
+    -iqueue : BlockingQueue<WebSocketImpl>
+    +put(ws: WebSocketImpl) : void
+    +run() : void
+    -doDecode(ws: WebSocketImpl, buf: ByteBuffer) : void
+    +WebSocketWorker()
+}
+
+  +class DefaultSSLWebSocketServerFactory {
+    #sslcontext : SSLContext
+    #exec : ExecutorService
+    +wrapChannel(channel: SocketChannel, key: SelectionKey) : ByteChannel
+    +createWebSocket(a: WebSocketAdapter, d: Draft) : WebSocketImpl
+    +createWebSocket(a: WebSocketAdapter, d: List<Draft>) : WebSocketImpl
+    +close() : void
+    +DefaultSSLWebSocketServerFactory(sslContext: SSLContext)
+    +DefaultSSLWebSocketServerFactory(sslContext: SSLContext, exec: ExecutorService)
+}
+
+  +class CustomSSLWebSocketServerFactory {
+    -enabledProtocols : String[] {readOnly}
+    -enabledCiphersuites : String[] {readOnly}
+    +wrapChannel(channel: SocketChannel, key: SelectionKey) : ByteChannel
+    +CustomSSLWebSocketServerFactory(sslContext: SSLContext, enabledProtocols: String[], enabledCiphersuites: String[])
+    +CustomSSLWebSocketServerFactory(sslContext: SSLContext, executerService: ExecutorService, enabledProtocols: String[], enabledCiphersuites: String[])
+}
+
+  +class SSLParametersWebSocketServerFactory {
+    -sslParameters : SSLParameters {readOnly}
+    +wrapChannel(channel: SocketChannel, key: SelectionKey) : ByteChannel
+    +SSLParametersWebSocketServerFactory(sslContext: SSLContext, sslParameters: SSLParameters)
+    +SSLParametersWebSocketServerFactory(sslContext: SSLContext, executerService: ExecutorService, sslParameters: SSLParameters)
+}
+
+  +class DefaultWebSocketServerFactory {
+    +createWebSocket(a: WebSocketAdapter, d: Draft) : WebSocketImpl
+    +createWebSocket(a: WebSocketAdapter, d: List<Draft>) : WebSocketImpl
+    +wrapChannel(channel: SocketChannel, key: SelectionKey) : SocketChannel
+    +close() : void
+}
+
+}
+
+package org.java_websocket.util {
+  +class Base64 {
+    +{static} NO_OPTIONS : int {readOnly}
+    +{static} ENCODE : int {readOnly}
+    +{static} GZIP : int {readOnly}
+    +{static} DO_BREAK_LINES : int {readOnly}
+    +{static} URL_SAFE : int {readOnly}
+    +{static} ORDERED : int {readOnly}
+    -{static} MAX_LINE_LENGTH : int {readOnly}
+    -{static} EQUALS_SIGN : byte {readOnly}
+    -{static} NEW_LINE : byte {readOnly}
+    -{static} PREFERRED_ENCODING : String {readOnly}
+    -{static} WHITE_SPACE_ENC : byte {readOnly}
+    -{static} _STANDARD_ALPHABET : byte[] {readOnly}
+    -{static} _STANDARD_DECODABET : byte[] {readOnly}
+    -{static} _URL_SAFE_ALPHABET : byte[] {readOnly}
+    -{static} _URL_SAFE_DECODABET : byte[] {readOnly}
+    -{static} _ORDERED_ALPHABET : byte[] {readOnly}
+    -{static} _ORDERED_DECODABET : byte[] {readOnly}
+    -{static} getAlphabet(options: int) : byte[]
+    -{static} getDecodabet(options: int) : byte[]
+    -{static} encode3to4(b4: byte[], threeBytes: byte[], numSigBytes: int, options: int) : byte[]
+    -{static} encode3to4(source: byte[], srcOffset: int, numSigBytes: int, destination: byte[], destOffset: int, options: int) : byte[]
+    +{static} encodeBytes(source: byte[]) : String
+    +{static} encodeBytes(source: byte[], off: int, len: int, options: int) : String
+    +{static} encodeBytesToBytes(source: byte[], off: int, len: int, options: int) : byte[]
+    -{static} decode4to3(source: byte[], srcOffset: int, destination: byte[], destOffset: int, options: int) : int
+    -Base64()
+}
+
+  +class NamedThreadFactory {
+    -defaultThreadFactory : ThreadFactory {readOnly}
+    -threadNumber : AtomicInteger {readOnly}
+    -threadPrefix : String {readOnly}
+    -daemon : boolean {readOnly}
+    +newThread(runnable: Runnable) : Thread
+    +NamedThreadFactory(threadPrefix: String)
+    +NamedThreadFactory(threadPrefix: String, daemon: boolean)
+}
+
+  +class Charsetfunctions {
+    -{static} codingErrorAction : CodingErrorAction {readOnly}
+    -{static} utf8d : int[] {readOnly}
+    +{static} utf8Bytes(s: String) : byte[]
+    +{static} asciiBytes(s: String) : byte[]
+    +{static} stringAscii(bytes: byte[]) : String
+    +{static} stringAscii(bytes: byte[], offset: int, length: int) : String
+    +{static} stringUtf8(bytes: byte[]) : String
+    +{static} stringUtf8(bytes: ByteBuffer) : String
+    +{static} isValidUTF8(data: ByteBuffer, off: int) : boolean
+    +{static} isValidUTF8(data: ByteBuffer) : boolean
+    -Charsetfunctions()
+}
+
+  +class Base64$OutputStream <<static>> {
+    -encode : boolean
+    -position : int
+    -buffer : byte[]
+    -bufferLength : int
+    -lineLength : int
+    -breakLines : boolean
+    -b4 : byte[]
+    -suspendEncoding : boolean
+    -options : int
+    -decodabet : byte[]
+    +write(theByte: int) : void
+    +write(theBytes: byte[], off: int, len: int) : void
+    +flushBase64() : void
+    +close() : void
+    +OutputStream(out: OutputStream)
+    +OutputStream(out: OutputStream, options: int)
+}
+
+  +class ByteBufferUtils {
+    +{static} transferByteBuffer(source: ByteBuffer, dest: ByteBuffer) : int
+    +{static} getEmptyByteBuffer() : ByteBuffer
+    -ByteBufferUtils()
+}
+
+}
+
+
+Draft_6455 ..> LimitExceededException
+WebSocketFactory ..> WebSocket
+DefaultSSLWebSocketServerFactory ..> Draft
+ClientHandshake <|-- ClientHandshakeBuilder
+WebSocketImpl ..> ClientHandshakeBuilder
+WebSocketServer$WebSocketWorker ..> WebSocketImpl
+ControlFrame ..> InvalidDataException
+Charsetfunctions ..> InvalidDataException
+WebSocketServer o-- "*" WebSocket
+Draft ..> ClientHandshake
+Draft ..> ClientHandshakeBuilder
+WebSocketAdapter <|-- AbstractWebSocket
+WebSocketAdapter -- "0..1" PingFrame
+WebSocketListener ..> ServerHandshakeBuilder
+WebSocket ..> Opcode
+WebSocketServer ..> WrappedIOException
+WebSocketServerFactory <|.. DefaultSSLWebSocketServerFactory
+Draft ..> ServerHandshake
+WrappedByteChannel <|.. SSLSocketChannel
+WrappedIOException *-- "1" WebSocket
+InvalidDataException <|-- InvalidHandshakeException
+Draft ..> CloseHandshakeType
+AbstractWebSocket ..> WebSocket
+Draft ..> HandshakeBuilder
+WebSocketAdapter ..> WebSocket
+WebSocketClient -- "0..1" DnsResolver
+Draft ..> Framedata
+FramedataImpl1 -- "0..1" Opcode
+InvalidDataException <|-- InvalidFrameException
+ControlFrame <|-- PongFrame
+WebSocketClient -- "0..1" Draft
+WebSocketAdapter ..> InvalidDataException
+WebSocketAdapter ..> Framedata
+FramedataImpl1 ..> InvalidDataException
+Draft ..> ServerHandshakeBuilder
+Draft_6455 ..> InvalidDataException
+WebSocketClient ..> IProtocol
+Draft_6455 o-- "*" IExtension
+WebSocketImpl ..> Opcode
+WebSocketServer o-- "*" WebSocketImpl
+IExtension ..> Framedata
+Framedata <|.. FramedataImpl1
+HandshakeBuilder <|-- ServerHandshakeBuilder
+WebSocketClient +-- WebSocketClient$WebsocketWriteThread : nested
+WebSocketServer ..> ClientHandshake
+IProtocol <|.. Protocol
+WebSocketServerFactory ..> WebSocketImpl
+Draft_6455 ..> InvalidHandshakeException
+Draft ..> Handshakedata
+ISSLChannel <|.. SSLSocketChannel2
+Draft -- "0..1" Opcode
+WebSocketListener ..> Handshakedata
+DefaultWebSocketServerFactory ..> WebSocketAdapter
+Draft ..> InvalidHandshakeException
+WrappedByteChannel <|.. AbstractWrappedByteChannel
+WebSocketImpl *-- "1" WebSocketListener
+Draft ..> InvalidDataException
+PerMessageDeflateExtension ..> Framedata
+Draft_6455 +-- Draft_6455$TranslatedPayloadMetaData : nested
+Draft_6455 ..> ClientHandshake
+DefaultExtension ..> Framedata
+Draft_6455 ..> ServerHandshake
+WebSocketFactory ..> Draft
+ControlFrame <|-- CloseFrame
+TextFrame ..> InvalidDataException
+Handshakedata <|-- HandshakeBuilder
+DefaultSSLWebSocketServerFactory ..> WebSocketImpl
+DefaultSSLWebSocketServerFactory ..> WebSocketAdapter
+Draft_6455 ..> WebSocketImpl
+WebSocketClient ..> Handshakedata
+WebSocketServer ..> Handshakedata
+Draft ..> HandshakeState
+WebSocketClient ..> Opcode
+ServerHandshake <|-- ServerHandshakeBuilder
+FramedataImpl1 <|-- ControlFrame
+WebSocketServer ..> Framedata
+PerMessageDeflateExtension ..> IExtension
+DataFrame <|-- TextFrame
+Draft <|-- Draft_6455
+WebSocketServer -- "0..1" WebSocketServerFactory
+ISSLChannel <|.. SSLSocketChannel
+IExtension ..> InvalidDataException
+Draft_6455 ..> ServerHandshakeBuilder
+ControlFrame <|-- PingFrame
+DefaultSSLWebSocketServerFactory <|-- SSLParametersWebSocketServerFactory
+WebSocketServer ..> WebSocketFactory
+WebSocketClient ..> Framedata
+WebSocketClient -- "0..1" WebSocketImpl
+WebSocketImpl o-- "*" Draft
+Draft_6455 -- "0..1" Framedata
+WebSocketListener ..> ClientHandshake
+WebSocketImpl ..> InvalidDataException
+WebSocketImpl -- "0..1" Role
+CompressionExtension ..> Framedata
+Draft ..> WebSocketImpl
+ControlFrame ..> Opcode
+WebSocketListener ..> WebSocket
+Handshakedata <|-- ClientHandshake
+Draft -- "0..1" Role
+CompressionExtension ..> InvalidDataException
+WebSocketServerFactory ..> Draft
+AbstractWebSocket <|-- WebSocketServer
+Framedata ..> Opcode
+WrappedByteChannel <|.. SSLSocketChannel2
+SocketChannelIOHelper ..> WrappedByteChannel
+WebSocketImpl ..> Framedata
+WebSocketAdapter ..> Draft
+CompressionExtension <|-- PerMessageDeflateExtension
+WebSocketFactory <|-- WebSocketServerFactory
+PongFrame ..> PingFrame
+WebSocketListener ..> ServerHandshake
+HandshakedataImpl1 <|-- HandshakeImpl1Server
+Draft_6455 ..> Opcode
+DefaultSSLWebSocketServerFactory <|-- CustomSSLWebSocketServerFactory
+DefaultWebSocketServerFactory ..> Draft
+Draft_6455 ..> ClientHandshakeBuilder
+WebSocketListener ..> PingFrame
+Draft_6455 ..> HandshakeBuilder
+PerMessageDeflateExtension ..> InvalidDataException
+WebSocketListener ..> Draft
+WebSocketImpl -- "0..1" ReadyState
+WebSocketImpl -- "0..1" ClientHandshake
+CloseFrame ..> InvalidDataException
+Handshakedata <|-- ServerHandshake
+WebSocketServer +-- WebSocketServer$WebSocketWorker : nested
+WebSocketListener ..> Framedata
+Draft_6455 ..> IncompleteException
+Draft_6455 ..> InvalidFrameException
+HandshakeBuilder <|-- ClientHandshakeBuilder
+ServerHandshakeBuilder <|.. HandshakeImpl1Server
+DataFrame ..> InvalidDataException
+WebSocket <|.. WebSocketClient
+DataFrame <|-- BinaryFrame
+DefaultExtension ..> InvalidDataException
+DefaultExtension <|-- CompressionExtension
+WebSocketListener ..> InvalidDataException
+WebSocket ..> Framedata
+WebSocketAdapter ..> ServerHandshakeBuilder
+WebSocketAdapter ..> ServerHandshake
+DataFrame ..> Opcode
+Draft_6455 ..> CloseHandshakeType
+WebSocket ..> Draft
+HandshakedataImpl1 <|-- HandshakeImpl1Client
+DataFrame <|-- ContinuousFrame
+WebSocketListener <|.. WebSocketAdapter
+WebSocketClient ..> InvalidHandshakeException
+WebSocketClient ..> ReadyState
+WebSocketImpl ..> Handshakedata
+WebSocket ..> ReadyState
+WebSocketClient$WebsocketWriteThread *-- "1" WebSocketClient
+WebSocketFactory ..> WebSocketAdapter
+FramedataImpl1 <|-- DataFrame
+Draft_6455 ..> HandshakeState
+WebSocket <|.. WebSocketImpl
+WebSocketClient ..> ServerHandshake
+WebSocketAdapter ..> ClientHandshake
+AbstractWebSocket <|-- WebSocketClient
+WebSocketServer o-- "*" Draft
+HandshakeBuilder <|.. HandshakedataImpl1
+WebSocketImpl ..> IProtocol
+WebSocketServerFactory <|.. DefaultWebSocketServerFactory
+Base64 +-- Base64$OutputStream : nested
+WebSocketImpl ..> InvalidHandshakeException
+InvalidDataException <|-- LimitExceededException
+WebSocketServerFactory ..> WebSocketAdapter
+IExtension <|.. DefaultExtension
+Draft_6455 o-- "*" IProtocol
+DefaultWebSocketServerFactory ..> WebSocketImpl
+SocketChannelIOHelper ..> WebSocketImpl
+ClientHandshakeBuilder <|.. HandshakeImpl1Client
+WebSocket ..> IProtocol
+PerMessageDeflateExtension ..> ExtensionRequestData
+
+@enduml

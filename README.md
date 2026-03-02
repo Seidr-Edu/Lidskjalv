@@ -1,4 +1,4 @@
-# Lidskjalv Monorepo
+# Lidskjalv
 
 This repository contains two tools:
 

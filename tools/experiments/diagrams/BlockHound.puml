@@ -1,0 +1,246 @@
+@startuml diagram
+
+hide empty members
+
+package reactor.blockhound {
+  +class BlockHoundRuntime$State <<static>> {
+    ~dynamic : boolean {readOnly}
+    ~allowed : boolean
+    +isDynamic() : boolean
+    +isAllowed() : boolean
+    +setAllowed(allowed: boolean) : void
+    +State(dynamic: boolean)
+    ~State(dynamic: boolean, allowed: boolean)
+}
+
+  +class BlockingMethod {
+    -className : String {readOnly}
+    -name : String {readOnly}
+    -modifiers : int {readOnly}
+    +getClassName() : String
+    +getName() : String
+    +getModifiers() : int
+    +isStatic() : boolean
+    +toString() : String
+    +BlockingMethod(className: String, name: String, modifiers: int)
+}
+
+  +class BlockHound$Builder <<static>> {
+    -blockingMethods : Map<String, Map<String, Set<String>>> {readOnly}
+    -allowances : Map<String, Map<String, Boolean>> {readOnly}
+    -onBlockingMethod : Consumer<BlockingMethod>
+    -threadPredicate : Predicate<Thread>
+    -dynamicThreadPredicate : Predicate<Thread>
+    -configuredInstrumentation : Instrumentation
+    +markAsBlocking(clazz: Class, methodName: String, signature: String) : Builder
+    +markAsBlocking(className: String, methodName: String, signature: String) : Builder
+    +allowBlockingCallsInside(className: String, methodName: String) : Builder
+    +disallowBlockingCallsInside(className: String, methodName: String) : Builder
+    +blockingMethodCallback(consumer: Consumer<BlockingMethod>) : Builder
+    +nonBlockingThreadPredicate(function: Function<Predicate<Thread>, Predicate<Thread>>) : Builder
+    +dynamicThreadPredicate(function: Function<Predicate<Thread>, Predicate<Thread>>) : Builder
+    +addDynamicThreadPredicate(predicate: Predicate<Thread>) : Builder
+    +loadIntegrations(integrations: BlockHoundIntegration) : Builder
+    +with(integration: BlockHoundIntegration) : Builder
+    +with(instrumentation: Instrumentation) : Builder
+    +install() : void
+    -testInstrumentation() : void
+    -instrument(instrumentation: Instrumentation) : void
+    ~Builder()
+}
+
+  ~class InstrumentationUtils {
+    ~{static} jdkMajorVersion : int {readOnly}
+    ~{static} injectBootstrapClasses(instrumentation: Instrumentation, classNames: String) : void
+    -{static} getJdkMajorVersion() : int
+    -{static} getRuntimeVersion() : Object
+    -{static} getRuntimeVersionFeature(version: Object) : int
+}
+
+  ~class AllowancesByteBuddyTransformer$AllowAdvice <<static>> {
+    ~{static} onEnter(allowed: boolean) : State
+    ~{static} onExit(previousState: State, allowed: boolean) : void
+}
+
+  ~class NativeWrappingClassFileTransformer$NativeWrappingClassVisitor <<static>> {
+    -className : String {readOnly}
+    -methods : Map<String, Set<String>> {readOnly}
+    +visitMethod(access: int, name: String, descriptor: String, signature: String, exceptions: String[]) : MethodVisitor
+    ~NativeWrappingClassVisitor(cw: ClassVisitor, methods: Map<String, Set<String>>, internalClassName: String)
+}
+
+  ~class AllowancesByteBuddyTransformer {
+    -allowances : Map<String, Map<String, Boolean>>
+    +transform(builder: Builder<?>, typeDescription: TypeDescription, classLoader: ClassLoader, module: JavaModule, protectionDomain: ProtectionDomain) : Builder<?>
+    ~AllowancesByteBuddyTransformer(allowances: Map<String, Map<String, Boolean>>)
+}
+
+  ~annotation AllowancesByteBuddyTransformer$AllowedArgument <<static>> <<Documented>> <<Retention>> <<java.lang.annotation.Target>> {
+}
+
+  +class BlockHound {
+    ~{static} PREFIX : String {readOnly}
+    -{static} INITIALIZED : AtomicBoolean {readOnly}
+    +{static} builder() : Builder
+    +{static} install(integrations: BlockHoundIntegration) : void
+    +{static} premain(agentArgs: String, inst: Instrumentation) : void
+    -BlockHound()
+}
+
+  ~enum BlockingCallsByteBuddyTransformer$ModifiersArgument$Factory <<static>> {
+    +{static} INSTANCE : Factory
+    +getAnnotationType() : Class<ModifiersArgument>
+    +make(target: InDefinedShape, annotation: Loadable<ModifiersArgument>, adviceType: AdviceType) : OffsetMapping
+}
+
+  ~annotation BlockingCallsByteBuddyTransformer$ModifiersArgument <<static>> <<Documented>> <<Retention>> <<java.lang.annotation.Target>> {
+}
+
+  ~class BlockHoundRuntime {
+    +{static} blockingMethodConsumer : Consumer<Object[]>
+    +{static} threadPredicate : Predicate<Thread>
+    +{static} dynamicThreadPredicate : Predicate<Thread>
+    +{static} STATE : ThreadLocal<State> {readOnly}
+    +{static} checkBlocking(internalClassName: String, methodName: String, modifiers: int) : void
+}
+
+  +class BlockingOperationError {
+    -{static} serialVersionUID : long {readOnly}
+    -method : BlockingMethod {readOnly}
+    +getMethod() : BlockingMethod
+    +BlockingOperationError(method: BlockingMethod)
+}
+
+  ~class BlockingCallsByteBuddyTransformer {
+    -blockingMethods : Map<String, Map<String, Set<String>>>
+    +transform(builder: Builder<?>, typeDescription: TypeDescription, classLoader: ClassLoader, module: JavaModule, protectionDomain: ProtectionDomain) : Builder<?>
+    ~BlockingCallsByteBuddyTransformer(blockingMethods: Map<String, Map<String, Set<String>>>)
+}
+
+  ~class TestThread {
+    ~blockingCallDetected : boolean
+    ~task : FutureTask<Void> {readOnly}
+    +run() : void
+    +startAndWait() : void
+    ~TestThread()
+}
+
+  -class BlockHound$BlockHoundPoolStrategy <<static>> {
+    +{static} INSTANCE : PoolStrategy {readOnly}
+    +typePool(classFileLocator: ClassFileLocator, classLoader: ClassLoader, name: String) : TypePool
+    +typePool(classFileLocator: ClassFileLocator, classLoader: ClassLoader) : TypePool
+    -BlockHoundPoolStrategy()
+}
+
+  ~class BlockingCallsByteBuddyTransformer$BlockingCallAdvice <<static>> {
+    ~{static} onEnter(declaringType: String, methodName: String, modifiers: int) : void
+}
+
+  ~class InstrumentationUtils$MakePublicClassVisitor <<static>> {
+    +visit(version: int, access: int, name: String, signature: String, superName: String, interfaces: String[]) : void
+    ~MakePublicClassVisitor(cw: ClassWriter)
+}
+
+  ~class NativeWrappingClassFileTransformer {
+    ~{static} BLOCK_HOUND_RUNTIME_TYPE : Type {readOnly}
+    -blockingMethods : Map<String, Map<String, Set<String>>> {readOnly}
+    -{static} JDK_18 : int {readOnly}
+    +transform(loader: ClassLoader, className: String, classBeingRedefined: Class<?>, protectionDomain: ProtectionDomain, classfileBuffer: byte[]) : byte[]
+    ~NativeWrappingClassFileTransformer(blockingMethods: Map<String, Map<String, Set<String>>>)
+}
+
+  ~class AllowancesByteBuddyTransformer$AllowedArgument$Factory {
+    ~methods : Map<String, Boolean> {readOnly}
+    +getAnnotationType() : Class<AllowedArgument>
+    +make(target: InDefinedShape, annotation: Loadable<AllowedArgument>, adviceType: AdviceType) : OffsetMapping
+    ~Factory(methods: Map<String, Boolean>)
+}
+
+}
+
+package reactor.blockhound.integration {
+  +class RxJava2Integration <<AutoService>> {
+    +applyTo(builder: Builder) : void
+}
+
+  +class ReactorIntegration <<AutoService>> {
+    +applyTo(builder: Builder) : void
+}
+
+  +interface BlockHoundIntegration {
+    ~{abstract} applyTo(builder: Builder) : void
+    ~getPriority() : int
+    ~compareTo(o: BlockHoundIntegration) : int
+}
+
+  +class StandardOutputIntegration <<AutoService>> {
+    +applyTo(builder: Builder) : void
+}
+
+  +class LoggingIntegration <<Deprecated>> <<AutoService>> {
+    +applyTo(builder: Builder) : void
+}
+
+  ~class StandardOutputIntegration$PrintStreamDelegate <<static>> {
+    ~delegate : PrintStream {readOnly}
+    +flush() : void
+    +close() : void
+    +checkError() : boolean
+    +write(b: int) : void
+    +write(buf: byte[], off: int, len: int) : void
+    +print(b: boolean) : void
+    +print(c: char) : void
+    +print(i: int) : void
+    +print(l: long) : void
+    +print(f: float) : void
+    +print(d: double) : void
+    +print(s: char[]) : void
+    +print(s: String) : void
+    +print(obj: Object) : void
+    +println() : void
+    +println(x: boolean) : void
+    +println(x: char) : void
+    +println(x: int) : void
+    +println(x: long) : void
+    +println(x: float) : void
+    +println(x: double) : void
+    +println(x: char[]) : void
+    +println(x: String) : void
+    +println(x: Object) : void
+    +printf(format: String, args: Object) : PrintStream
+    +printf(l: Locale, format: String, args: Object) : PrintStream
+    +format(format: String, args: Object) : PrintStream
+    +format(l: Locale, format: String, args: Object) : PrintStream
+    +append(csq: CharSequence) : PrintStream
+    +append(csq: CharSequence, start: int, end: int) : PrintStream
+    +append(c: char) : PrintStream
+    +write(b: byte[]) : void
+    +toString() : String
+    ~PrintStreamDelegate(delegate: PrintStream)
+}
+
+}
+
+
+InstrumentationUtils +-- InstrumentationUtils$MakePublicClassVisitor : nested
+AllowancesByteBuddyTransformer +-- AllowancesByteBuddyTransformer$AllowAdvice : nested
+BlockHoundRuntime +-- BlockHoundRuntime$State : nested
+BlockHound$Builder ..> BlockingMethod
+AllowancesByteBuddyTransformer +-- AllowancesByteBuddyTransformer$AllowedArgument : nested
+BlockingCallsByteBuddyTransformer +-- BlockingCallsByteBuddyTransformer$BlockingCallAdvice : nested
+BlockHoundIntegration <|.. LoggingIntegration
+BlockHoundIntegration <|.. StandardOutputIntegration
+BlockHound +-- BlockHound$Builder : nested
+BlockHound ..> BlockHoundIntegration
+BlockHound +-- BlockHound$BlockHoundPoolStrategy : nested
+BlockingOperationError *-- "1" BlockingMethod
+BlockingCallsByteBuddyTransformer$ModifiersArgument +-- BlockingCallsByteBuddyTransformer$ModifiersArgument$Factory : nested
+BlockHoundIntegration <|.. ReactorIntegration
+BlockHoundIntegration <|.. RxJava2Integration
+AllowancesByteBuddyTransformer$AllowedArgument +-- AllowancesByteBuddyTransformer$AllowedArgument$Factory : nested
+StandardOutputIntegration +-- StandardOutputIntegration$PrintStreamDelegate : nested
+NativeWrappingClassFileTransformer +-- NativeWrappingClassFileTransformer$NativeWrappingClassVisitor : nested
+BlockingCallsByteBuddyTransformer +-- BlockingCallsByteBuddyTransformer$ModifiersArgument : nested
+BlockHound$Builder ..> BlockHoundIntegration
+
+@enduml

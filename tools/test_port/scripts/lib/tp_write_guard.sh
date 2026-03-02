@@ -54,8 +54,16 @@ tp_check_write_scope() {
   : > "$changes_file"
   : > "$diff_file"
 
-  join -t $'\t' -a1 -a2 -e '__MISSING__' -o '0,1.2,2.2' \
-    "$before_file" "$after_file" > "$joined_file" || true
+  if ! command -v join >/dev/null 2>&1; then
+    tp_err "tp_write_guard: required command 'join' not found"
+    return 2
+  fi
+
+  if ! join -t $'\t' -a1 -a2 -e '__MISSING__' -o '0,1.2,2.2' \
+    "$before_file" "$after_file" > "$joined_file"; then
+    tp_err "tp_write_guard: failed to compute write-scope change set"
+    return 2
+  fi
 
   local bad=0
   local violations=0

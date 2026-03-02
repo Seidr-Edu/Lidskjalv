@@ -124,13 +124,21 @@ tp_execute() {
 
     : > "$TP_WRITE_SCOPE_FAILURE_PATHS_FILE"
     : > "$TP_WRITE_SCOPE_DIFF_FILE"
-    if ! tp_check_write_scope "$TP_PORTED_REPO" "$TP_WRITE_SCOPE_BEFORE_FILE" "$TP_WRITE_SCOPE_AFTER_FILE"; then
+    if tp_check_write_scope "$TP_PORTED_REPO" "$TP_WRITE_SCOPE_BEFORE_FILE" "$TP_WRITE_SCOPE_AFTER_FILE"; then
+      :
+    else
+      local write_scope_rc=$?
       TP_STATUS="failed"
-      TP_REASON="write-scope-violation"
-      TP_FAILURE_CLASS="write-scope-violation"
       TP_PORTED_ORIGINAL_TESTS_STATUS="fail"
       TP_PORTED_ORIGINAL_TESTS_EXIT_CODE=1
       TP_ITERATIONS_USED="$i"
+      if [[ "$write_scope_rc" -eq 1 ]]; then
+        TP_REASON="write-scope-violation"
+        TP_FAILURE_CLASS="write-scope-violation"
+      else
+        TP_REASON="write-scope-check-failed"
+        TP_FAILURE_CLASS="write-scope-check-failed"
+      fi
       break
     fi
 

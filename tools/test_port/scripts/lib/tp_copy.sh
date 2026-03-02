@@ -26,7 +26,10 @@ tp_snapshot_original_tests() {
     "$TP_ORIGINAL_EFFECTIVE_PATH/" "$TP_ORIGINAL_TESTS_SNAPSHOT/" >/dev/null 2>&1; then
     return 1
   fi
-  find "$TP_ORIGINAL_TESTS_SNAPSHOT" -type f -print -quit | grep -q .
+  if ! find "$TP_ORIGINAL_TESTS_SNAPSHOT" -type f -print -quit | grep -q .; then
+    return 1
+  fi
+  return 0
 }
 
 tp_seed_ported_repo_with_original_tests() {

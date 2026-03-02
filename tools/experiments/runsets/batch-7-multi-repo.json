@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "defaults": {
+    "scan_original": "auto",
+    "test_port": "on",
+    "test_port_max_iter": 5
+  },
+  "sources": {
+    "kong_unirest_java": {
+      "source_repo": "https://github.com/Kong/unirest-java.git",
+      "source_subdir": "unirest"
+    },
+    "casbin_jcasbin": {
+      "source_repo": "https://github.com/casbin/jcasbin.git"
+    },
+    "reactor_blockhound": {
+      "source_repo": "https://github.com/reactor/BlockHound.git",
+      "source_subdir": "agent"
+    },
+    "obsidiandynamics_kafdrop": {
+      "source_repo": "https://github.com/obsidiandynamics/kafdrop.git"
+    },
+    "json_path_jsonpath": {
+      "source_repo": "https://github.com/json-path/JsonPath.git",
+      "source_subdir": "json-path"
+    },
+    "pengrad_java_telegram_bot_api": {
+      "source_repo": "https://github.com/pengrad/java-telegram-bot-api.git",
+      "source_subdir": "library"
+    },
+    "apache_cordova_plugin_inappbrowser": {
+      "source_repo": "https://github.com/apache/cordova-plugin-inappbrowser.git"
+    }
+  },
+  "runs": [
+    {
+      "id": "unirest-java",
+      "source": "kong_unirest_java",
+      "diagram": "tools/experiments/diagrams/unirest-java.puml"
+    },
+    {
+      "id": "jcasbin",
+      "source": "casbin_jcasbin",
+      "diagram": "tools/experiments/diagrams/jcasbin.puml"
+    },
+    {
+      "id": "blockhound",
+      "source": "reactor_blockhound",
+      "diagram": "tools/experiments/diagrams/BlockHound.puml"
+    },
+    {
+      "id": "kafdrop",
+      "source": "obsidiandynamics_kafdrop",
+      "diagram": "tools/experiments/diagrams/kafdrop.puml"
+    },
+    {
+      "id": "jsonpath",
+      "source": "json_path_jsonpath",
+      "diagram": "tools/experiments/diagrams/JsonPath.puml"
+    },
+    {
+      "id": "java-telegram-bot-api",
+      "source": "pengrad_java_telegram_bot_api",
+      "diagram": "tools/experiments/diagrams/java-telegram-bot-api.puml"
+    },
+    {
+      "id": "cordova-plugin-inappbrowser",
+      "source": "apache_cordova_plugin_inappbrowser",
+      "diagram": "tools/experiments/diagrams/cordova-plugin-inappbrowser.puml"
+    }
+  ]
+}

@@ -1,0 +1,688 @@
+@startuml diagram
+
+hide empty members
+
+package com.auth0.jwt {
+  +class JWT <<SuppressWarnings>> {
+    -parser : JWTParser {readOnly}
+    +decodeJwt(token: String) : DecodedJWT
+    +{static} decode(token: String) : DecodedJWT
+    +{static} require(algorithm: Algorithm) : Verification
+    +{static} create() : Builder
+    +JWT()
+}
+
+  +class JWTVerifier$BaseVerification <<static>> {
+    -algorithm : Algorithm {readOnly}
+    -expectedChecks : List<ExpectedCheckHolder> {readOnly}
+    -defaultLeeway : long
+    -customLeeways : Map<String, Long> {readOnly}
+    -ignoreIssuedAt : boolean
+    -clock : Clock
+    +withIssuer(issuer: String) : Verification
+    +withSubject(subject: String) : Verification
+    +withAudience(audience: String) : Verification
+    +withAnyOfAudience(audience: String) : Verification
+    +acceptLeeway(leeway: long) : Verification
+    +acceptExpiresAt(leeway: long) : Verification
+    +acceptNotBefore(leeway: long) : Verification
+    +acceptIssuedAt(leeway: long) : Verification
+    +ignoreIssuedAt() : Verification
+    +withJWTId(jwtId: String) : Verification
+    +withClaimPresence(name: String) : Verification
+    +withNullClaim(name: String) : Verification
+    +withClaim(name: String, value: Boolean) : Verification
+    +withClaim(name: String, value: Integer) : Verification
+    +withClaim(name: String, value: Long) : Verification
+    +withClaim(name: String, value: Double) : Verification
+    +withClaim(name: String, value: String) : Verification
+    +withClaim(name: String, value: Date) : Verification
+    +withClaim(name: String, value: Instant) : Verification
+    +withClaim(name: String, predicate: BiPredicate<Claim, DecodedJWT>) : Verification
+    +withArrayClaim(name: String, items: String) : Verification
+    +withArrayClaim(name: String, items: Integer) : Verification
+    +withArrayClaim(name: String, items: Long) : Verification
+    +build() : JWTVerifier
+    +build(clock: Clock) : JWTVerifier
+    +getLeewayFor(name: String) : long
+    -addMandatoryClaimChecks() : void
+    -assertValidCollectionClaim(claim: Claim, expectedClaimValue: Object[]) : boolean
+    -assertValidInstantClaim(claimName: String, claim: Claim, leeway: long, shouldBeFuture: boolean) : boolean
+    -assertInstantIsFuture(claimVal: Instant, leeway: long, now: Instant) : boolean
+    -assertInstantIsLessThanOrEqualToNow(claimVal: Instant, leeway: long, now: Instant) : boolean
+    -assertValidAudienceClaim(actualAudience: List<String>, expectedAudience: List<String>, shouldContainAll: boolean) : boolean
+    -assertPositive(leeway: long) : void
+    -assertNonNull(name: String) : void
+    -addCheck(name: String, predicate: BiPredicate<Claim, DecodedJWT>) : void
+    -constructExpectedCheck(claimName: String, check: BiPredicate<Claim, DecodedJWT>) : ExpectedCheckHolder
+    -verifyNull(claim: Claim, value: Object) : boolean
+    -isNullOrEmpty(args: String[]) : boolean
+    ~BaseVerification(algorithm: Algorithm)
+}
+
+  ~class TokenUtils <<abstract>> {
+    ~{static} splitToken(token: String) : String[]
+    -{static} wrongNumberOfParts(partCount: Object) : JWTDecodeException
+}
+
+  +class JWTVerifier {
+    -algorithm : Algorithm {readOnly}
+    ~expectedChecks : List<ExpectedCheckHolder> {readOnly}
+    -parser : JWTParser {readOnly}
+    ~{static} init(algorithm: Algorithm) : Verification
+    +verify(token: String) : DecodedJWT
+    +verify(jwt: DecodedJWT) : DecodedJWT
+    -verifyAlgorithm(jwt: DecodedJWT, expectedAlgorithm: Algorithm) : void
+    -verifyClaims(jwt: DecodedJWT, expectedChecks: List<ExpectedCheckHolder>) : void
+    ~JWTVerifier(algorithm: Algorithm, expectedChecks: List<ExpectedCheckHolder>)
+}
+
+  +class HeaderParams {
+    +{static} ALGORITHM : String {readOnly}
+    +{static} CONTENT_TYPE : String {readOnly}
+    +{static} TYPE : String {readOnly}
+    +{static} KEY_ID : String {readOnly}
+    -HeaderParams()
+}
+
+  +class JWTCreator <<SuppressWarnings>> {
+    -algorithm : Algorithm {readOnly}
+    -headerJson : String {readOnly}
+    -payloadJson : String {readOnly}
+    -{static} mapper : ObjectMapper {readOnly}
+    -{static} module : SimpleModule {readOnly}
+    ~{static} init() : Builder
+    -sign() : String
+    -JWTCreator(algorithm: Algorithm, headerClaims: Map<String, Object>, payloadClaims: Map<String, Object>)
+}
+
+  +class JWTCreator$Builder <<static>> {
+    -payloadClaims : Map<String, Object> {readOnly}
+    -headerClaims : Map<String, Object> {readOnly}
+    +withHeader(headerClaims: Map<String, Object>) : Builder
+    +withHeader(headerClaimsJson: String) : Builder
+    +withKeyId(keyId: String) : Builder
+    +withIssuer(issuer: String) : Builder
+    +withSubject(subject: String) : Builder
+    +withAudience(audience: String) : Builder
+    +withExpiresAt(expiresAt: Date) : Builder
+    +withExpiresAt(expiresAt: Instant) : Builder
+    +withNotBefore(notBefore: Date) : Builder
+    +withNotBefore(notBefore: Instant) : Builder
+    +withIssuedAt(issuedAt: Date) : Builder
+    +withIssuedAt(issuedAt: Instant) : Builder
+    +withJWTId(jwtId: String) : Builder
+    +withClaim(name: String, value: Boolean) : Builder
+    +withClaim(name: String, value: Integer) : Builder
+    +withClaim(name: String, value: Long) : Builder
+    +withClaim(name: String, value: Double) : Builder
+    +withClaim(name: String, value: String) : Builder
+    +withClaim(name: String, value: Date) : Builder
+    +withClaim(name: String, value: Instant) : Builder
+    +withClaim(name: String, map: Map<String, ?>) : Builder
+    +withClaim(name: String, list: List<?>) : Builder
+    +withNullClaim(name: String) : Builder
+    +withArrayClaim(name: String, items: String[]) : Builder
+    +withArrayClaim(name: String, items: Integer[]) : Builder
+    +withArrayClaim(name: String, items: Long[]) : Builder
+    +withPayload(payloadClaims: Map<String, ?>) : Builder
+    +withPayload(payloadClaimsJson: String) : Builder
+    -validatePayload(payload: Map<String, ?>) : boolean
+    -{static} validateClaim(map: Map<?, ?>) : boolean
+    -{static} validateClaim(list: List<?>) : boolean
+    -{static} isSupportedType(value: Object) : boolean
+    -{static} isBasicType(value: Object) : boolean
+    +sign(algorithm: Algorithm) : String
+    -assertNonNull(name: String) : void
+    -addClaim(name: String, value: Object) : void
+    ~Builder()
+}
+
+  ~class JWTDecoder <<SuppressWarnings>> {
+    -{static} serialVersionUID : long {readOnly}
+    -parts : String[] {readOnly}
+    -header : Header {readOnly}
+    -payload : Payload {readOnly}
+    +getAlgorithm() : String
+    +getType() : String
+    +getContentType() : String
+    +getKeyId() : String
+    +getHeaderClaim(name: String) : Claim
+    +getIssuer() : String
+    +getSubject() : String
+    +getAudience() : List<String>
+    +getExpiresAt() : Date
+    +getExpiresAtAsInstant() : Instant
+    +getNotBefore() : Date
+    +getNotBeforeAsInstant() : Instant
+    +getIssuedAt() : Date
+    +getIssuedAtAsInstant() : Instant
+    +getId() : String
+    +getClaim(name: String) : Claim
+    +getClaims() : Map<String, Claim>
+    +getHeader() : String
+    +getPayload() : String
+    +getSignature() : String
+    +getToken() : String
+    ~JWTDecoder(jwt: String)
+    ~JWTDecoder(converter: JWTParser, jwt: String)
+}
+
+  +class RegisteredClaims {
+    +{static} ISSUER : String {readOnly}
+    +{static} SUBJECT : String {readOnly}
+    +{static} AUDIENCE : String {readOnly}
+    +{static} EXPIRES_AT : String {readOnly}
+    +{static} NOT_BEFORE : String {readOnly}
+    +{static} ISSUED_AT : String {readOnly}
+    +{static} JWT_ID : String {readOnly}
+    -RegisteredClaims()
+}
+
+}
+
+package com.auth0.jwt.algorithms {
+  ~class HMACAlgorithm {
+    -crypto : CryptoHelper {readOnly}
+    -secret : byte[] {readOnly}
+    ~{static} getSecretBytes(secret: String) : byte[]
+    +verify(jwt: DecodedJWT) : void
+    +sign(headerBytes: byte[], payloadBytes: byte[]) : byte[]
+    +sign(contentBytes: byte[]) : byte[]
+    ~HMACAlgorithm(crypto: CryptoHelper, id: String, algorithm: String, secretBytes: byte[])
+    ~HMACAlgorithm(id: String, algorithm: String, secretBytes: byte[])
+    ~HMACAlgorithm(id: String, algorithm: String, secret: String)
+}
+
+  ~class CryptoHelper {
+    -{static} JWT_PART_SEPARATOR : byte {readOnly}
+    ~verifySignatureFor(algorithm: String, secretBytes: byte[], header: String, payload: String, signatureBytes: byte[]) : boolean
+    ~verifySignatureFor(algorithm: String, secretBytes: byte[], headerBytes: byte[], payloadBytes: byte[], signatureBytes: byte[]) : boolean
+    ~verifySignatureFor(algorithm: String, publicKey: PublicKey, header: String, payload: String, signatureBytes: byte[]) : boolean
+    ~verifySignatureFor(algorithm: String, publicKey: PublicKey, headerBytes: byte[], payloadBytes: byte[], signatureBytes: byte[]) : boolean
+    ~createSignatureFor(algorithm: String, privateKey: PrivateKey, headerBytes: byte[], payloadBytes: byte[]) : byte[]
+    ~createSignatureFor(algorithm: String, secretBytes: byte[], headerBytes: byte[], payloadBytes: byte[]) : byte[]
+    ~createSignatureFor(algorithm: String, secretBytes: byte[], contentBytes: byte[]) : byte[]
+    ~createSignatureFor(algorithm: String, privateKey: PrivateKey, contentBytes: byte[]) : byte[]
+}
+
+  +class Algorithm <<abstract>> <<SuppressWarnings>> {
+    -name : String {readOnly}
+    -description : String {readOnly}
+    +{static} RSA256(keyProvider: RSAKeyProvider) : Algorithm
+    +{static} RSA256(publicKey: RSAPublicKey, privateKey: RSAPrivateKey) : Algorithm
+    +{static} RSA256(key: RSAKey) : Algorithm
+    +{static} RSA384(keyProvider: RSAKeyProvider) : Algorithm
+    +{static} RSA384(publicKey: RSAPublicKey, privateKey: RSAPrivateKey) : Algorithm
+    +{static} RSA384(key: RSAKey) : Algorithm
+    +{static} RSA512(keyProvider: RSAKeyProvider) : Algorithm
+    +{static} RSA512(publicKey: RSAPublicKey, privateKey: RSAPrivateKey) : Algorithm
+    +{static} RSA512(key: RSAKey) : Algorithm
+    +{static} HMAC256(secret: String) : Algorithm
+    +{static} HMAC256(secret: byte[]) : Algorithm
+    +{static} HMAC384(secret: String) : Algorithm
+    +{static} HMAC384(secret: byte[]) : Algorithm
+    +{static} HMAC512(secret: String) : Algorithm
+    +{static} HMAC512(secret: byte[]) : Algorithm
+    +{static} ECDSA256(keyProvider: ECDSAKeyProvider) : Algorithm
+    +{static} ECDSA256(publicKey: ECPublicKey, privateKey: ECPrivateKey) : Algorithm
+    +{static} ECDSA256(key: ECKey) : Algorithm
+    +{static} ECDSA384(keyProvider: ECDSAKeyProvider) : Algorithm
+    +{static} ECDSA384(publicKey: ECPublicKey, privateKey: ECPrivateKey) : Algorithm
+    +{static} ECDSA384(key: ECKey) : Algorithm
+    +{static} ECDSA512(keyProvider: ECDSAKeyProvider) : Algorithm
+    +{static} ECDSA512(publicKey: ECPublicKey, privateKey: ECPrivateKey) : Algorithm
+    +{static} ECDSA512(key: ECKey) : Algorithm
+    +{static} none() : Algorithm
+    +getSigningKeyId() : String
+    +getName() : String
+    ~getDescription() : String
+    +toString() : String
+    +{abstract} verify(jwt: DecodedJWT) : void
+    +sign(headerBytes: byte[], payloadBytes: byte[]) : byte[]
+    +{abstract} sign(contentBytes: byte[]) : byte[]
+    #Algorithm(name: String, description: String)
+}
+
+  ~class ECDSAAlgorithm {
+    -keyProvider : ECDSAKeyProvider {readOnly}
+    -crypto : CryptoHelper {readOnly}
+    -ecNumberSize : int {readOnly}
+    +verify(jwt: DecodedJWT) : void
+    +sign(headerBytes: byte[], payloadBytes: byte[]) : byte[]
+    +sign(contentBytes: byte[]) : byte[]
+    +getSigningKeyId() : String
+    ~DERToJOSE(derSignature: byte[]) : byte[]
+    ~validateSignatureStructure(joseSignature: byte[], publicKey: ECPublicKey) : void
+    ~JOSEToDER(joseSignature: byte[]) : byte[]
+    -isAllZeros(bytes: byte[]) : boolean
+    -countPadding(bytes: byte[], fromIndex: int, toIndex: int) : int
+    ~{static} providerForKeys(publicKey: ECPublicKey, privateKey: ECPrivateKey) : ECDSAKeyProvider
+    ~ECDSAAlgorithm(crypto: CryptoHelper, id: String, algorithm: String, ecNumberSize: int, keyProvider: ECDSAKeyProvider)
+    ~ECDSAAlgorithm(id: String, algorithm: String, ecNumberSize: int, keyProvider: ECDSAKeyProvider)
+}
+
+  ~class RSAAlgorithm {
+    -keyProvider : RSAKeyProvider {readOnly}
+    -crypto : CryptoHelper {readOnly}
+    +verify(jwt: DecodedJWT) : void
+    +sign(headerBytes: byte[], payloadBytes: byte[]) : byte[]
+    +sign(contentBytes: byte[]) : byte[]
+    +getSigningKeyId() : String
+    ~{static} providerForKeys(publicKey: RSAPublicKey, privateKey: RSAPrivateKey) : RSAKeyProvider
+    ~RSAAlgorithm(crypto: CryptoHelper, id: String, algorithm: String, keyProvider: RSAKeyProvider)
+    ~RSAAlgorithm(id: String, algorithm: String, keyProvider: RSAKeyProvider)
+}
+
+  ~class NoneAlgorithm {
+    +verify(jwt: DecodedJWT) : void
+    +sign(headerBytes: byte[], payloadBytes: byte[]) : byte[]
+    +sign(contentBytes: byte[]) : byte[]
+    ~NoneAlgorithm()
+}
+
+}
+
+package com.auth0.jwt.exceptions {
+  +class TokenExpiredException {
+    -{static} serialVersionUID : long {readOnly}
+    -expiredOn : Instant {readOnly}
+    +getExpiredOn() : Instant
+    +TokenExpiredException(message: String, expiredOn: Instant)
+}
+
+  +class InvalidClaimException {
+    +InvalidClaimException(message: String)
+}
+
+  +class SignatureVerificationException {
+    +SignatureVerificationException(algorithm: Algorithm)
+    +SignatureVerificationException(algorithm: Algorithm, cause: Throwable)
+}
+
+  +class JWTVerificationException {
+    +JWTVerificationException(message: String)
+    +JWTVerificationException(message: String, cause: Throwable)
+}
+
+  +class JWTDecodeException {
+    +JWTDecodeException(message: String)
+    +JWTDecodeException(message: String, cause: Throwable)
+}
+
+  +class SignatureGenerationException {
+    +SignatureGenerationException(algorithm: Algorithm, cause: Throwable)
+}
+
+  +class JWTCreationException {
+    +JWTCreationException(message: String, cause: Throwable)
+}
+
+  +class IncorrectClaimException {
+    -claimName : String {readOnly}
+    -claimValue : Claim {readOnly}
+    +getClaimName() : String
+    +getClaimValue() : Claim
+    +IncorrectClaimException(message: String, claimName: String, claim: Claim)
+}
+
+  +class AlgorithmMismatchException {
+    +AlgorithmMismatchException(message: String)
+}
+
+  +class MissingClaimException {
+    -claimName : String {readOnly}
+    +getClaimName() : String
+    +MissingClaimException(claimName: String)
+}
+
+}
+
+package com.auth0.jwt.impl {
+  +class PayloadSerializer {
+    #writeClaim(entry: Entry<String, Object>, gen: JsonGenerator) : void
+    -writeAudience(gen: JsonGenerator, e: Entry<String, Object>) : void
+    +PayloadSerializer()
+}
+
+  +class JWTParser {
+    -{static} DEFAULT_OBJECT_MAPPER : ObjectMapper {readOnly}
+    -{static} DEFAULT_PAYLOAD_READER : ObjectReader {readOnly}
+    -{static} DEFAULT_HEADER_READER : ObjectReader {readOnly}
+    -payloadReader : ObjectReader {readOnly}
+    -headerReader : ObjectReader {readOnly}
+    +parsePayload(json: String) : Payload
+    +parseHeader(json: String) : Header
+    ~{static} addDeserializers(mapper: ObjectMapper) : void
+    ~{static} getDefaultObjectMapper() : ObjectMapper
+    -{static} createDefaultObjectMapper() : ObjectMapper
+    -{static} decodeException() : JWTDecodeException
+    -{static} decodeException(json: String) : JWTDecodeException
+    +JWTParser()
+    ~JWTParser(mapper: ObjectMapper)
+}
+
+  ~class BasicHeader {
+    -{static} serialVersionUID : long {readOnly}
+    -algorithm : String {readOnly}
+    -type : String {readOnly}
+    -contentType : String {readOnly}
+    -keyId : String {readOnly}
+    -tree : Map<String, JsonNode> {readOnly}
+    -objectCodec : ObjectCodec {readOnly}
+    ~getTree() : Map<String, JsonNode>
+    +getAlgorithm() : String
+    +getType() : String
+    +getContentType() : String
+    +getKeyId() : String
+    +getHeaderClaim(name: String) : Claim
+    ~BasicHeader(algorithm: String, type: String, contentType: String, keyId: String, tree: Map<String, JsonNode>, objectCodec: ObjectCodec)
+}
+
+  ~class PayloadDeserializer {
+    +deserialize(p: JsonParser, ctxt: DeserializationContext) : Payload
+    ~getStringOrArray(codec: ObjectCodec, tree: Map<String, JsonNode>, claimName: String) : List<String>
+    ~getInstantFromSeconds(tree: Map<String, JsonNode>, claimName: String) : Instant
+    ~getString(tree: Map<String, JsonNode>, claimName: String) : String
+    ~PayloadDeserializer()
+}
+
+  +class PayloadClaimsHolder {
+    +PayloadClaimsHolder(claims: Map<String, Object>)
+}
+
+  ~class PayloadImpl {
+    -{static} serialVersionUID : long {readOnly}
+    -issuer : String {readOnly}
+    -subject : String {readOnly}
+    -audience : List<String> {readOnly}
+    -expiresAt : Instant {readOnly}
+    -notBefore : Instant {readOnly}
+    -issuedAt : Instant {readOnly}
+    -jwtId : String {readOnly}
+    -tree : Map<String, JsonNode> {readOnly}
+    -objectCodec : ObjectCodec {readOnly}
+    ~getTree() : Map<String, JsonNode>
+    +getIssuer() : String
+    +getSubject() : String
+    +getAudience() : List<String>
+    +getExpiresAt() : Date
+    +getExpiresAtAsInstant() : Instant
+    +getIssuedAt() : Date
+    +getIssuedAtAsInstant() : Instant
+    +getNotBefore() : Date
+    +getNotBeforeAsInstant() : Instant
+    +getId() : String
+    +getClaim(name: String) : Claim
+    +getClaims() : Map<String, Claim>
+    ~PayloadImpl(issuer: String, subject: String, audience: List<String>, expiresAt: Instant, notBefore: Instant, issuedAt: Instant, jwtId: String, tree: Map<String, JsonNode>, objectCodec: ObjectCodec)
+}
+
+  +interface ExpectedCheckHolder {
+    ~{abstract} getClaimName() : String
+    ~{abstract} verify(claim: Claim, decodedJWT: DecodedJWT) : boolean
+}
+
+  +class ClaimsHolder <<abstract>> {
+    -claims : Map<String, Object>
+    ~getClaims() : Map<String, Object>
+    #ClaimsHolder(claims: Map<String, Object>)
+}
+
+  ~class HeaderDeserializer {
+    +deserialize(p: JsonParser, ctxt: DeserializationContext) : Header
+    ~getString(tree: Map<String, JsonNode>, claimName: String) : String
+    ~HeaderDeserializer()
+}
+
+  +class HeaderClaimsHolder {
+    +HeaderClaimsHolder(claims: Map<String, Object>)
+}
+
+  +class HeaderSerializer {
+    +HeaderSerializer()
+}
+
+  +class ClaimsSerializer<T extends ClaimsHolder> {
+    +serialize(holder: T, gen: JsonGenerator, provider: SerializerProvider) : void
+    #writeClaim(entry: Entry<String, Object>, gen: JsonGenerator) : void
+    -{static} handleSerialization(value: Object, gen: JsonGenerator) : void
+    -{static} serializeMap(map: Map<?, ?>, gen: JsonGenerator) : void
+    -{static} serializeList(list: List<?>, gen: JsonGenerator) : void
+    -{static} instantToSeconds(instant: Instant) : long
+    -{static} dateToSeconds(date: Date) : long
+    +ClaimsSerializer(t: Class<T>)
+}
+
+  ~class JsonNodeClaim {
+    -codec : ObjectCodec {readOnly}
+    -data : JsonNode {readOnly}
+    +asBoolean() : Boolean
+    +asInt() : Integer
+    +asLong() : Long
+    +asDouble() : Double
+    +asString() : String
+    +asDate() : Date
+    +asInstant() : Instant
+    +asArray(clazz: Class<T>) : T[]
+    +asList(clazz: Class<T>) : List<T>
+    +asMap() : Map<String, Object>
+    +as(clazz: Class<T>) : T
+    +isNull() : boolean
+    +isMissing() : boolean
+    +toString() : String
+    ~{static} extractClaim(claimName: String, tree: Map<String, JsonNode>, objectCodec: ObjectCodec) : Claim
+    ~{static} claimFromNode(node: JsonNode, objectCodec: ObjectCodec) : Claim
+    -JsonNodeClaim(node: JsonNode, codec: ObjectCodec)
+}
+
+}
+
+package com.auth0.jwt.interfaces {
+  +interface Verification {
+    ~withIssuer(issuer: String) : Verification
+    ~{abstract} withIssuer(issuer: String) : Verification
+    ~{abstract} withSubject(subject: String) : Verification
+    ~{abstract} withAudience(audience: String) : Verification
+    ~{abstract} withAnyOfAudience(audience: String) : Verification
+    ~{abstract} acceptLeeway(leeway: long) : Verification
+    ~{abstract} acceptExpiresAt(leeway: long) : Verification
+    ~{abstract} acceptNotBefore(leeway: long) : Verification
+    ~{abstract} acceptIssuedAt(leeway: long) : Verification
+    ~{abstract} withJWTId(jwtId: String) : Verification
+    ~{abstract} withClaimPresence(name: String) : Verification
+    ~{abstract} withNullClaim(name: String) : Verification
+    ~{abstract} withClaim(name: String, value: Boolean) : Verification
+    ~{abstract} withClaim(name: String, value: Integer) : Verification
+    ~{abstract} withClaim(name: String, value: Long) : Verification
+    ~{abstract} withClaim(name: String, value: Double) : Verification
+    ~{abstract} withClaim(name: String, value: String) : Verification
+    ~{abstract} withClaim(name: String, value: Date) : Verification
+    ~withClaim(name: String, value: Instant) : Verification
+    ~{abstract} withClaim(name: String, predicate: BiPredicate<Claim, DecodedJWT>) : Verification
+    ~{abstract} withArrayClaim(name: String, items: String) : Verification
+    ~{abstract} withArrayClaim(name: String, items: Integer) : Verification
+    ~{abstract} withArrayClaim(name: String, items: Long) : Verification
+    ~{abstract} ignoreIssuedAt() : Verification
+    ~{abstract} build() : JWTVerifier
+}
+
+  +interface DecodedJWT {
+    ~{abstract} getToken() : String
+    ~{abstract} getHeader() : String
+    ~{abstract} getPayload() : String
+    ~{abstract} getSignature() : String
+}
+
+  +interface ECDSAKeyProvider {
+}
+
+  ~interface KeyProvider<U extends PublicKey, R extends PrivateKey> {
+    ~{abstract} getPublicKeyById(keyId: String) : U
+    ~{abstract} getPrivateKey() : R
+    ~{abstract} getPrivateKeyId() : String
+}
+
+  +interface JWTVerifier {
+    ~{abstract} verify(token: String) : DecodedJWT
+    ~{abstract} verify(jwt: DecodedJWT) : DecodedJWT
+}
+
+  +interface Claim {
+    ~{abstract} isNull() : boolean
+    ~{abstract} isMissing() : boolean
+    ~{abstract} asBoolean() : Boolean
+    ~{abstract} asInt() : Integer
+    ~{abstract} asLong() : Long
+    ~{abstract} asDouble() : Double
+    ~{abstract} asString() : String
+    ~{abstract} asDate() : Date
+    ~asInstant() : Instant
+    ~{abstract} asArray(clazz: Class<T>) : T[]
+    ~{abstract} asList(clazz: Class<T>) : List<T>
+    ~{abstract} asMap() : Map<String, Object>
+    ~{abstract} as(clazz: Class<T>) : T
+}
+
+  +interface RSAKeyProvider {
+}
+
+  +interface JWTPartsParser {
+    ~{abstract} parsePayload(json: String) : Payload
+    ~{abstract} parseHeader(json: String) : Header
+}
+
+  +interface Header {
+    ~{abstract} getAlgorithm() : String
+    ~{abstract} getType() : String
+    ~{abstract} getContentType() : String
+    ~{abstract} getKeyId() : String
+    ~{abstract} getHeaderClaim(name: String) : Claim
+}
+
+  +interface Payload {
+    ~{abstract} getIssuer() : String
+    ~{abstract} getSubject() : String
+    ~{abstract} getAudience() : List<String>
+    ~{abstract} getExpiresAt() : Date
+    ~getExpiresAtAsInstant() : Instant
+    ~{abstract} getNotBefore() : Date
+    ~getNotBeforeAsInstant() : Instant
+    ~{abstract} getIssuedAt() : Date
+    ~getIssuedAtAsInstant() : Instant
+    ~{abstract} getId() : String
+    ~{abstract} getClaim(name: String) : Claim
+    ~{abstract} getClaims() : Map<String, Claim>
+}
+
+}
+
+
+Payload <|-- DecodedJWT
+Algorithm <|-- RSAAlgorithm
+Algorithm <|-- HMACAlgorithm
+ECDSAAlgorithm ..> SignatureVerificationException
+JWTCreator *-- "1" Algorithm
+JsonNodeClaim ..> JWTDecodeException
+JWTPartsParser <|.. JWTParser
+RSAAlgorithm ..> SignatureVerificationException
+JWTCreator$Builder ..> Algorithm
+JWTVerifier$BaseVerification ..> JWTVerifier
+JWTCreator +-- JWTCreator$Builder : nested
+Payload <|.. PayloadImpl
+JWTVerifier ..> InvalidClaimException
+JWT *-- "1" JWTParser
+JWT ..> Verification
+HeaderDeserializer ..> Header
+JWTVerifier *-- "1" Algorithm
+Verification ..> Claim
+JWTParser ..> Payload
+DecodedJWT <|.. JWTDecoder
+Algorithm ..> RSAKeyProvider
+JWTVerifier$BaseVerification *-- "1" Algorithm
+JWTPartsParser ..> Header
+NoneAlgorithm ..> DecodedJWT
+JWTVerifier ..> JWTVerificationException
+Verification <|.. JWTVerifier$BaseVerification
+Algorithm ..> ECDSAKeyProvider
+Header ..> Claim
+JWTVerificationException <|-- SignatureVerificationException
+JWTVerifier$BaseVerification ..> Claim
+JWTVerifier *-- "1" JWTParser
+JWTPartsParser ..> Payload
+ClaimsSerializer <|-- PayloadSerializer
+Algorithm ..> DecodedJWT
+JWTDecoder ..> JWTDecodeException
+TokenUtils ..> JWTDecodeException
+JWTCreator ..> JWTCreationException
+InvalidClaimException <|-- MissingClaimException
+HMACAlgorithm *-- "1" CryptoHelper
+Algorithm ..> SignatureGenerationException
+ECDSAAlgorithm *-- "1" CryptoHelper
+Header <|-- DecodedJWT
+Verification ..> DecodedJWT
+PayloadDeserializer ..> JWTDecodeException
+JWTVerifier ..> DecodedJWT
+ECDSAAlgorithm ..> DecodedJWT
+RSAAlgorithm *-- "1" CryptoHelper
+JWT ..> Algorithm
+ClaimsSerializer <|-- HeaderSerializer
+JWT ..> DecodedJWT
+JWTVerifier$BaseVerification o-- "*" ExpectedCheckHolder
+JWTPartsParser ..> JWTDecodeException
+JWTCreator ..> SignatureGenerationException
+ExpectedCheckHolder ..> Claim
+RSAAlgorithm *-- "1" RSAKeyProvider
+IncorrectClaimException *-- "1" Claim
+JWTParser ..> Header
+ECDSAAlgorithm ..> SignatureGenerationException
+BasicHeader ..> Claim
+Algorithm ..> SignatureVerificationException
+Payload ..> Claim
+Algorithm <|-- NoneAlgorithm
+Algorithm <|-- ECDSAAlgorithm
+Verification ..> JWTVerifier
+SignatureVerificationException ..> Algorithm
+JWTVerificationException <|-- TokenExpiredException
+PayloadDeserializer ..> Payload
+PayloadImpl ..> Claim
+ECDSAAlgorithm *-- "1" ECDSAKeyProvider
+JWTVerifier +-- JWTVerifier$BaseVerification : nested
+ClaimsHolder <|-- PayloadClaimsHolder
+NoneAlgorithm ..> SignatureVerificationException
+RSAAlgorithm ..> DecodedJWT
+JWTVerifier o-- "*" ExpectedCheckHolder
+JWTVerifier ..> AlgorithmMismatchException
+HMACAlgorithm ..> SignatureVerificationException
+JWTCreationException <|-- SignatureGenerationException
+JWTParser ..> JWTDecodeException
+SignatureGenerationException ..> Algorithm
+JWTVerifier ..> Verification
+HMACAlgorithm ..> SignatureGenerationException
+JWTDecoder *-- "1" Header
+JWT ..> JWTDecodeException
+JWTDecoder ..> Claim
+Claim ..> JWTDecodeException
+Claim <|.. JsonNodeClaim
+RSAAlgorithm ..> SignatureGenerationException
+JWTVerifier <|.. JWTVerifier
+InvalidClaimException <|-- IncorrectClaimException
+JWTVerifier ..> TokenExpiredException
+JWTVerifier ..> JWTVerificationException
+NoneAlgorithm ..> SignatureGenerationException
+ClaimsHolder <|-- HeaderClaimsHolder
+JWTVerifier$BaseVerification ..> DecodedJWT
+KeyProvider <|-- RSAKeyProvider
+KeyProvider <|-- ECDSAKeyProvider
+JWTVerifier ..> DecodedJWT
+Header <|.. BasicHeader
+JWTDecoder *-- "1" Payload
+JWTCreator$Builder ..> JWTCreationException
+HMACAlgorithm ..> DecodedJWT
+ExpectedCheckHolder ..> DecodedJWT
+JWTVerificationException <|-- JWTDecodeException
+JWTVerificationException <|-- AlgorithmMismatchException
+JWTVerificationException <|-- InvalidClaimException
+JWTDecoder ..> JWTParser
+
+@enduml

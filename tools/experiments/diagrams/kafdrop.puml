@@ -1,0 +1,945 @@
+@startuml diagram
+
+hide empty members
+
+package kafdrop {
+  -class Kafdrop$EnvironmentSetupListener <<static>> {
+    -{static} SM_CONFIG_DIR : String {readOnly}
+    -{static} CONFIG_SUFFIX : String {readOnly}
+    +getOrder() : int
+    +onApplicationEvent(event: ApplicationEnvironmentPreparedEvent) : void
+    -{static} readProperties(environment: Environment, name: String) : IniFilePropertySource
+}
+
+  -class Kafdrop$LoggingConfigurationListener <<static>> {
+    -{static} PROP_LOGGING_FILE : String {readOnly}
+    -{static} PROP_LOGGER : String {readOnly}
+    -{static} PROP_SPRING_BOOT_LOG_LEVEL : String {readOnly}
+    +getOrder() : int
+    +onApplicationEvent(event: ApplicationEnvironmentPreparedEvent) : void
+}
+
+  +class Kafdrop <<SpringBootApplication>> {
+    -{static} LOG : Logger {readOnly}
+    +{static} main(args: String[]) : void
+    +{static} createApplicationBuilder() : SpringApplicationBuilder
+    +deploymentCustomizer() : WebServerFactoryCustomizer<UndertowServletWebServerFactory>
+    +webConfig() : WebMvcConfigurer
+}
+
+}
+
+package kafdrop.config {
+  +class ObjectMapperConfig <<Configuration>> {
+    +objectMapper(builder: Jackson2ObjectMapperBuilder) : ObjectMapper
+}
+
+  +class HealthCheckConfiguration$HealthCheck <<static>> <<Component>> <<ManagedResource>> {
+    -healthEndpoint : HealthEndpoint {readOnly}
+    +getHealth() : Map<String, Object>
+    -getDetails(details: Map<String, Object>) : Map<String, Object>
+    -getStatus(health: Health) : String
+    +HealthCheck(healthEndpoint: HealthEndpoint)
+}
+
+  +class MessageFormatConfiguration$MessageFormatProperties <<static>> <<Component>> <<ConfigurationProperties>> {
+    -format : MessageFormat
+    -keyFormat : MessageFormat
+    +init() : void
+    +getFormat() : MessageFormat
+    +setFormat(format: MessageFormat) : void
+    +getKeyFormat() : MessageFormat
+    +setKeyFormat(keyFormat: MessageFormat) : void
+}
+
+  +class KafkaConfigurationException {
+    ~KafkaConfigurationException(cause: Throwable)
+}
+
+  +class CorsConfiguration <<Configuration>> <<ConditionalOnProperty>> {
+    -corsAllowOrigins : String
+    -corsAllowMethods : String
+    -corsMaxAge : String
+    -corsAllowCredentials : String
+    -corsAllowHeaders : String
+    +corsFilter() : Filter
+}
+
+  +class ProtobufDescriptorConfiguration$ProtobufDescriptorProperties <<static>> <<Component>> <<ConfigurationProperties>> {
+    -{static} LOG : Logger {readOnly}
+    -directory : String
+    -parseAnyProto : Boolean
+    +getDirectory() : String
+    +setDirectory(directory: String) : void
+    +getParseAnyProto() : Boolean
+    +setParseAnyProto(parseAnyProto: Boolean) : void
+    +getDescFilesList() : List<String>
+}
+
+  +class InterceptorConfiguration <<Component>> {
+    -environment : Environment {readOnly}
+    +addInterceptors(registry: InterceptorRegistry) : void
+    +InterceptorConfiguration(environment: Environment)
+}
+
+  +class ProtobufDescriptorConfiguration <<Configuration>> {
+}
+
+  +class HealthCheckConfiguration <<Configuration>> {
+}
+
+  +class InterceptorConfiguration$ProfileHandlerInterceptor {
+    +postHandle(request: HttpServletRequest, response: HttpServletResponse, handler: Object, modelAndView: ModelAndView) : void
+}
+
+  +class OASConfiguration <<Configuration>> {
+    +httpApi() : OpenAPI
+}
+
+  +class MessageFormatConfiguration <<Configuration>> {
+}
+
+  +class KafkaConfiguration <<Component>> <<ConfigurationProperties>> <<Data>> {
+    -{static} LOG : Logger {readOnly}
+    -brokerConnect : String
+    -saslMechanism : String
+    -securityProtocol : String
+    -truststoreFile : String
+    -propertiesFile : String
+    -keystoreFile : String
+    +applyCommon(properties: Properties) : void
+}
+
+  +class SchemaRegistryConfiguration$SchemaRegistryProperties <<static>> <<Component>> <<ConfigurationProperties>> {
+    ~{static} CONNECT_SEPARATOR : Pattern {readOnly}
+    -connect : String
+    -auth : String
+    +getConnect() : String
+    +setConnect(connect: String) : void
+    +getAuth() : String
+    +setAuth(auth: String) : void
+    +getConnectList() : List<String>
+}
+
+  +class SchemaRegistryConfiguration <<Configuration>> {
+}
+
+}
+
+package kafdrop.config.ini {
+  +class IniFileReader {
+    -{static} COMMENT_CHARS : String {readOnly}
+    -{static} SEPARATOR_CHARS : String {readOnly}
+    -{static} QUOTE_CHARACTERS : String {readOnly}
+    -{static} LINE_CONT : String {readOnly}
+    -{static} LINE_SEPARATOR : String {readOnly}
+    -{static} findSeparatorBeforeQuote(line: String, quoteIndex: int) : int
+    +read(input: Reader) : IniFileProperties
+    -findSeparator(line: String) : int
+    -parseValue(val: String, reader: BufferedReader) : String
+    -lineContinues(line: String) : boolean
+    -lineContinues(line: String, pos: int) : boolean
+    -isCommentChar(c: char) : boolean
+    #isCommentLine(line: String) : boolean
+    #isSectionLine(line: String) : boolean
+}
+
+  +class IniFilePropertySource {
+    -{static} loadPropertiesForIniFile(iniProperties: IniFileProperties, activeProfiles: String[]) : Map<String, Object>
+    +IniFilePropertySource(name: String, source: IniFileProperties, activeProfiles: String[])
+}
+
+  +class IniFileProperties {
+    -sectionProperties : Map<String, Map<String, String>>
+    -defaultProperties : Map<String, String>
+    +getDefaultProperties() : Map<String, String>
+    +getSectionNames() : Collection<String>
+    +getSectionProperties(section: String) : Map<String, String>
+    +addSectionProperty(section: String, name: String, value: String) : void
+    -doGetSectionProperties(section: String) : Map<String, String>
+}
+
+}
+
+package kafdrop.controller {
+  +class KafkaExceptionHandler <<ControllerAdvice>> {
+    +notInitialized() : String
+}
+
+  +class TopicController <<Tag>> <<Controller>> <<RequestMapping>> {
+    -kafkaMonitor : KafkaMonitor {readOnly}
+    -topicDeleteEnabled : boolean {readOnly}
+    -topicCreateEnabled : boolean {readOnly}
+    -messageFormatProperties : MessageFormatProperties {readOnly}
+    +topicDetails(topicName: String, model: Model) : String
+    +deleteTopic(topicName: String, model: Model) : String
+    +createTopicPage(model: Model) : String
+    +getTopic(topicName: String) : TopicVO
+    +getAllTopics() : List<TopicVO>
+    +getConsumers(topicName: String) : List<ConsumerVO>
+    +createTopic(createTopicVO: CreateTopicVO, model: Model) : String
+    +TopicController(kafkaMonitor: KafkaMonitor, topicDeleteEnabled: Boolean, topicCreateEnabled: Boolean, messageFormatProperties: MessageFormatProperties)
+}
+
+  +class ClusterController <<Tag>> <<Controller>> {
+    -kafkaConfiguration : KafkaConfiguration {readOnly}
+    -kafkaMonitor : KafkaMonitor {readOnly}
+    -buildProperties : BuildProperties {readOnly}
+    -topicCreateEnabled : boolean {readOnly}
+    -{static} blankBuildProperties() : BuildProperties
+    +clusterInfo(model: Model, filter: String) : String
+    +getCluster() : ClusterInfoVO
+    +brokerNotFound(model: Model) : String
+    +healthCheck() : void
+    +ClusterController(kafkaConfiguration: KafkaConfiguration, kafkaMonitor: KafkaMonitor, buildInfoProvider: ObjectProvider<BuildInfo>, topicCreateEnabled: Boolean)
+}
+
+  +class MessageController <<Tag>> <<Controller>> {
+    -kafkaMonitor : KafkaMonitor {readOnly}
+    -messageInspector : MessageInspector {readOnly}
+    -messageFormatProperties : MessageFormatProperties {readOnly}
+    -schemaRegistryProperties : SchemaRegistryProperties {readOnly}
+    -protobufProperties : ProtobufDescriptorProperties {readOnly}
+    -sendEnabled : boolean {readOnly}
+    +viewAllMessages(topicName: String, model: Model, count: Integer) : String
+    +getAllMessages(topicName: String, count: Integer) : List<MessageVO>
+    -getMessages(topicName: String, defaultKeyFormat: MessageFormat, defaultFormat: MessageFormat, topic: TopicVO, size: int) : List<MessageVO>
+    +viewMessageForm(topicName: String, messageForm: PartitionOffsetInfo, errors: BindingResult, model: Model) : String
+    +addMessage(topicName: String, body: CreateMessageVO, model: Model) : String
+    +searchMessageForm(topicName: String, searchMessageForm: SearchMessageForm, errors: BindingResult, model: Model) : String
+    -searchMessageVOs(topicName: String, searchMessageForm: SearchMessageFormForJson, descFile: String, msgTypeName: String) : SearchResultsVO
+    +searchMessages(topicName: String, searchMessageForm: SearchMessageFormForJson, errors: BindingResult) : SearchResultsVO
+    -getSelectedMessageFormat(format: String) : MessageFormat
+    +getPartitionOrMessages(topicName: String, partition: Integer, offset: Long, count: Integer, format: String, keyFormat: String, descFile: String, msgTypeName: String, isAnyProto: Boolean) : List<Object>
+    -getDeserializer(topicName: String, format: MessageFormat, descFile: String, msgTypeName: String) : MessageDeserializer
+    -getDeserializer(topicName: String, format: MessageFormat, descFile: String, msgTypeName: String, isAnyProto: boolean) : MessageDeserializer
+    -getSerializer(topicName: String, format: MessageFormat, descFile: String, msgTypeName: String) : MessageSerializer
+    +MessageController(kafkaMonitor: KafkaMonitor, messageInspector: MessageInspector, messageFormatProperties: MessageFormatProperties, schemaRegistryProperties: SchemaRegistryProperties, protobufProperties: ProtobufDescriptorProperties, sendEnabled: boolean)
+}
+
+  +class ClusterController$ClusterInfoVO <<static>> {
+    ~summary : ClusterSummaryVO
+    ~brokers : List<BrokerVO>
+    ~topics : List<TopicVO>
+    +getSummary() : ClusterSummaryVO
+    +getBrokers() : List<BrokerVO>
+    +getTopics() : List<TopicVO>
+}
+
+  +class BrokerController <<Tag>> <<Controller>> {
+    -kafkaMonitor : KafkaMonitor {readOnly}
+    +brokerDetails(brokerId: int, model: Model) : String
+    +brokerDetailsJson(brokerId: int) : BrokerVO
+    +brokerDetailsJson() : List<BrokerVO>
+    +BrokerController(kafkaMonitor: KafkaMonitor)
+}
+
+  +class ConsumerNotFoundException {
+    +ConsumerNotFoundException(groupId: String)
+}
+
+  +class BasicErrorController <<Controller>> {
+    -{static} LOG : Logger {readOnly}
+    +handleError(request: HttpServletRequest) : ModelAndView
+    +BasicErrorController(errorAttributes: ErrorAttributes)
+}
+
+  +class AclController <<Tag>> <<Controller>> {
+    -kafkaMonitor : KafkaMonitor {readOnly}
+    +acls(model: Model) : String
+    +getAllTopics() : List<AclVO>
+    +AclController(kafkaMonitor: KafkaMonitor)
+}
+
+  +class ConsumerController <<Tag>> <<Controller>> <<RequestMapping>> {
+    -kafkaMonitor : KafkaMonitor {readOnly}
+    +consumerDetail(groupId: String, model: Model) : String
+    +getConsumer(groupId: String) : ConsumerVO
+    +ConsumerController(kafkaMonitor: KafkaMonitor)
+}
+
+  +class MessageController$PartitionOffsetInfo <<static>> {
+    -partition : Integer
+    -offset : Long
+    -count : Long
+    -format : MessageFormat
+    -keyFormat : MessageFormat
+    -descFile : String
+    -msgTypeName : String
+    -isAnyProto : Boolean
+    +isEmpty() : boolean
+    +getPartition() : Integer
+    +setPartition(partition: Integer) : void
+    +getOffset() : Long
+    +setOffset(offset: Long) : void
+    +getCount() : Long
+    +setCount(count: Long) : void
+    +getKeyFormat() : MessageFormat
+    +setKeyFormat(keyFormat: MessageFormat) : void
+    +getFormat() : MessageFormat
+    +setFormat(format: MessageFormat) : void
+    +getDescFile() : String
+    +setDescFile(descFile: String) : void
+    +getMsgTypeName() : String
+    +setMsgTypeName(msgTypeName: String) : void
+    +getIsAnyProto() : Boolean
+    +setIsAnyProto(isAnyProto: Boolean) : void
+    +PartitionOffsetInfo(partition: int, offset: long, count: long, format: MessageFormat)
+    +PartitionOffsetInfo(partition: int, offset: long, count: long)
+    +PartitionOffsetInfo()
+}
+
+}
+
+package kafdrop.form {
+  +class SearchMessageForm {
+    -descFile : String
+    -msgTypeName : String
+    +getDescFile() : String
+    +setDescFile(descFile: String) : void
+    +getMsgTypeName() : String
+    +setMsgTypeName(msgTypeName: String) : void
+    +SearchMessageForm(searchText: String, format: MessageFormat)
+    +SearchMessageForm(searchText: String)
+    +SearchMessageForm()
+}
+
+  +class SearchMessageFormForJson <<Data>> {
+    -searchText : String
+    -maximumCount : Integer
+    -partition : Integer
+    -format : MessageFormat
+    -keyFormat : MessageFormat
+    -startTimestamp : Date
+    -keys : String[]
+    +isEmpty() : boolean
+    +getSearchText() : String
+    +setSearchText(searchText: String) : void
+    +getMaximumCount() : Integer
+    +setMaximumCount(maximumCount: Integer) : void
+    +getPartition() : Integer
+    +setPartition(partition: Integer) : void
+    +getFormat() : MessageFormat
+    +setFormat(format: MessageFormat) : void
+    +getKeyFormat() : MessageFormat
+    +setKeyFormat(keyFormat: MessageFormat) : void
+    +getStartTimestamp() : Date
+    +setStartTimestamp(startTimestamp: Date) : void
+    #SearchMessageFormForJson()
+    #SearchMessageFormForJson(searchText: String, format: MessageFormat)
+    +SearchMessageFormForJson(searchText: String, maximumCount: Integer, partition: Integer, format: MessageFormat, keyFormat: MessageFormat, startTimestamp: Date)
+}
+
+}
+
+package kafdrop.model {
+  +class TopicPartitionVO$PartitionReplica <<static>> {
+    -id : Integer {readOnly}
+    -inSync : boolean {readOnly}
+    -leader : boolean {readOnly}
+    -offline : boolean {readOnly}
+    +getId() : Integer
+    ~isInSync() : boolean
+    ~isLeader() : boolean
+    ~isOffline() : boolean
+    +PartitionReplica(id: Integer, inSync: boolean, leader: boolean, offline: boolean)
+}
+
+  +class AclVO {
+    -name : String {readOnly}
+    -resourceType : String {readOnly}
+    -patternType : String {readOnly}
+    -principal : String {readOnly}
+    -host : String {readOnly}
+    -operation : String {readOnly}
+    -permissionType : String {readOnly}
+    +getName() : String
+    +getResourceType() : String
+    +getPatternType() : String
+    +getPrincipal() : String
+    +getHost() : String
+    +getOperation() : String
+    +getPermissionType() : String
+    +compareTo(that: AclVO) : int
+    +equals(o: Object) : boolean
+    +hashCode() : int
+    +AclVO(resourceType: String, name: String, patternType: String, principal: String, host: String, operation: String, permissionType: String)
+}
+
+  +class ConsumerPartitionVO {
+    -groupId : String {readOnly}
+    -topic : String {readOnly}
+    -partitionId : int {readOnly}
+    -offset : long
+    -size : long
+    -firstOffset : long
+    +getTopic() : String
+    +getPartitionId() : int
+    +getSize() : long
+    +setSize(size: long) : void
+    +getFirstOffset() : long
+    +setFirstOffset(firstOffset: long) : void
+    +getLag() : long
+    +getOffset() : long
+    +setOffset(offset: long) : void
+    +toString() : String
+    +ConsumerPartitionVO(groupId: String, topic: String, partitionId: int)
+}
+
+  +class SearchResultsVO {
+    -messages : List<MessageVO>
+    -completionDetails : String
+    +getMessages() : List<MessageVO>
+    +getCompletionDetails() : String
+    +setCompletionDetails(completionDetails: String) : void
+    +setMessages(messages: List<MessageVO>) : void
+}
+
+  +class ConsumerVO {
+    -groupId : String {readOnly}
+    -topics : Map<String, ConsumerTopicVO> {readOnly}
+    +getGroupId() : String
+    +addTopic(topic: ConsumerTopicVO) : void
+    +getTopic(topic: String) : ConsumerTopicVO
+    +getTopics() : Collection<ConsumerTopicVO>
+    +compareTo(that: ConsumerVO) : int
+    +equals(o: Object) : boolean
+    +hashCode() : int
+    +ConsumerVO(groupId: String)
+}
+
+  +class BrokerVO {
+    -id : int {readOnly}
+    -host : String {readOnly}
+    -port : int {readOnly}
+    -controller : boolean {readOnly}
+    -rack : String {readOnly}
+    +getId() : int
+    +getHost() : String
+    +getPort() : int
+    +getRack() : String
+    +isController() : boolean
+    +BrokerVO(id: int, host: String, port: int, rack: String, controller: boolean)
+}
+
+  +class TopicPartitionVO {
+    -id : int {readOnly}
+    -replicas : Map<Integer, PartitionReplica> {readOnly}
+    -leaderId : Integer
+    -preferredLeaderId : Integer
+    -size : long
+    -firstOffset : long
+    +getId() : int
+    +getReplicas() : Collection<PartitionReplica>
+    +addReplica(replica: PartitionReplica) : void
+    +getLeader() : PartitionReplica
+    +getPreferredLeader() : PartitionReplica
+    +isLeaderPreferred() : boolean
+    +getInSyncReplicas() : List<PartitionReplica>
+    -inSyncReplicaStream() : Stream<PartitionReplica>
+    +getOfflineReplicas() : List<PartitionReplica>
+    -offlineReplicasStream() : Stream<PartitionReplica>
+    +isUnderReplicated() : boolean
+    +getSize() : long
+    +setSize(size: long) : void
+    +getFirstOffset() : long
+    +setFirstOffset(firstOffset: long) : void
+    +toString() : String
+    +TopicPartitionVO(id: int)
+}
+
+  +class ClusterSummaryVO {
+    -topicCount : int
+    -partitionCount : int
+    -underReplicatedCount : int
+    -preferredReplicaPercent : double
+    -brokerLeaderPartitionCount : Map<Integer, Integer>
+    -brokerPreferredLeaderPartitionCount : Map<Integer, Integer>
+    +getTopicCount() : int
+    +setTopicCount(topicCount: int) : void
+    +getPartitionCount() : int
+    +setPartitionCount(partitionCount: int) : void
+    +getUnderReplicatedCount() : int
+    +setUnderReplicatedCount(underReplicatedCount: int) : void
+    +getPreferredReplicaPercent() : double
+    +setPreferredReplicaPercent(preferredReplicaPercent: double) : void
+    +getBrokerLeaderPartitionCount() : Map<Integer, Integer>
+    +getBrokerLeaderPartitionCount(brokerId: int) : Integer
+    +getBrokerLeaderPartitionRatio(brokerId: int) : double
+    +addBrokerLeaderPartition(brokerId: int) : void
+    +addBrokerLeaderPartition(brokerId: int, partitionCount: int) : void
+    +getBrokerPreferredLeaderPartitionCount() : Map<Integer, Integer>
+    +addBrokerPreferredLeaderPartition(brokerId: int) : void
+    +addBrokerPreferredLeaderPartition(brokerId: int, partitionCount: int) : void
+    +getExpectedBrokerIds() : Collection<Integer>
+}
+
+  +class CreateTopicVO <<Data>> <<RequiredArgsConstructor>> <<Schema>> {
+    ~name : String
+    ~partitionsNumber : int
+    ~replicationFactor : int
+}
+
+  +class ConsumerTopicVO {
+    -topic : String {readOnly}
+    -offsets : Map<Integer, ConsumerPartitionVO> {readOnly}
+    +getTopic() : String
+    +addOffset(offset: ConsumerPartitionVO) : void
+    +getLag() : long
+    +getPartitions() : Collection<ConsumerPartitionVO>
+    +ConsumerTopicVO(topic: String)
+}
+
+  +class MessageVO {
+    -partition : int
+    -offset : long
+    -message : String
+    -key : String
+    -headers : Map<String, String>
+    -timestamp : Date
+    +getPartition() : int
+    +setPartition(partition: int) : void
+    +getOffset() : long
+    +setOffset(offset: long) : void
+    +getMessage() : String
+    +setMessage(message: String) : void
+    +getKey() : String
+    +setKey(key: String) : void
+    +getHeaders() : Map<String, String>
+    +setHeaders(headers: Map<String, String>) : void
+    +getHeadersFormatted() : String
+    +getTimestamp() : Date
+    +setTimestamp(timestamp: Date) : void
+}
+
+  +class CreateMessageVO <<Data>> <<RequiredArgsConstructor>> {
+    -topicPartition : int
+    -key : String
+    -value : String
+    -topic : String
+}
+
+  +class TopicVO {
+    -name : String {readOnly}
+    -partitions : Map<Integer, TopicPartitionVO>
+    -config : Map<String, String>
+    +getName() : String
+    +getConfig() : Map<String, String>
+    +setConfig(config: Map<String, String>) : void
+    +getPartitions() : Collection<TopicPartitionVO>
+    +setPartitions(partitions: Map<Integer, TopicPartitionVO>) : void
+    +getPartition(partitionId: int) : Optional<TopicPartitionVO>
+    +getLeaderPartitions(brokerId: int) : Collection<TopicPartitionVO>
+    +getUnderReplicatedPartitions() : Collection<TopicPartitionVO>
+    +getTotalSize() : long
+    +getAvailableSize() : long
+    +getPreferredReplicaPercent() : double
+    +compareTo(that: TopicVO) : int
+    +equals(o: Object) : boolean
+    +hashCode() : int
+    +toString() : String
+    +TopicVO(name: String)
+}
+
+}
+
+package kafdrop.service {
+  ~class KafkaHighLevelAdminClient$ClusterDescription {
+    ~nodes : Collection<Node> {readOnly}
+    ~controller : Node {readOnly}
+    ~clusterId : String {readOnly}
+    ~ClusterDescription(nodes: Collection<Node>, controller: Node, clusterId: String)
+}
+
+  -class KafkaHighLevelConsumer$ScanStatus <<static>> {
+    -endingTimestamp : long
+    -scannedCount : int
+    +{static} createInstance(previousScanStatus: ScanStatus, firstTimestampOfBLock: long, sizeOfBlock: int) : ScanStatus
+}
+
+  +class KafkaHighLevelAdminClient <<Service>> {
+    -{static} LOG : Logger {readOnly}
+    -kafkaConfiguration : KafkaConfiguration {readOnly}
+    -adminClient : AdminClient
+    +init() : void
+    ~describeCluster() : ClusterDescription
+    ~listConsumerGroups() : Set<String>
+    ~listConsumerGroupOffsetsIfAuthorized(groupId: String) : Map<TopicPartition, OffsetAndMetadata>
+    ~describeTopicConfigs(topicNames: Set<String>) : Map<String, Config>
+    ~createTopic(newTopic: NewTopic) : void
+    ~deleteTopic(topic: String) : void
+    ~listAcls() : Collection<AclBinding>
+    -printAcls() : void
+    +KafkaHighLevelAdminClient(kafkaConfiguration: KafkaConfiguration)
+}
+
+  +class BrokerNotFoundException <<ResponseStatus>> {
+    +BrokerNotFoundException(message: String)
+}
+
+  +class TopicNotFoundException <<ResponseStatus>> {
+    +TopicNotFoundException(message: String)
+}
+
+  +interface KafkaMonitor {
+    ~{abstract} getBrokers() : List<BrokerVO>
+    ~{abstract} getBroker(id: int) : Optional<BrokerVO>
+    ~{abstract} getTopics() : List<TopicVO>
+    ~{abstract} getMessages(topic: String, count: int, deserializers: Deserializers) : List<MessageVO>
+    ~{abstract} getMessages(topicPartition: TopicPartition, offset: long, count: int, deserializers: Deserializers) : List<MessageVO>
+    ~{abstract} getTopic(topic: String) : Optional<TopicVO>
+    ~{abstract} getClusterSummary(topics: Collection<TopicVO>) : ClusterSummaryVO
+    ~{abstract} getConsumersByGroup(groupId: String) : List<ConsumerVO>
+    ~{abstract} getConsumersByTopics(topicVos: Collection<TopicVO>) : List<ConsumerVO>
+    ~{abstract} searchMessages(topic: String, searchString: String, partition: Integer, maximumCount: Integer, startTimestamp: Date, deserializers: Deserializers) : SearchResultsVO
+    ~{abstract} createTopic(createTopicDto: CreateTopicVO) : void
+    ~{abstract} deleteTopic(topic: String) : void
+    ~{abstract} publishMessage(message: CreateMessageVO, serializers: Serializers) : RecordMetadata
+    ~{abstract} getAcls() : List<AclVO>
+}
+
+  ~class KafkaAdminClientException {
+    ~KafkaAdminClientException(cause: Throwable)
+}
+
+  +enum SearchResults$CompletionReason <<static>> {
+    +{static} NO_MORE_MESSAGES_IN_TOPIC : CompletionReason
+    +{static} FOUND_REQUESTED_NUMBER_OF_RESULTS : CompletionReason
+    +{static} EXCEEDED_MAX_SCAN_COUNT : CompletionReason
+}
+
+  +class SearchResults {
+    -results : List<ConsumerRecord<String, String>>
+    -completionReason : CompletionReason
+    -finalMessageTimestamp : Date
+    -messagesScannedCount : long
+}
+
+  +class NotInitializedException {
+    ~NotInitializedException()
+}
+
+  +class KafkaHighLevelConsumer <<Service>> {
+    -{static} POLL_TIMEOUT_MS : int {readOnly}
+    -{static} SEARCH_POLL_TIMEOUT_MS : int {readOnly}
+    -{static} SEARCH_MAX_MESSAGES_TO_SCAN : int {readOnly}
+    -{static} LOG : Logger {readOnly}
+    -kafkaConsumer : KafkaConsumer<byte[], byte[]>
+    -kafkaConfiguration : KafkaConfiguration {readOnly}
+    -initializeClient() : void
+    ~setTopicPartitionSizes(topics: List<TopicVO>) : void
+    ~getLatestRecords(partition: TopicPartition, offset: long, count: int, deserializers: Deserializers) : List<ConsumerRecord<String, String>>
+    ~getLatestRecords(topic: String, count: int, deserializers: Deserializers) : List<ConsumerRecord<String, String>>
+    ~searchRecords(topic: String, searchString: String, partition: Integer, maximumCount: Integer, startTimestamp: Date, deserializers: Deserializers) : SearchResults
+    -seekToTimestamp(partitions: List<TopicPartition>, startTimestamp: Date) : void
+    -searchRecords(searchString: String, maximumCount: Integer, deserializers: Deserializers) : SearchResults
+    -searchPolledRecords(polled: ConsumerRecords<byte[], byte[]>, deserializers: Deserializers, loweredSearchString: String, foundRecords: List<ConsumerRecord<String, String>>, scanStatus: ScanStatus) : ScanStatus
+    -searchPolledRecordsOfPartition(polled: ConsumerRecords<byte[], byte[]>, partition: TopicPartition, deserializers: Deserializers, loweredSearchString: String, foundRecords: List<ConsumerRecord<String, String>>, scanStatus: ScanStatus) : ScanStatus
+    -determinePartitionsForTopic(topic: String) : List<TopicPartition>
+    -seekToOffset(partition: TopicPartition, offset: OffsetAndTimestamp) : void
+    -{static} createConsumerRecord(rec: ConsumerRecord<byte[], byte[]>, deserializers: Deserializers) : ConsumerRecord<String, String>
+    -containsValue(deserializer: MessageDeserializer, value: byte[], loweredSearchString: String) : boolean
+    -{static} deserialize(deserializer: MessageDeserializer, bytes: byte[]) : String
+    ~getAllTopics() : Map<String, List<PartitionInfo>>
+    ~getTopicInfos(allTopicsMap: Map<String, List<PartitionInfo>>, topics: String[]) : Map<String, TopicVO>
+    -getTopicInfo(topic: String, partitionInfoList: List<PartitionInfo>) : TopicVO
+    +KafkaHighLevelConsumer(kafkaConfiguration: KafkaConfiguration)
+}
+
+  +class BuildInfo <<Service>> <<ConditionalOnResource>> {
+    -buildProperties : BuildProperties {readOnly}
+    +getBuildProperties() : BuildProperties
+    +BuildInfo(buildProperties: BuildProperties)
+}
+
+  +class KafkaHighLevelProducer <<Service>> {
+    -{static} LOG : Logger {readOnly}
+    -kafkaConfiguration : KafkaConfiguration {readOnly}
+    -kafkaProducer : KafkaProducer<byte[], byte[]>
+    -initializeClient() : void
+    +publishMessage(message: CreateMessageVO, serializers: Serializers) : RecordMetadata
+    +KafkaHighLevelProducer(kafkaConfiguration: KafkaConfiguration)
+}
+
+  -class KafkaMonitorImpl$ConsumerGroupOffsets <<static>> {
+    ~groupId : String {readOnly}
+    ~offsets : Map<TopicPartition, OffsetAndMetadata> {readOnly}
+    ~isEmpty() : boolean
+    ~forTopics(topics: Set<String>) : ConsumerGroupOffsets
+    +toString() : String
+    ~ConsumerGroupOffsets(groupId: String, offsets: Map<TopicPartition, OffsetAndMetadata>)
+}
+
+  +class MessageInspector <<Service>> {
+    -kafkaMonitor : KafkaMonitor {readOnly}
+    +getMessages(topicName: String, partitionId: int, offset: long, count: int, deserializers: Deserializers) : List<MessageVO>
+    +getMessages(topicName: String, count: int, deserializers: Deserializers) : List<MessageVO>
+    +MessageInspector(kafkaMonitor: KafkaMonitor)
+}
+
+  +class KafkaProducerException <<ResponseStatus>> {
+    +KafkaProducerException(exception: Throwable)
+    +KafkaProducerException(message: String)
+}
+
+  +class KafkaMonitorImpl <<Service>> {
+    -{static} LOG : Logger {readOnly}
+    -highLevelConsumer : KafkaHighLevelConsumer {readOnly}
+    -highLevelAdminClient : KafkaHighLevelAdminClient {readOnly}
+    -highLevelProducer : KafkaHighLevelProducer {readOnly}
+    +getBrokers() : List<BrokerVO>
+    +getBroker(id: int) : Optional<BrokerVO>
+    +getClusterSummary(topics: Collection<TopicVO>) : ClusterSummaryVO
+    +getTopics() : List<TopicVO>
+    +getTopics(topics: String[]) : List<TopicVO>
+    +getTopic(topic: String) : Optional<TopicVO>
+    -getTopicMetadata(allTopicsMap: Map<String, List<PartitionInfo>>, topics: String) : Map<String, TopicVO>
+    +getMessages(topic: String, count: int, deserializers: Deserializers) : List<MessageVO>
+    +getMessages(topicPartition: TopicPartition, offset: long, count: int, deserializers: Deserializers) : List<MessageVO>
+    -{static} headersToMap(headers: Headers) : Map<String, String>
+    -setTopicPartitionSizes(topics: List<TopicVO>) : void
+    +getConsumersByGroup(groupId: String) : List<ConsumerVO>
+    +getConsumersByTopics(topicVos: Collection<TopicVO>) : List<ConsumerVO>
+    +searchMessages(topic: String, searchString: String, partition: Integer, maximumCount: Integer, startTimestamp: Date, deserializers: Deserializers) : SearchResultsVO
+    +createTopic(createTopicDto: CreateTopicVO) : void
+    +deleteTopic(topic: String) : void
+    +getAcls() : List<AclVO>
+    -{static} convert(consumerGroupOffsets: List<ConsumerGroupOffsets>, topicVos: Collection<TopicVO>) : List<ConsumerVO>
+    -resolveOffsets(groupId: String) : ConsumerGroupOffsets
+    -getConsumerOffsets(groupId: String) : List<ConsumerGroupOffsets>
+    -getConsumerOffsets(topics: Set<String>) : List<ConsumerGroupOffsets>
+    +publishMessage(message: CreateMessageVO, serializers: Serializers) : RecordMetadata
+    +KafkaMonitorImpl(highLevelConsumer: KafkaHighLevelConsumer, highLevelAdminClient: KafkaHighLevelAdminClient, highLevelProducer: KafkaHighLevelProducer)
+}
+
+}
+
+package kafdrop.util {
+  +class SerializationException {
+    -{static} serialVersionUID : long {readOnly}
+    +SerializationException(msg: String)
+}
+
+  +interface MessageSerializer <<FunctionalInterface>> {
+    ~{abstract} serializeMessage(value: String) : byte[]
+}
+
+  +class MsgPackMessageSerializer {
+    -{static} LOGGER : Logger {readOnly}
+    +serializeMessage(value: String) : byte[]
+}
+
+  +class ProtobufMessageSerializer {
+    -{static} LOGGER : Logger {readOnly}
+    -fullDescFile : String {readOnly}
+    -msgTypeName : String {readOnly}
+    +serializeMessage(value: String) : byte[]
+    +ProtobufMessageSerializer(fullDescFile: String, msgTypeName: String)
+}
+
+  +class DeserializationException {
+    -{static} serialVersionUID : long {readOnly}
+    +DeserializationException(msg: String)
+}
+
+  +class AvroMessageSerializer {
+    -topicName : String {readOnly}
+    -serializer : KafkaAvroSerializer {readOnly}
+    +serializeMessage(value: String) : byte[]
+    -getSerializer(schemaRegistryUrl: String, schemaRegistryAuth: String) : KafkaAvroSerializer
+    +AvroMessageSerializer(topicName: String, schemaRegistryUrl: String, schemaRegistryAuth: String)
+}
+
+  ~class ByteUtils {
+    ~{static} readString(buffer: ByteBuffer) : String
+    ~{static} readInt(buffer: ByteBuffer) : String
+    -{static} readBytes(buffer: ByteBuffer) : byte[]
+    -{static} readBytes(buffer: ByteBuffer, size: int) : byte[]
+    ~{static} convertToByteArray(buffer: ByteBuffer) : byte[]
+    -ByteUtils()
+}
+
+  +class ProtobufMessageDeserializer {
+    -fullDescFile : String {readOnly}
+    -msgTypeName : String {readOnly}
+    -isAnyProto : boolean {readOnly}
+    -{static} LOG : Logger {readOnly}
+    +deserializeMessage(buffer: ByteBuffer) : String
+    +ProtobufMessageDeserializer(fullDescFile: String, msgTypeName: String, isAnyProto: boolean)
+}
+
+  +enum KeyFormat {
+    +{static} DEFAULT : KeyFormat
+    +{static} INT : KeyFormat
+    +{static} AVRO : KeyFormat
+}
+
+  +class DefaultMessageDeserializer {
+    +deserializeMessage(buffer: ByteBuffer) : String
+}
+
+  +interface MessageDeserializer <<FunctionalInterface>> {
+    ~{abstract} deserializeMessage(buffer: ByteBuffer) : String
+}
+
+  +class Deserializers {
+    -keyDeserializer : MessageDeserializer {readOnly}
+    -valueDeserializer : MessageDeserializer {readOnly}
+    +getKeyDeserializer() : MessageDeserializer
+    +getValueDeserializer() : MessageDeserializer
+    +Deserializers(keyDeserializer: MessageDeserializer, valueDeserializer: MessageDeserializer)
+}
+
+  +enum MessageFormat {
+    +{static} DEFAULT : MessageFormat
+    +{static} INT : MessageFormat
+    +{static} AVRO : MessageFormat
+    +{static} PROTOBUF : MessageFormat
+    +{static} MSGPACK : MessageFormat
+}
+
+  +class DefaultMessageSerializer {
+    +serializeMessage(value: String) : byte[]
+}
+
+  +class ProtobufSchemaRegistryMessageDeserializer {
+    -topicName : String {readOnly}
+    -deserializer : KafkaProtobufDeserializer {readOnly}
+    +deserializeMessage(buffer: ByteBuffer) : String
+    -{static} getDeserializer(schemaRegistryUrl: String, schemaRegistryAuth: String) : KafkaProtobufDeserializer
+    +ProtobufSchemaRegistryMessageDeserializer(topicName: String, schemaRegistryUrl: String, schemaRegistryAuth: String)
+}
+
+  +class MsgPackMessageDeserializer {
+    -{static} LOG : Logger {readOnly}
+    +deserializeMessage(buffer: ByteBuffer) : String
+}
+
+  +class IntMessageDeserializer {
+    +deserializeMessage(buffer: ByteBuffer) : String
+}
+
+  +class Serializers {
+    -keySerializer : MessageSerializer {readOnly}
+    -valueSerializer : MessageSerializer {readOnly}
+    +getKeySerializer() : MessageSerializer
+    +getValueSerializer() : MessageSerializer
+    +Serializers(keySerializer: MessageSerializer, valueSerializer: MessageSerializer)
+}
+
+  +class AvroMessageDeserializer {
+    -topicName : String {readOnly}
+    -deserializer : KafkaAvroDeserializer {readOnly}
+    +deserializeMessage(buffer: ByteBuffer) : String
+    -{static} getDeserializer(schemaRegistryUrl: String, schemaRegistryAuth: String) : KafkaAvroDeserializer
+    +AvroMessageDeserializer(topicName: String, schemaRegistryUrl: String, schemaRegistryAuth: String)
+}
+
+}
+
+
+TopicController ..> TopicVO
+KafkaMonitor ..> SearchResultsVO
+TopicController *-- "1" KafkaMonitor
+KafkaHighLevelConsumer ..> Deserializers
+MessageDeserializer <|.. AvroMessageDeserializer
+MessageInspector *-- "1" KafkaMonitor
+KafkaMonitor ..> MessageVO
+KafkaMonitorImpl ..> Serializers
+ConsumerController ..> ConsumerNotFoundException
+KafkaHighLevelProducer *-- "1" KafkaConfiguration
+SchemaRegistryConfiguration +-- SchemaRegistryConfiguration$SchemaRegistryProperties : nested
+KafkaMonitorImpl ..> MessageVO
+SearchMessageFormForJson -- "0..1" MessageFormat
+KafkaMonitor ..> Deserializers
+KafkaMonitorImpl ..> CreateMessageVO
+SearchMessageFormForJson <|-- SearchMessageForm
+InterceptorConfiguration +-- InterceptorConfiguration$ProfileHandlerInterceptor : nested
+MessageInspector ..> MessageVO
+KafkaHighLevelAdminClient +-- KafkaHighLevelAdminClient$ClusterDescription : nested
+MessageController ..> CreateMessageVO
+MessageFormatConfiguration +-- MessageFormatConfiguration$MessageFormatProperties : nested
+KafkaHighLevelConsumer ..> TopicVO
+KafkaMonitorImpl ..> CreateTopicVO
+ClusterController$ClusterInfoVO o-- "*" TopicVO
+KafkaMonitor ..> Serializers
+KafkaHighLevelConsumer +-- KafkaHighLevelConsumer$ScanStatus : nested
+Deserializers *-- "1" MessageDeserializer
+KafkaMonitorImpl ..> Deserializers
+TopicVO ..> TopicPartitionVO
+IniFileReader ..> IniFileProperties
+MessageController ..> SearchResultsVO
+Kafdrop +-- Kafdrop$EnvironmentSetupListener : nested
+MessageDeserializer <|.. DefaultMessageDeserializer
+ClusterController$ClusterInfoVO -- "0..1" ClusterSummaryVO
+KafkaMonitorImpl ..> ClusterSummaryVO
+Kafdrop$EnvironmentSetupListener ..> IniFilePropertySource
+MessageSerializer <|.. AvroMessageSerializer
+KafkaHighLevelConsumer *-- "1" KafkaConfiguration
+ClusterController *-- "1" KafkaConfiguration
+MessageSerializer <|.. DefaultMessageSerializer
+KafkaMonitor <|.. KafkaMonitorImpl
+SearchResults +-- SearchResults$CompletionReason : nested
+KafkaMonitorImpl *-- "1" KafkaHighLevelProducer
+HealthCheckConfiguration +-- HealthCheckConfiguration$HealthCheck : nested
+BrokerController *-- "1" KafkaMonitor
+ConsumerController *-- "1" KafkaMonitor
+MessageSerializer <|.. MsgPackMessageSerializer
+KafkaMonitor ..> ConsumerVO
+BrokerController ..> BrokerVO
+KafkaMonitorImpl *-- "1" KafkaHighLevelConsumer
+ProtobufDescriptorConfiguration +-- ProtobufDescriptorConfiguration$ProtobufDescriptorProperties : nested
+MessageController ..> MessageDeserializer
+KafkaHighLevelProducer ..> CreateMessageVO
+ClusterController$ClusterInfoVO o-- "*" BrokerVO
+MessageController ..> SearchMessageForm
+KafkaMonitorImpl ..> BrokerVO
+MessageController ..> MessageFormat
+TopicController ..> ConsumerVO
+TopicPartitionVO +-- TopicPartitionVO$PartitionReplica : nested
+MessageController *-- "1" KafkaMonitor
+KafkaMonitorImpl ..> ConsumerVO
+ConsumerController ..> ConsumerVO
+MessageController ..> SearchMessageFormForJson
+IniFilePropertySource ..> IniFileProperties
+KafkaHighLevelAdminClient *-- "1" KafkaConfiguration
+Serializers *-- "1" MessageSerializer
+ClusterController +-- ClusterController$ClusterInfoVO : nested
+KafkaMonitor ..> AclVO
+KafkaHighLevelConsumer ..> MessageDeserializer
+KafkaMonitorImpl ..> TopicVO
+KafkaMonitor ..> CreateMessageVO
+KafkaMonitorImpl ..> AclVO
+MessageController ..> TopicVO
+KafkaMonitor ..> BrokerVO
+KafkaMonitor ..> TopicVO
+TopicController ..> CreateTopicVO
+SearchResultsVO o-- "*" MessageVO
+AclController ..> AclVO
+ConsumerVO ..> ConsumerTopicVO
+KafkaMonitor ..> ClusterSummaryVO
+KafkaHighLevelConsumer ..> SearchResults
+MessageFormatConfiguration$MessageFormatProperties -- "0..1" MessageFormat
+MessageInspector ..> Deserializers
+ClusterController *-- "1" KafkaMonitor
+KafkaMonitorImpl *-- "1" KafkaHighLevelAdminClient
+MessageDeserializer <|.. ProtobufMessageDeserializer
+MessageController *-- "1" MessageInspector
+SearchMessageForm ..> MessageFormat
+MessageController$PartitionOffsetInfo -- "0..1" MessageFormat
+KafkaMonitorImpl ..> SearchResultsVO
+MessageSerializer <|.. ProtobufMessageSerializer
+MessageDeserializer <|.. ProtobufSchemaRegistryMessageDeserializer
+ConsumerTopicVO ..> ConsumerPartitionVO
+MessageDeserializer <|.. MsgPackMessageDeserializer
+KafkaMonitor ..> CreateTopicVO
+MessageController ..> MessageSerializer
+MessageDeserializer <|.. IntMessageDeserializer
+MessageController +-- MessageController$PartitionOffsetInfo : nested
+Kafdrop +-- Kafdrop$LoggingConfigurationListener : nested
+MessageController ..> MessageVO
+KafkaHighLevelProducer ..> Serializers
+AclController *-- "1" KafkaMonitor
+KafkaMonitorImpl +-- KafkaMonitorImpl$ConsumerGroupOffsets : nested
+
+@enduml

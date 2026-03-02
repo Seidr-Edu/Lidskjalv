@@ -23,7 +23,9 @@ exp_write_reports() {
     "$BASELINE_ORIGINAL_STATUS" "$BASELINE_ORIGINAL_RC" "$BASELINE_ORIGINAL_LOG_PATH" \
     "$BASELINE_GENERATED_STATUS" "$BASELINE_GENERATED_RC" "$BASELINE_GENERATED_LOG_PATH" \
     "$PORTED_ORIGINAL_TESTS_STATUS" "$PORTED_ORIGINAL_TESTS_EXIT_CODE" "$PORTED_ORIGINAL_TESTS_LOG_PATH" \
-    "$EVENTS_LOG" "$CODEX_STDERR_LOG" "$OUTPUT_LAST_MESSAGE" "$EXP_SUMMARY_MD"
+    "$EVENTS_LOG" "$CODEX_STDERR_LOG" "$OUTPUT_LAST_MESSAGE" \
+    "$TEST_PORT_TOOL_RUN_DIR" "$TEST_PORT_TOOL_JSON_PATH" "$TEST_PORT_TOOL_SUMMARY_PATH" "$TEST_PORT_TOOL_LOG_PATH" \
+    "$EXP_SUMMARY_MD"
 import glob, json, os, sys
 import xml.etree.ElementTree as ET
 
@@ -44,6 +46,7 @@ import xml.etree.ElementTree as ET
  baseline_gen_status, baseline_gen_rc, baseline_gen_log,
  ported_status, ported_rc, ported_log,
  adapter_events_log, adapter_stderr_log, adapter_last_message,
+ test_port_tool_run_dir, test_port_tool_json_path, test_port_tool_summary_path, test_port_tool_log_path,
  summary_md
 ) = sys.argv[1:]
 
@@ -55,6 +58,16 @@ def parse_json_obj(raw):
     except Exception:
         return {}
     return parsed if isinstance(parsed, dict) else {}
+
+def load_json_file(path):
+    if not path or not os.path.exists(path):
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            parsed = json.load(f)
+    except Exception:
+        return None
+    return parsed if isinstance(parsed, dict) else None
 
 def read_violation_entries(path):
     out = []
@@ -389,13 +402,32 @@ obj = {
   }
 }
 
+tp_tool_obj = load_json_file(test_port_tool_json_path)
+if tp_tool_obj is not None:
+    tp_tool_obj = dict(tp_tool_obj)
+    tp_tool_obj.setdefault("enabled", tp_enabled)
+    tp_tool_obj.setdefault("informational", tp_informational)
+    if isinstance(tp_tool_obj.get("immutability"), dict):
+        tp_tool_obj.setdefault("new_repo_unchanged", tp_tool_obj["immutability"].get("generated_repo_unchanged"))
+    tp_tool_obj["tool_run_dir"] = test_port_tool_run_dir
+    tp_tool_obj["tool_json_path"] = test_port_tool_json_path
+    tp_tool_obj["tool_summary_path"] = test_port_tool_summary_path
+    if test_port_tool_log_path:
+        tp_tool_obj["tool_log_path"] = test_port_tool_log_path
+    obj["test_port"] = tp_tool_obj
+
+if isinstance(obj.get("test_port"), dict):
+    obj["test_port"].setdefault("tool_run_dir", test_port_tool_run_dir)
+    obj["test_port"].setdefault("tool_json_path", test_port_tool_json_path)
+    obj["test_port"].setdefault("tool_summary_path", test_port_tool_summary_path)
+    if test_port_tool_log_path:
+        obj["test_port"].setdefault("tool_log_path", test_port_tool_log_path)
+
 with open(exp_json, "w", encoding="utf-8") as f:
     json.dump(obj, f, indent=2)
 PY
 
   local tp_change_set_path=""
-  local tp_write_guard_dir=""
-  local tp_root_dir=""
   local tp_add=0
   local tp_mod=0
   local tp_del=0
@@ -406,92 +438,16 @@ PY
   local tp_behavioral_verdict_reason="unknown"
   local tp_behavioral_case_count=0
 
-  if [[ -n "${TEST_PORT_WRITE_SCOPE_DIFF_FILE:-}" ]]; then
-    tp_write_guard_dir="$(dirname "$TEST_PORT_WRITE_SCOPE_DIFF_FILE")"
-    tp_change_set_path="${tp_write_guard_dir}/ported-protected-change-set.tsv"
-    tp_root_dir="$(dirname "$tp_write_guard_dir")"
-  fi
-
-  if [[ -f "$tp_change_set_path" ]]; then
-    tp_add="$(awk -F '\t' '$1=="A"{c++} END{print c+0}' "$tp_change_set_path")"
-    tp_mod="$(awk -F '\t' '$1=="M"{c++} END{print c+0}' "$tp_change_set_path")"
-    tp_del="$(awk -F '\t' '$1=="D"{c++} END{print c+0}' "$tp_change_set_path")"
-    tp_total_changes="$(awk 'END{print NR+0}' "$tp_change_set_path")"
-  fi
-
-  if [[ -d "${tp_root_dir}/original-tests-snapshot" ]]; then
-    tp_orig_snapshot_files="$(find "${tp_root_dir}/original-tests-snapshot" -type f | wc -l | tr -d ' ')"
-  fi
-
-  if [[ -d "${tp_root_dir}/ported-tests-repo" ]]; then
-    tp_final_test_files="$(
-      cd "${tp_root_dir}/ported-tests-repo" && \
-      find . -type f \
-        ! -path './.git/*' \
-        ! -path './target/*' \
-        ! -path './build/*' \
-        ! -path './.gradle/*' \
-        ! -path './.scannerwork/*' \
-        ! -path './out/*' \
-        -print | \
-      awk '
-        /^\.\/src\/test\// {c++}
-        /^\.\/test\// {c++}
-        /^\.\/tests\// {c++}
-        /^\.\/src\/[^\/]*Test[^\/]*\// {c++}
-        END {print c+0}
-      '
-    )"
-  fi
-
-  case "$TEST_PORT_STATUS" in
-    failed)
-      if [[ "$TEST_PORT_REASON" == "behavioral-difference-evidence" || "${TEST_PORT_FAILURE_CLASS:-}" == "behavioral-mismatch" ]]; then
-        tp_behavioral_verdict="difference_detected"
-        tp_behavioral_verdict_reason="assertion-mismatch-evidence"
-      elif [[ "$TEST_PORT_REASON" == "tests-failed" ]]; then
-        tp_behavioral_verdict="inconclusive"
-        tp_behavioral_verdict_reason="${TEST_PORT_FAILURE_CLASS:-ported-tests-failed}"
-      elif [[ "$TEST_PORT_REASON" == "write-scope-violation" ]]; then
-        tp_behavioral_verdict="invalid"
-        tp_behavioral_verdict_reason="write-scope-violation"
-      else
-        tp_behavioral_verdict="inconclusive"
-        tp_behavioral_verdict_reason="${TEST_PORT_REASON:-stage-failed}"
-      fi
-      ;;
-    passed)
-      if [[ "$tp_del" -gt 0 ]]; then
-        tp_behavioral_verdict="inconclusive"
-        tp_behavioral_verdict_reason="suite-reduced-during-adaptation"
-      else
-        tp_behavioral_verdict="no_difference_detected"
-        tp_behavioral_verdict_reason="retained-ported-tests-pass"
-      fi
-      ;;
-    skipped)
-      tp_behavioral_verdict="skipped"
-      tp_behavioral_verdict_reason="${TEST_PORT_REASON:-stage-skipped}"
-      ;;
-    *)
-      tp_behavioral_verdict="inconclusive"
-      tp_behavioral_verdict_reason="${TEST_PORT_REASON:-unknown}"
-      ;;
-  esac
-
-  if [[ -f "$EXP_JSON" ]]; then
-    tp_behavioral_case_count="$(
-      python3 - <<'PY' "$EXP_JSON"
-import json, sys
-try:
-    with open(sys.argv[1], "r", encoding="utf-8") as f:
-        obj = json.load(f)
-    print(int(obj.get("test_port", {}).get("behavioral_evidence", {}).get("failing_case_count", 0)))
-except Exception:
-    print(0)
-PY
-    )"
-  fi
+  tp_change_set_path="${TEST_PORT_WRITE_SCOPE_CHANGE_SET_PATH:-}"
+  tp_add="${TEST_PORT_SUITE_CHANGES_ADDED:-0}"
+  tp_mod="${TEST_PORT_SUITE_CHANGES_MODIFIED:-0}"
+  tp_del="${TEST_PORT_SUITE_CHANGES_DELETED:-0}"
+  tp_total_changes="${TEST_PORT_SUITE_CHANGES_TOTAL:-0}"
+  tp_orig_snapshot_files="${TEST_PORT_SUITE_SHAPE_ORIGINAL_SNAPSHOT_FILE_COUNT:-0}"
+  tp_final_test_files="${TEST_PORT_SUITE_SHAPE_FINAL_PORTED_TEST_FILE_COUNT:-0}"
+  tp_behavioral_verdict="${TEST_PORT_BEHAVIORAL_VERDICT:-inconclusive}"
+  tp_behavioral_verdict_reason="${TEST_PORT_BEHAVIORAL_VERDICT_REASON:-unknown}"
+  tp_behavioral_case_count="${TEST_PORT_BEHAVIORAL_FAILING_CASE_COUNT:-0}"
 
   cat > "$EXP_SUMMARY_MD" <<MD
 # Experiment Summary
@@ -521,6 +477,10 @@ PY
 - Failure classifier: ${TEST_PORT_FAILURE_CLASS:-<none>}
 - Observed failing test cases (from JUnit reports): **${tp_behavioral_case_count}**
 - Adapter prereqs OK: **${TEST_PORT_ADAPTER_PREREQS_OK}**
+- Tool run dir: ${TEST_PORT_TOOL_RUN_DIR:-<none>}
+- Tool summary: ${TEST_PORT_TOOL_SUMMARY_PATH:-<none>}
+- Tool JSON: ${TEST_PORT_TOOL_JSON_PATH:-<none>}
+- Tool log: ${TEST_PORT_TOOL_LOG_PATH:-<none>}
 - New repo unchanged: **${TEST_PORT_NEW_REPO_UNCHANGED}**
 - Write-scope policy: **${TEST_PORT_WRITE_SCOPE_POLICY}**
 - Write-scope violations: **${TEST_PORT_WRITE_SCOPE_VIOLATION_COUNT}**

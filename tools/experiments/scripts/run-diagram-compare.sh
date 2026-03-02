@@ -13,15 +13,12 @@ source "${SCRIPT_DIR}/lib/exp_naming.sh"
 source "${SCRIPT_DIR}/lib/exp_sources.sh"
 source "${SCRIPT_DIR}/lib/exp_andvari.sh"
 source "${SCRIPT_DIR}/lib/exp_lidskjalv.sh"
-source "${SCRIPT_DIR}/lib/exp_test_port.sh"
+source "${SCRIPT_DIR}/lib/exp_test_port_client.sh"
 source "${SCRIPT_DIR}/lib/exp_report.sh"
 
 # Reuse Lidskjalv source parsing/key derivation helpers and state lookup.
 source "${REPO_ROOT}/tools/lidskjalv/scripts/lib/common.sh"
 source "${REPO_ROOT}/tools/lidskjalv/scripts/lib/state.sh"
-# Reuse Andvari adapter interface for test-port model edits.
-ROOT_DIR="${REPO_ROOT}/tools/andvari"
-source "${REPO_ROOT}/tools/andvari/scripts/adapters/adapter.sh"
 
 main() {
   exp_parse_args "$@"
@@ -35,19 +32,15 @@ main() {
   EXP_LOG_DIR="${EXP_RUN_DIR}/logs"
   EXP_WORKSPACE_DIR="${EXP_RUN_DIR}/workspace"
   EXP_WORKSPACE_SCAN_DIR="${EXP_WORKSPACE_DIR}/scan"
-  EXP_WORKSPACE_TEST_PORT_DIR="${EXP_WORKSPACE_DIR}/test-port"
-  EXP_TEST_PORT_LOG_DIR="${EXP_LOG_DIR}/test-port"
-  EXP_TEST_PORT_SUMMARY_DIR="${EXP_WORKSPACE_TEST_PORT_DIR}/summaries"
-  EXP_TEST_PORT_GUARDS_DIR="${EXP_WORKSPACE_TEST_PORT_DIR}/write-guards"
   EXP_OUTPUT_DIR="${EXP_RUN_DIR}/outputs"
   EXP_JSON="${EXP_OUTPUT_DIR}/experiment.json"
   EXP_SUMMARY_MD="${EXP_OUTPUT_DIR}/summary.md"
 
-  mkdir -p "$EXP_LOG_DIR" "$EXP_WORKSPACE_SCAN_DIR" "$EXP_OUTPUT_DIR" "$EXP_TEST_PORT_LOG_DIR"
+  mkdir -p "$EXP_LOG_DIR" "$EXP_WORKSPACE_SCAN_DIR" "$EXP_OUTPUT_DIR"
 
-  EVENTS_LOG="${EXP_TEST_PORT_LOG_DIR}/adapter-events.jsonl"
-  CODEX_STDERR_LOG="${EXP_TEST_PORT_LOG_DIR}/adapter-stderr.log"
-  OUTPUT_LAST_MESSAGE="${EXP_TEST_PORT_LOG_DIR}/adapter-last-message.md"
+  EVENTS_LOG=""
+  CODEX_STDERR_LOG=""
+  OUTPUT_LAST_MESSAGE=""
   ADAPTER="${ANDVARI_ADAPTER:-codex}"
 
   state_init
@@ -61,6 +54,16 @@ main() {
   TEST_PORT_STATUS="skipped"
   TEST_PORT_REASON=""
   TEST_PORT_FAILURE_CLASS=""
+  TEST_PORT_BEHAVIORAL_VERDICT="skipped"
+  TEST_PORT_BEHAVIORAL_VERDICT_REASON="not-run"
+  TEST_PORT_BEHAVIORAL_FAILING_CASE_COUNT=0
+  TEST_PORT_SUITE_CHANGES_ADDED=0
+  TEST_PORT_SUITE_CHANGES_MODIFIED=0
+  TEST_PORT_SUITE_CHANGES_DELETED=0
+  TEST_PORT_SUITE_CHANGES_TOTAL=0
+  TEST_PORT_SUITE_SHAPE_ORIGINAL_SNAPSHOT_FILE_COUNT=0
+  TEST_PORT_SUITE_SHAPE_FINAL_PORTED_TEST_FILE_COUNT=0
+  TEST_PORT_SUITE_SHAPE_RETENTION_RATIO=""
   BASELINE_ORIGINAL_RC=-1
   BASELINE_GENERATED_RC=-1
   BASELINE_ORIGINAL_STATUS="skipped"
@@ -77,12 +80,14 @@ main() {
   TEST_PORT_WRITE_SCOPE_VIOLATION_COUNT=0
   TEST_PORT_WRITE_SCOPE_FAILURE_PATHS_FILE=""
   TEST_PORT_WRITE_SCOPE_DIFF_FILE=""
+  TEST_PORT_WRITE_SCOPE_CHANGE_SET_PATH=""
   TEST_PORT_ADAPTER_PREREQS_OK=true
+  TEST_PORT_TOOL_RUN_DIR=""
+  TEST_PORT_TOOL_JSON_PATH=""
+  TEST_PORT_TOOL_SUMMARY_PATH=""
+  TEST_PORT_TOOL_LOG_PATH=""
+  TEST_PORT_TOOL_EXIT_CODE=0
   if [[ "$TEST_PORT_MODE" == "on" ]]; then
-    if ! adapter_check_prereqs "$ADAPTER"; then
-      TEST_PORT_ADAPTER_PREREQS_OK=false
-      exp_warn "adapter prereqs failed; test-port stage will be skipped"
-    fi
     exp_log "running test-port stage"
     exp_run_test_port
   fi

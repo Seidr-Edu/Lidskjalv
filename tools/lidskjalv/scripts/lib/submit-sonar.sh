@@ -127,6 +127,25 @@ sonar_validate_main_source_indexing() {
   return 0
 }
 
+sonar_set_project_public_visibility() {
+  local key="$1"
+  [[ "$SONAR_HOST_URL" == *"sonarcloud.io"* ]] || return 0
+  [[ -n "${SONAR_ORGANIZATION:-}" ]] || return 0
+
+  if ! curl -sf -u "${SONAR_TOKEN}:" \
+    -X POST "${SONAR_HOST_URL}/api/projects/update_visibility" \
+    --data-urlencode "project=${key}" \
+    --data-urlencode "organization=${SONAR_ORGANIZATION}" \
+    --data-urlencode "visibility=public" \
+    >/dev/null 2>&1; then
+    log_warn "Could not set SonarCloud project visibility to public for ${key}"
+    return 1
+  fi
+
+  log_info "Ensured SonarCloud project visibility is public: ${key}"
+  return 0
+}
+
 # Submit a project to SonarQube for analysis
 # Usage: submit_to_sonar <project_key> <build_dir> <build_tool>
 # Returns: 0 on success, 1 on failure
@@ -313,6 +332,7 @@ sonar_create_project() {
   # Check if already exists
   if sonar_project_exists "$key"; then
     log_info "Project $key already exists in SonarQube"
+    sonar_set_project_public_visibility "$key" || true
     return 0
   fi
   
@@ -333,6 +353,8 @@ sonar_create_project() {
     -X POST "${SONAR_HOST_URL}/api/projects/create" \
     "${create_args[@]}" \
     >/dev/null 2>&1 || true
+
+  sonar_set_project_public_visibility "$key" || true
   
   return 0
 }

@@ -28,6 +28,22 @@ PIPELINE_BUILD_DIR=""
 PIPELINE_BUILD_TOOL=""
 PIPELINE_BUILD_JDK=""
 
+pipeline_detect_build_tool_for_dir() {
+  local dir="$1"
+
+  if [[ -f "${dir}/pom.xml" ]] || [[ -f "${dir}/mvnw" ]]; then
+    echo "maven"
+    return 0
+  fi
+
+  if [[ -f "${dir}/build.gradle" ]] || [[ -f "${dir}/build.gradle.kts" ]] || [[ -f "${dir}/settings.gradle" ]] || [[ -f "${dir}/settings.gradle.kts" ]] || [[ -f "${dir}/gradlew" ]]; then
+    echo "gradle"
+    return 0
+  fi
+
+  echo ""
+}
+
 # Run full scan pipeline for one repository.
 # Usage:
 #   run_scan_pipeline <key> <display_name> <source_type> <normalized_ref> <repos_root>
@@ -69,8 +85,30 @@ run_scan_pipeline() {
   fi
 
   parse_build_result "$build_result"
-  local build_tool="$BUILD_TOOL"
-  local build_subdir="${subdir_hint:-$BUILD_SUBDIR}"
+  local detected_tool="$BUILD_TOOL"
+  local detected_subdir="$BUILD_SUBDIR"
+  local build_tool="$detected_tool"
+  local build_subdir="$detected_subdir"
+
+  if [[ -n "$subdir_hint" ]]; then
+    local hinted_dir="${repo_dir}/${subdir_hint}"
+    if [[ ! -d "$hinted_dir" ]]; then
+      log_warn "Requested subdir '${subdir_hint}' does not exist; using detected build path instead"
+    else
+      local hinted_tool
+      hinted_tool="$(pipeline_detect_build_tool_for_dir "$hinted_dir")"
+      if [[ -n "$hinted_tool" ]]; then
+        build_tool="$hinted_tool"
+        build_subdir="$subdir_hint"
+        if [[ "$hinted_tool" != "$detected_tool" ]]; then
+          log_info "Subdir hint '${subdir_hint}' uses ${hinted_tool}; overriding detected ${detected_tool} build tool"
+        fi
+      else
+        log_warn "Requested subdir '${subdir_hint}' has no build markers; using detected build path instead"
+      fi
+    fi
+  fi
+
   local build_dir="$repo_dir"
   if [[ -n "$build_subdir" ]]; then
     build_dir="${repo_dir}/${build_subdir}"

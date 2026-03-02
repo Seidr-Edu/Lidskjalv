@@ -12,6 +12,7 @@
 # shellcheck disable=SC2034  # Referenced by build.sh after sourcing this file.
 MAVEN_STRATEGIES=(
   # Modern JDKs with standard test skipping
+  "25|-DskipTests=true -Dmaven.test.skip=true"
   "21|-DskipTests=true -Dmaven.test.skip=true"
   "17|-DskipTests=true -Dmaven.test.skip=true"
   
@@ -27,14 +28,44 @@ MAVEN_STRATEGIES=(
 # Get Maven command for a build
 # Usage: get_maven_command <build_dir>
 # Returns: maven command (mvn or ./mvnw)
+maven_is_wrapper_script() {
+  local wrapper_path="$1"
+  [[ -f "$wrapper_path" ]] || return 1
+  grep -q "org.apache.maven.wrapper.MavenWrapperMain" "$wrapper_path" 2>/dev/null
+}
+
+find_maven_wrapper_upward() {
+  local dir="$1"
+
+  while [[ -n "$dir" ]]; do
+    local candidate="${dir}/mvnw"
+    if [[ -f "$candidate" ]]; then
+      if maven_is_wrapper_script "$candidate"; then
+        [[ -x "$candidate" ]] || chmod +x "$candidate" 2>/dev/null || true
+        echo "$candidate"
+        return 0
+      fi
+      log_warn "Ignoring non-standard mvnw script at $candidate; using system mvn"
+    fi
+
+    local parent
+    parent="$(dirname "$dir")"
+    [[ "$parent" == "$dir" ]] && break
+    dir="$parent"
+  done
+
+  return 1
+}
+
 get_maven_command() {
   local build_dir="$1"
-  
-  if [[ -x "${build_dir}/mvnw" ]]; then
-    echo "./mvnw"
-  else
-    echo "mvn"
+  local wrapper_path=""
+  if wrapper_path="$(find_maven_wrapper_upward "$build_dir")"; then
+    echo "$wrapper_path"
+    return 0
   fi
+
+  echo "mvn"
 }
 
 maven_has_pom_packaging() {
@@ -89,6 +120,9 @@ maven_build() {
   
   local mvn_cmd
   mvn_cmd="$(get_maven_command "$build_dir")"
+  local maven_user_home="${build_dir}/.m2"
+  local maven_repo_local="${maven_user_home}/repository"
+  ensure_dir "$maven_repo_local"
   
   # Base command: clean compile (we don't need to run verify for SonarQube)
   # SonarQube needs compiled classes, not packaged artifacts
@@ -100,7 +134,7 @@ maven_build() {
   # Run the build
   local exit_code=0
   # shellcheck disable=SC2086
-  run_logged "$log_file" $mvn_cmd $base_args $strategy_args -B || exit_code=$?
+  run_logged "$log_file" env "MAVEN_USER_HOME=$maven_user_home" $mvn_cmd $base_args $strategy_args "-Dmaven.repo.local=$maven_repo_local" -B || exit_code=$?
   
   popd >/dev/null || return 1
   return $exit_code
@@ -119,6 +153,9 @@ maven_sonar() {
   
   local mvn_cmd
   mvn_cmd="$(get_maven_command "$build_dir")"
+  local maven_user_home="${build_dir}/.m2"
+  local maven_repo_local="${maven_user_home}/repository"
+  ensure_dir "$maven_repo_local"
   
   # Save and restore working directory
   pushd "$build_dir" >/dev/null || return 1
@@ -132,13 +169,14 @@ maven_sonar() {
     "-Dsonar.token=$SONAR_TOKEN"
     "-Dsonar.projectKey=$project_key"
     "-Dsonar.organization=$SONAR_ORGANIZATION"
+    "-Dmaven.repo.local=$maven_repo_local"
     -DskipTests=true
     -B
   )
   if [[ "${SONAR_SCM_EXCLUSIONS_DISABLED:-}" == "true" ]]; then
     sonar_cmd+=(-Dsonar.scm.exclusions.disabled=true)
   fi
-  run_logged "$log_file" "${sonar_cmd[@]}" || exit_code=$?
+  run_logged "$log_file" env "MAVEN_USER_HOME=$maven_user_home" "${sonar_cmd[@]}" || exit_code=$?
   
   popd >/dev/null || return 1
   return $exit_code

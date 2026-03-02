@@ -32,18 +32,72 @@ GRADLE_STRATEGIES=(
 # Get Gradle command for a build
 # Usage: get_gradle_command <build_dir>
 # Returns: gradle command (./gradlew or gradle)
+gradle_is_wrapper_script() {
+  local wrapper_path="$1"
+  [[ -f "$wrapper_path" ]] || return 1
+  grep -q "org.gradle.wrapper.GradleWrapperMain" "$wrapper_path" 2>/dev/null
+}
+
+find_gradle_wrapper_upward() {
+  local dir="$1"
+
+  while [[ -n "$dir" ]]; do
+    local candidate="${dir}/gradlew"
+    if [[ -f "$candidate" ]]; then
+      if gradle_is_wrapper_script "$candidate"; then
+        [[ -x "$candidate" ]] || chmod +x "$candidate" 2>/dev/null || true
+        echo "$candidate"
+        return 0
+      fi
+      log_warn "Ignoring non-standard gradlew script at $candidate; using system gradle"
+    fi
+
+    local parent
+    parent="$(dirname "$dir")"
+    [[ "$parent" == "$dir" ]] && break
+    dir="$parent"
+  done
+
+  return 1
+}
+
+gradle_has_build_marker() {
+  local build_dir="$1"
+  [[ -f "${build_dir}/build.gradle" ]] ||
+    [[ -f "${build_dir}/build.gradle.kts" ]] ||
+    [[ -f "${build_dir}/settings.gradle" ]] ||
+    [[ -f "${build_dir}/settings.gradle.kts" ]]
+}
+
+gradle_validate_project_layout() {
+  local build_dir="$1"
+  local log_file="${2:-}"
+
+  if gradle_has_build_marker "$build_dir"; then
+    return 0
+  fi
+
+  if find_gradle_wrapper_upward "$build_dir" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local msg="Invalid Gradle layout: no build.gradle(.kts)/settings.gradle(.kts) found in $build_dir and no valid Gradle wrapper found in parent directories."
+  if [[ -n "$log_file" ]]; then
+    printf '[ERROR] %s\n' "$msg" >> "$log_file"
+  fi
+  log_error "$msg"
+  return 1
+}
+
 get_gradle_command() {
   local build_dir="$1"
-  
-  if [[ -x "${build_dir}/gradlew" ]]; then
-    echo "./gradlew"
-  elif [[ -f "${build_dir}/gradlew" ]]; then
-    # Make it executable
-    chmod +x "${build_dir}/gradlew"
-    echo "./gradlew"
-  else
-    echo "gradle"
+  local wrapper_path=""
+  if wrapper_path="$(find_gradle_wrapper_upward "$build_dir")"; then
+    echo "$wrapper_path"
+    return 0
   fi
+
+  echo "gradle"
 }
 
 # Build Gradle project with specific strategy
@@ -53,9 +107,15 @@ gradle_build() {
   local build_dir="$1"
   local strategy_args="$2"
   local log_file="$3"
+
+  if ! gradle_validate_project_layout "$build_dir" "$log_file"; then
+    return 1
+  fi
   
   local gradle_cmd
   gradle_cmd="$(get_gradle_command "$build_dir")"
+  local gradle_user_home="${build_dir}/.gradle-user-home"
+  ensure_dir "$gradle_user_home"
   
   # Save and restore working directory
   pushd "$build_dir" >/dev/null || return 1
@@ -65,14 +125,14 @@ gradle_build() {
   # wrapper scripts that only accept task names.
   local exit_code=0
   # shellcheck disable=SC2086
-  run_logged "$log_file" $gradle_cmd $strategy_args --stacktrace || exit_code=$?
+  run_logged "$log_file" env "GRADLE_USER_HOME=$gradle_user_home" $gradle_cmd $strategy_args --stacktrace || exit_code=$?
 
-  if [[ $exit_code -ne 0 ]] && [[ "$gradle_cmd" == "./gradlew" ]]; then
+  if [[ $exit_code -ne 0 ]] && [[ "$(basename "$gradle_cmd")" == "gradlew" ]]; then
     if grep -q "Unsupported task: --stacktrace" "$log_file" 2>/dev/null; then
       log_warn "Custom gradlew detected (no --stacktrace support), retrying without --stacktrace"
       exit_code=0
       # shellcheck disable=SC2086
-      run_logged "$log_file" $gradle_cmd $strategy_args || exit_code=$?
+      run_logged "$log_file" env "GRADLE_USER_HOME=$gradle_user_home" $gradle_cmd $strategy_args || exit_code=$?
     fi
   fi
   
@@ -86,9 +146,15 @@ gradle_sonar() {
   local build_dir="$1"
   local project_key="$2"
   local log_file="$3"
+
+  if ! gradle_validate_project_layout "$build_dir" "$log_file"; then
+    return 1
+  fi
   
   local gradle_cmd
   gradle_cmd="$(get_gradle_command "$build_dir")"
+  local gradle_user_home="${build_dir}/.gradle-user-home"
+  ensure_dir "$gradle_user_home"
   
   # Save and restore working directory
   pushd "$build_dir" >/dev/null || return 1
@@ -134,7 +200,7 @@ gradle_sonar() {
   if grep -qE "sonarqube|org.sonarqube" build.gradle* 2>/dev/null; then
     log_info "Project has SonarQube plugin configured, using 'sonar' task"
     # shellcheck disable=SC2086
-    run_logged "$log_file" $gradle_cmd sonar $sonar_args -x test || exit_code=$?
+    run_logged "$log_file" env "GRADLE_USER_HOME=$gradle_user_home" $gradle_cmd sonar $sonar_args -x test || exit_code=$?
   else
     log_info "No SonarQube plugin found, injecting via init script"
     local init_script="${build_dir}/sonar-init.gradle"
@@ -153,7 +219,7 @@ allprojects {
 GRADLE_INIT
     
     # shellcheck disable=SC2086
-    run_logged "$log_file" $gradle_cmd --init-script "$init_script" sonar $sonar_args -x test || exit_code=$?
+    run_logged "$log_file" env "GRADLE_USER_HOME=$gradle_user_home" $gradle_cmd --init-script "$init_script" sonar $sonar_args -x test || exit_code=$?
     
     rm -f "$init_script"
   fi
@@ -259,7 +325,11 @@ GRADLE_INIT
 parse_gradle_error() {
   local log_file="$1"
   
-  if grep -q "SDK location not found" "$log_file" 2>/dev/null; then
+  if grep -q "Invalid Gradle layout:" "$log_file" 2>/dev/null; then
+    echo "invalid_project_layout"
+  elif grep -q "Could not create parent directory for lock file" "$log_file" 2>/dev/null; then
+    echo "environment_permission"
+  elif grep -q "SDK location not found" "$log_file" 2>/dev/null; then
     echo "sdk_not_found"
   elif grep -q "com/android/build/gradle" "$log_file" 2>/dev/null; then
     echo "android_plugin_incompatibility"
@@ -291,7 +361,11 @@ extract_gradle_error_message() {
   
   local error_line
   
-  if grep -q "SDK location not found" "$log_file" 2>/dev/null; then
+  if grep -q "Invalid Gradle layout:" "$log_file" 2>/dev/null; then
+    error_line="$(grep -m1 "Invalid Gradle layout:" "$log_file" 2>/dev/null | head -c 200)"
+  elif grep -q "Could not create parent directory for lock file" "$log_file" 2>/dev/null; then
+    error_line="$(grep -m1 "Could not create parent directory for lock file" "$log_file" 2>/dev/null | head -c 200)"
+  elif grep -q "SDK location not found" "$log_file" 2>/dev/null; then
     error_line="Android SDK not found (set ANDROID_HOME or sdk.dir in local.properties)"
   elif grep -q "Task .* not found in root project" "$log_file" 2>/dev/null; then
     error_line="$(grep -m1 "Task .* not found" "$log_file" 2>/dev/null | head -c 200)"

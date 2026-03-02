@@ -1,13 +1,22 @@
+# Secrets
 .env
 tools/lidskjalv/.env
+
+# Local notes / assistant metadata
+claude.md
+.github/copilot-instructions.md
+
+# Root runtime artifacts
 _work/
 logs/
 state/
-claude.md
-.github/copilot-instructions.md
 repos/
-.data/
+
+# Tool runtime artifacts
 tools/lidskjalv/_work/
 tools/lidskjalv/logs/
 tools/lidskjalv/state/
 tools/lidskjalv/repos/
+
+# Experiment and run artifacts (large/noisy/non-deterministic)
+.data/

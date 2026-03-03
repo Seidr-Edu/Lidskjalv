@@ -70,7 +70,7 @@ Retained/removed metrics are reported in `test_port.json` under `suite_shape`:
 
 - `retained_original_test_file_count`
 - `removed_original_test_file_count`
-- `retention_ratio` (`retained_original/original_snapshot`, capped at 1.0)
+- `retention_ratio` (`retained_original/original_snapshot`)
 
 ## Removed-test manifest contract
 

@@ -18,7 +18,11 @@ tp_write_reports() {
     "$TP_WRITE_SCOPE_IGNORED_PREFIXES_CSV" \
     "$TP_EVIDENCE_JSON_PATH" "$TP_REMOVED_TESTS_MANIFEST_REL" "$TP_RETENTION_POLICY_MODE" "$TP_RETENTION_DOCUMENTED_REMOVALS_REQUIRED" \
     "$TP_BASELINE_ORIGINAL_STATUS" "$TP_BASELINE_ORIGINAL_RC" "$TP_BASELINE_ORIGINAL_LOG" \
+    "$TP_BASELINE_ORIGINAL_STRATEGY" "$TP_BASELINE_ORIGINAL_UNIT_ONLY_RC" "$TP_BASELINE_ORIGINAL_FULL_RC" \
+    "$TP_BASELINE_ORIGINAL_FAILURE_CLASS" "$TP_BASELINE_ORIGINAL_FAILURE_TYPE" \
     "$TP_BASELINE_GENERATED_STATUS" "$TP_BASELINE_GENERATED_RC" "$TP_BASELINE_GENERATED_LOG" \
+    "$TP_BASELINE_GENERATED_STRATEGY" "$TP_BASELINE_GENERATED_UNIT_ONLY_RC" "$TP_BASELINE_GENERATED_FULL_RC" \
+    "$TP_BASELINE_GENERATED_FAILURE_CLASS" "$TP_BASELINE_GENERATED_FAILURE_TYPE" \
     "$TP_PORTED_ORIGINAL_TESTS_STATUS" "$TP_PORTED_ORIGINAL_TESTS_EXIT_CODE" "$TP_PORTED_ORIGINAL_TESTS_LOG" \
     "$TP_ITERATIONS_USED" "$TP_ADAPTER_NONZERO_RUNS" \
     "$TP_ADAPTER_EVENTS_LOG" "$TP_ADAPTER_STDERR_LOG" "$TP_ADAPTER_LAST_MESSAGE" \
@@ -38,7 +42,11 @@ import xml.etree.ElementTree as ET
   write_scope_ignored_prefixes_csv,
   evidence_json_path, removed_tests_manifest_rel, retention_policy_mode, retention_documented_removals_required,
   baseline_orig_status, baseline_orig_rc, baseline_orig_log,
+  baseline_orig_strategy, baseline_orig_unit_rc, baseline_orig_full_rc,
+  baseline_orig_failure_class, baseline_orig_failure_type,
   baseline_gen_status, baseline_gen_rc, baseline_gen_log,
+  baseline_gen_strategy, baseline_gen_unit_rc, baseline_gen_full_rc,
+  baseline_gen_failure_class, baseline_gen_failure_type,
   ported_status, ported_rc, ported_log,
   iterations_used, adapter_nonzero_runs,
   adapter_events_log, adapter_stderr_log, adapter_last_message,
@@ -227,11 +235,21 @@ obj = {
         "status": baseline_orig_status,
         "exit_code": to_int(baseline_orig_rc, -1),
         "log_path": baseline_orig_log,
+        "strategy": baseline_orig_strategy,
+        "unit_only_exit_code": to_int(baseline_orig_unit_rc, -1),
+        "full_fallback_exit_code": to_int(baseline_orig_full_rc, -1),
+        "failure_class": baseline_orig_failure_class,
+        "failure_type": baseline_orig_failure_type,
     },
     "baseline_generated_tests": {
         "status": baseline_gen_status,
         "exit_code": to_int(baseline_gen_rc, -1),
         "log_path": baseline_gen_log,
+        "strategy": baseline_gen_strategy,
+        "unit_only_exit_code": to_int(baseline_gen_unit_rc, -1),
+        "full_fallback_exit_code": to_int(baseline_gen_full_rc, -1),
+        "failure_class": baseline_gen_failure_class,
+        "failure_type": baseline_gen_failure_type,
     },
     "ported_original_tests": {
         "status": ported_status,
@@ -313,8 +331,8 @@ summary_lines = [
     f"- Observed failing test cases (from JUnit reports): **{obj['behavioral_evidence']['failing_case_count']}**",
     f"- Iterations used: **{obj['ported_original_tests']['iterations_used']}**",
     f"- Adapter non-zero runs: **{obj['ported_original_tests']['adapter_nonzero_runs']}**",
-    f"- Baseline original tests: **{obj['baseline_original_tests']['status']}** (exit {obj['baseline_original_tests']['exit_code']}) log: {obj['baseline_original_tests']['log_path'] or '<none>'}",
-    f"- Baseline generated tests: **{obj['baseline_generated_tests']['status']}** (exit {obj['baseline_generated_tests']['exit_code']}) log: {obj['baseline_generated_tests']['log_path'] or '<none>'}",
+    f"- Baseline original tests: **{obj['baseline_original_tests']['status']}** (exit {obj['baseline_original_tests']['exit_code']}, strategy {obj['baseline_original_tests'].get('strategy') or '<none>'}, failure type {obj['baseline_original_tests'].get('failure_type') or '<none>'}) log: {obj['baseline_original_tests']['log_path'] or '<none>'}",
+    f"- Baseline generated tests: **{obj['baseline_generated_tests']['status']}** (exit {obj['baseline_generated_tests']['exit_code']}, strategy {obj['baseline_generated_tests'].get('strategy') or '<none>'}, failure type {obj['baseline_generated_tests'].get('failure_type') or '<none>'}) log: {obj['baseline_generated_tests']['log_path'] or '<none>'}",
     f"- Ported original tests: **{obj['ported_original_tests']['status']}** (exit {obj['ported_original_tests']['exit_code']}) log: {obj['ported_original_tests']['log_path'] or '<none>'}",
     "- Detailed failing cases are in `test_port.json` under `behavioral_evidence.failing_cases`.",
 ]

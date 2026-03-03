@@ -37,7 +37,11 @@ tp_run_tests() {
 
   set +e
   case "$runner" in
-    maven) (cd "$repo" && mvn -q test) >"$log_file" 2>&1 ;;
+    maven)
+      local maven_local_repo="${TP_MAVEN_LOCAL_REPO:-${repo}/.m2/repository}"
+      mkdir -p "$maven_local_repo"
+      (cd "$repo" && mvn -q "-Dmaven.repo.local=${maven_local_repo}" test) >"$log_file" 2>&1
+      ;;
     gradle-wrapper) (cd "$repo" && ./gradlew test --no-daemon) >"$log_file" 2>&1 ;;
     gradle) (cd "$repo" && gradle test --no-daemon) >"$log_file" 2>&1 ;;
     *)

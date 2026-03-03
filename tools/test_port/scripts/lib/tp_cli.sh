@@ -20,8 +20,45 @@ Optional:
   --max-iter N                Adaptation iterations after initial pass (default: 5)
   --strict                    Non-zero exit if status is not passed
   --write-scope-policy NAME   Only "tests-only" is supported (default: tests-only)
+  --write-scope-ignore-prefix PATH
+                              Ignore repo-relative path prefix from write-scope monitoring.
+                              Repeatable. Combined with TP_WRITE_SCOPE_IGNORE_PREFIXES.
   -h, --help                  Show this help
 EOF
+}
+
+tp_resolve_write_scope_ignored_prefixes() {
+  local -a builtins=(
+    "./completion/proof/logs/"
+    "./.mvn_repo/"
+  )
+  local -a all_raw=("${builtins[@]}")
+  local -a env_raw=()
+  local raw_env="${TP_WRITE_SCOPE_IGNORE_PREFIXES:-}"
+  if [[ -n "$raw_env" ]]; then
+    if [[ "$raw_env" == :* || "$raw_env" == *: || "$raw_env" == *"::"* ]]; then
+      tp_fail "TP_WRITE_SCOPE_IGNORE_PREFIXES contains empty entries"
+    fi
+    local IFS=':'
+    read -r -a env_raw <<< "$raw_env"
+    all_raw+=("${env_raw[@]}")
+  fi
+  all_raw+=("${TP_WRITE_SCOPE_IGNORE_PREFIXES_CLI[@]+"${TP_WRITE_SCOPE_IGNORE_PREFIXES_CLI[@]}"}")
+
+  TP_WRITE_SCOPE_IGNORED_PREFIXES=()
+  local seen='|'
+  local raw
+  local normalized
+  for raw in "${all_raw[@]}"; do
+    normalized="$(tp_normalize_repo_prefix "$raw")" || tp_fail "invalid --write-scope-ignore-prefix value: '$raw'"
+    case "$seen" in
+      *"|${normalized}|"*) continue ;;
+    esac
+    seen="${seen}${normalized}|"
+    TP_WRITE_SCOPE_IGNORED_PREFIXES+=("$normalized")
+  done
+
+  TP_WRITE_SCOPE_IGNORED_PREFIXES_CSV="$(IFS=:; printf '%s' "${TP_WRITE_SCOPE_IGNORED_PREFIXES[*]}")"
 }
 
 tp_parse_args() {
@@ -35,6 +72,7 @@ tp_parse_args() {
   TP_MAX_ITER="5"
   TP_STRICT=false
   TP_WRITE_SCOPE_POLICY="tests-only"
+  TP_WRITE_SCOPE_IGNORE_PREFIXES_CLI=()
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -47,6 +85,10 @@ tp_parse_args() {
       --adapter) TP_ADAPTER="${2:-}"; shift 2 ;;
       --max-iter) TP_MAX_ITER="${2:-}"; shift 2 ;;
       --write-scope-policy) TP_WRITE_SCOPE_POLICY="${2:-}"; shift 2 ;;
+      --write-scope-ignore-prefix)
+        TP_WRITE_SCOPE_IGNORE_PREFIXES_CLI+=("${2:-}")
+        shift 2
+        ;;
       --strict) TP_STRICT=true; shift ;;
       -h|--help) tp_print_help; exit 0 ;;
       *)
@@ -61,6 +103,7 @@ tp_validate_and_finalize_args() {
   [[ -n "$TP_ORIGINAL_REPO" ]] || tp_fail "--original-repo is required"
   [[ "$TP_MAX_ITER" =~ ^[0-9]+$ ]] || tp_fail "--max-iter must be non-negative integer"
   [[ "$TP_WRITE_SCOPE_POLICY" == "tests-only" ]] || tp_fail "--write-scope-policy must be tests-only"
+  tp_resolve_write_scope_ignored_prefixes
 
   TP_GENERATED_REPO="$(tp_abs_path "$TP_GENERATED_REPO")"
   TP_ORIGINAL_REPO="$(tp_abs_path "$TP_ORIGINAL_REPO")"
@@ -96,6 +139,7 @@ tp_validate_and_finalize_args() {
   TP_OUTPUT_DIR="${TP_RUN_DIR}/outputs"
   TP_SUMMARY_DIR="${TP_WORKSPACE_DIR}/summaries"
   TP_GUARDS_DIR="${TP_WORKSPACE_DIR}/write-guards"
+  TP_MAVEN_LOCAL_REPO="${TP_WORKSPACE_DIR}/.m2/repository"
 
   TP_ORIGINAL_BASELINE_REPO="${TP_WORKSPACE_DIR}/original-baseline-repo"
   TP_GENERATED_BASELINE_REPO="${TP_WORKSPACE_DIR}/generated-baseline-repo"

@@ -65,3 +65,28 @@ tp_sanitize_id_component() {
   [[ -n "$raw" ]] || raw="repo"
   printf '%s\n' "$raw"
 }
+
+tp_normalize_repo_prefix() {
+  local raw="$1"
+  [[ -n "$raw" ]] || return 1
+  [[ "$raw" != /* ]] || return 1
+
+  while [[ "$raw" == ./* ]]; do
+    raw="${raw#./}"
+  done
+
+  raw="$(printf '%s' "$raw" | sed -E 's#/+#/#g')"
+
+  while [[ "$raw" == */ ]]; do
+    raw="${raw%/}"
+  done
+
+  [[ -n "$raw" ]] || return 1
+  case "$raw" in
+    .|..|../*|*/..|*"/../"*|./*|*/.|*"/./"*)
+      return 1
+      ;;
+  esac
+
+  printf './%s/\n' "$raw"
+}

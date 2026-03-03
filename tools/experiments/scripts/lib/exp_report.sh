@@ -14,8 +14,10 @@ exp_write_reports() {
     "$ANDVARI_RUN_DIR" "$ANDVARI_EXIT_CODE" "$ANDVARI_RUN_REPORT" \
     "$SCAN_ORIGINAL_MODE" "$ORIGINAL_SCAN_STATUS" "$ORIGINAL_SCAN_REUSED" "$ORIGINAL_SCAN_KEY" "$ORIGINAL_SCAN_DISPLAY_NAME" \
     "$ORIGINAL_SCAN_SONAR_URL" "$ORIGINAL_SCAN_QUALITY_GATE" "$ORIGINAL_SCAN_MEASURES_JSON" "$ORIGINAL_SCAN_STATE_LOG_DIR" \
+    "$ORIGINAL_SCAN_SONAR_TASK_ID" "$ORIGINAL_SCAN_CE_TASK_STATUS" "$ORIGINAL_SCAN_DATA_STATUS" \
     "$GENERATED_SCAN_STATUS" "$GENERATED_SONAR_KEY" "$GENERATED_DISPLAY_NAME" \
     "$GENERATED_SCAN_SONAR_URL" "$GENERATED_SCAN_QUALITY_GATE" "$GENERATED_SCAN_MEASURES_JSON" "$GENERATED_SCAN_STATE_LOG_DIR" \
+    "$GENERATED_SCAN_SONAR_TASK_ID" "$GENERATED_SCAN_CE_TASK_STATUS" "$GENERATED_SCAN_DATA_STATUS" \
     "$TEST_PORT_MODE" "$STRICT_TEST_PORT" "$TEST_PORT_STATUS" "$TEST_PORT_REASON" "$TEST_PORT_FAILURE_CLASS" "$TEST_PORT_ADAPTER_PREREQS_OK" \
     "$TEST_PORT_NEW_REPO_UNCHANGED" "$TEST_PORT_WRITE_SCOPE_POLICY" "$TEST_PORT_WRITE_SCOPE_VIOLATION_COUNT" \
     "$TEST_PORT_WRITE_SCOPE_FAILURE_PATHS_FILE" "$TEST_PORT_WRITE_SCOPE_DIFF_FILE" \
@@ -36,8 +38,10 @@ import xml.etree.ElementTree as ET
  andvari_dir, andvari_exit, andvari_report,
  scan_orig_mode, scan_orig_status, scan_orig_reused, scan_orig_key, scan_orig_name,
  scan_orig_url, scan_orig_qg, scan_orig_measures_json, scan_orig_state_log_dir,
+ scan_orig_task_id, scan_orig_ce_status, scan_orig_data_status,
  scan_gen_status, scan_gen_key, scan_gen_name,
  scan_gen_url, scan_gen_qg, scan_gen_measures_json, scan_gen_state_log_dir,
+ scan_gen_task_id, scan_gen_ce_status, scan_gen_data_status,
  test_port_mode, strict_tp, test_port_status, test_port_reason, test_port_failure_class, test_port_adapter_prereqs_ok,
  new_repo_unchanged, write_scope_policy, write_scope_violations_count,
  write_scope_fail_paths_file, write_scope_diff_file,
@@ -335,6 +339,9 @@ obj = {
       "status": scan_orig_status,
       "sonar_url": scan_orig_url,
       "quality_gate": scan_orig_qg,
+      "sonar_task_id": scan_orig_task_id,
+      "ce_task_status": scan_orig_ce_status,
+      "scan_data_status": scan_orig_data_status,
       "measures": parse_json_obj(scan_orig_measures_json),
       "state_log_dir": scan_orig_state_log_dir
     },
@@ -344,6 +351,9 @@ obj = {
       "status": scan_gen_status,
       "sonar_url": scan_gen_url,
       "quality_gate": scan_gen_qg,
+      "sonar_task_id": scan_gen_task_id,
+      "ce_task_status": scan_gen_ce_status,
+      "scan_data_status": scan_gen_data_status,
       "measures": parse_json_obj(scan_gen_measures_json),
       "state_log_dir": scan_gen_state_log_dir
     }
@@ -476,9 +486,15 @@ PY
 - Original key: ${ORIGINAL_SCAN_KEY} (status: **${ORIGINAL_SCAN_STATUS}**, reused: **${ORIGINAL_SCAN_REUSED}**)
 - Original Sonar URL: ${ORIGINAL_SCAN_SONAR_URL:-<none>}
 - Original quality gate: ${ORIGINAL_SCAN_QUALITY_GATE:-<unknown>}
+- Original scan data status: **${ORIGINAL_SCAN_DATA_STATUS:-unavailable}**
+- Original Sonar task ID: ${ORIGINAL_SCAN_SONAR_TASK_ID:-<none>}
+- Original CE task status: ${ORIGINAL_SCAN_CE_TASK_STATUS:-<none>}
 - Generated key: ${GENERATED_SONAR_KEY} (status: **${GENERATED_SCAN_STATUS}**)
 - Generated Sonar URL: ${GENERATED_SCAN_SONAR_URL:-<none>}
 - Generated quality gate: ${GENERATED_SCAN_QUALITY_GATE:-<unknown>}
+- Generated scan data status: **${GENERATED_SCAN_DATA_STATUS:-unavailable}**
+- Generated Sonar task ID: ${GENERATED_SCAN_SONAR_TASK_ID:-<none>}
+- Generated CE task status: ${GENERATED_SCAN_CE_TASK_STATUS:-<none>}
 
 ## Test-port
 - Enabled: **${TEST_PORT_MODE}**

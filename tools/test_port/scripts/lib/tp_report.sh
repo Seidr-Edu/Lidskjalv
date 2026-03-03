@@ -15,6 +15,7 @@ tp_write_reports() {
     "$TP_BEHAVIORAL_VERDICT" "$TP_BEHAVIORAL_VERDICT_REASON" \
     "$TP_GENERATED_REPO_UNCHANGED" "$TP_GENERATED_BEFORE_HASH_PATH" "$TP_GENERATED_AFTER_HASH_PATH" \
     "$TP_WRITE_SCOPE_VIOLATION_COUNT" "$TP_WRITE_SCOPE_FAILURE_PATHS_FILE" "$TP_WRITE_SCOPE_DIFF_FILE" "$TP_WRITE_SCOPE_CHANGE_SET_PATH" \
+    "$TP_WRITE_SCOPE_IGNORED_PREFIXES_CSV" \
     "$TP_BASELINE_ORIGINAL_STATUS" "$TP_BASELINE_ORIGINAL_RC" "$TP_BASELINE_ORIGINAL_LOG" \
     "$TP_BASELINE_GENERATED_STATUS" "$TP_BASELINE_GENERATED_RC" "$TP_BASELINE_GENERATED_LOG" \
     "$TP_PORTED_ORIGINAL_TESTS_STATUS" "$TP_PORTED_ORIGINAL_TESTS_EXIT_CODE" "$TP_PORTED_ORIGINAL_TESTS_LOG" \
@@ -33,6 +34,7 @@ import xml.etree.ElementTree as ET
   behavioral_verdict, behavioral_verdict_reason,
   generated_unchanged, generated_before_hash_path, generated_after_hash_path,
   write_scope_violation_count, write_scope_fail_paths, write_scope_diff_path, write_scope_change_set_path,
+  write_scope_ignored_prefixes_csv,
   baseline_orig_status, baseline_orig_rc, baseline_orig_log,
   baseline_gen_status, baseline_gen_rc, baseline_gen_log,
   ported_status, ported_rc, ported_log,
@@ -85,6 +87,11 @@ def read_change_set_stats(path):
                 stats[kind] += 1
             stats["total"] += 1
     return stats
+
+def parse_prefixes(csv_value):
+    if not csv_value:
+        return []
+    return [part for part in csv_value.split(":") if part]
 
 def is_allowed_test_rel(rel):
     if rel.startswith("./src/test/") or rel.startswith("./test/") or rel.startswith("./tests/"):
@@ -227,6 +234,7 @@ obj = {
         "violations_log_path": write_scope_fail_paths,
         "diff_path": write_scope_diff_path,
         "change_set_path": write_scope_change_set_path,
+        "ignored_prefixes": parse_prefixes(write_scope_ignored_prefixes_csv),
     },
     "baseline_original_tests": {
         "status": baseline_orig_status,
@@ -294,6 +302,7 @@ summary_lines = [
     f"- Adapter prereqs OK: **{str(obj.get('adapter_prereqs_ok', False)).lower()}**",
     f"- Generated repo unchanged: **{str(obj['immutability']['generated_repo_unchanged']).lower()}**",
     f"- Write-scope policy: **{obj['write_scope']['policy']}**",
+    f"- Write-scope ignored prefixes: **{', '.join(obj['write_scope']['ignored_prefixes']) if obj['write_scope']['ignored_prefixes'] else '<none>'}**",
     f"- Write-scope violations: **{obj['write_scope']['violation_count']}**",
     f"- Suite changes (A/M/D/total): **{obj['suite_changes']['added']}/{obj['suite_changes']['modified']}/{obj['suite_changes']['deleted']}/{obj['suite_changes']['total']}**",
     f"- Test files (original snapshot -> final ported): **{obj['suite_shape']['original_snapshot_file_count']} -> {obj['suite_shape']['final_ported_test_file_count']}**",

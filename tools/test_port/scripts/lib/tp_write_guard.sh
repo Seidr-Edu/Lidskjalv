@@ -18,6 +18,17 @@ tp_is_allowed_test_path() {
   esac
 }
 
+tp_is_ignored_write_scope_path() {
+  local rel="$1"
+  local prefix
+  for prefix in "${TP_WRITE_SCOPE_IGNORED_PREFIXES[@]+"${TP_WRITE_SCOPE_IGNORED_PREFIXES[@]}"}"; do
+    case "$rel" in
+      "$prefix"*) return 0 ;;
+    esac
+  done
+  return 1
+}
+
 tp_write_repo_manifest() {
   local repo="$1"
   local manifest_file="$2"
@@ -25,6 +36,9 @@ tp_write_repo_manifest() {
   : > "$manifest_file"
   while IFS= read -r rel; do
     [[ -n "$rel" ]] || continue
+    if tp_is_ignored_write_scope_path "$rel"; then
+      continue
+    fi
     local abs="${repo}/${rel#./}"
     printf '%s\t%s\n' "$rel" "$(tp_sha256_file "$abs")" >> "$manifest_file"
   done < <(
@@ -69,6 +83,9 @@ tp_check_write_scope() {
   local violations=0
   while IFS=$'\t' read -r rel before_hash after_hash; do
     [[ -n "$rel" ]] || continue
+    if tp_is_ignored_write_scope_path "$rel"; then
+      continue
+    fi
 
     local kind=""
     if [[ "$before_hash" == "__MISSING__" ]]; then

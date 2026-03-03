@@ -42,6 +42,21 @@ jobs:
 
           shellcheck -x -e SC1090,SC1091 "${files[@]}"
 
+  test-port-tests:
+    name: Test-port hermetic tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate test-port test script syntax
+        run: |
+          git ls-files -z 'tools/test_port/tests/*.sh' 'tools/test_port/tests/lib/*.sh' | xargs -0 -n1 bash -n
+
+      - name: Run test-port hermetic suite
+        run: |
+          bash tools/test_port/tests/run.sh
+
   entrypoint-smoke:
     name: Entrypoint smoke (--help and wrapper routing)
     runs-on: ubuntu-latest

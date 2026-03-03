@@ -211,6 +211,58 @@ MVN
   tpt_assert_file_contains "$log" "baseline full test fallback" "combined baseline log should include fallback section"
 }
 
+case_maven_baseline_fallback_passes_after_unit_only_failure() {
+  local tmp repo fake_bin log args_file call_count_file
+  tmp="$(tpt_mktemp_dir)"
+  repo="${tmp}/repo"
+  fake_bin="${tmp}/bin"
+  log="${tmp}/baseline.log"
+  args_file="${tmp}/mvn-args.txt"
+  call_count_file="${tmp}/mvn-call-count.txt"
+
+  mkdir -p "$repo" "$fake_bin"
+  echo "<project/>" > "${repo}/pom.xml"
+
+  cat > "${fake_bin}/mvn" <<'MVN'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >> "$TPT_MVN_ARGS_FILE"
+count=0
+if [[ -f "$TPT_MVN_CALL_COUNT_FILE" ]]; then
+  count="$(cat "$TPT_MVN_CALL_COUNT_FILE")"
+fi
+count=$((count + 1))
+printf '%s\n' "$count" > "$TPT_MVN_CALL_COUNT_FILE"
+if [[ "$*" == *"-DskipITs"* ]]; then
+  echo "Connection refused"
+  exit 1
+fi
+mkdir -p target/surefire-reports
+cat > target/surefire-reports/TEST-fake.xml <<'XML'
+<testsuite tests="1" failures="0" errors="0"><testcase classname="fake" name="ok"/></testsuite>
+XML
+exit 0
+MVN
+  chmod +x "${fake_bin}/mvn"
+
+  export TPT_MVN_ARGS_FILE="$args_file"
+  export TPT_MVN_CALL_COUNT_FILE="$call_count_file"
+  PATH="${fake_bin}:$PATH"
+  hash -r
+
+  tp_run_baseline_tests "$repo" "$log"
+
+  tpt_assert_eq "maven-unit-first-fallback-full" "$TP_BASELINE_LAST_STRATEGY" "baseline maven strategy should remain unit-first fallback"
+  tpt_assert_eq "pass" "$TP_BASELINE_LAST_STATUS" "full fallback success should mark baseline pass"
+  tpt_assert_eq "1" "$TP_BASELINE_LAST_UNIT_ONLY_RC" "unit-only baseline should fail"
+  tpt_assert_eq "0" "$TP_BASELINE_LAST_FULL_RC" "full fallback should pass"
+  tpt_assert_eq "" "$TP_BASELINE_LAST_FAILURE_CLASS" "pass result should not carry failure class"
+  tpt_assert_eq "" "$TP_BASELINE_LAST_FAILURE_TYPE" "pass result should not carry failure type"
+  tpt_assert_eq "2" "$(cat "$call_count_file")" "maven should run both unit-only and full fallback phases"
+  tpt_assert_file_contains "$log" "baseline unit-only run" "combined baseline log should include unit-only section"
+  tpt_assert_file_contains "$log" "baseline full test fallback" "combined baseline log should include fallback section"
+}
+
 case_classifier_avoids_generic_error_as_compatibility() {
   local tmp log
   tmp="$(tpt_mktemp_dir)"
@@ -228,6 +280,7 @@ tpt_run_case "gradle invocation unchanged" case_gradle_invocation_unchanged
 tpt_run_case "unknown runner returns skip code" case_unknown_runner_returns_skipped_code
 tpt_run_case "maven baseline unit-first skips full fallback on success" case_maven_baseline_uses_unit_first_and_skips_full_on_success
 tpt_run_case "maven baseline fallback classifies environmental noise" case_maven_baseline_falls_back_and_classifies_environmental_noise
+tpt_run_case "maven baseline fallback recovers from unit-only failure" case_maven_baseline_fallback_passes_after_unit_only_failure
 tpt_run_case "classifier avoids generic error compatibility overfit" case_classifier_avoids_generic_error_as_compatibility
 
 tpt_finish_suite

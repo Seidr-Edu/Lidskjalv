@@ -194,7 +194,8 @@ tp_run_baseline_tests() {
 
       if [[ "$full_rc" -eq 0 ]]; then
         TP_BASELINE_LAST_STATUS="pass"
-        TP_BASELINE_LAST_FAILURE_TYPE="unit-only-invocation-failure"
+        TP_BASELINE_LAST_FAILURE_CLASS=""
+        TP_BASELINE_LAST_FAILURE_TYPE=""
         $had_errexit && set -e || set +e
         return 0
       fi

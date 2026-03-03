@@ -7,6 +7,10 @@ Hard constraints:
 - Do not modify production code, build files, wrappers, scripts, docs, or config outside tests.
 - Do not weaken assertions or rewrite expected behavior solely to make the suite pass.
 - Do not delete/disable failing tests just to remove evidence of behavioral differences.
+- Preserve as many original tests as possible; removal is allowed only for truly unportable tests or missing target behavior.
+- If any original test file is removed, add/update `./completion/proof/logs/test-port-removed-tests.tsv` with:
+  `<repo-relative-test-path>\t<category>\t<reason>`
+- Allowed manifest categories: `unportable`, `missing-target-feature`.
 
 Use this failure summary:
 ${FAILURE_SUMMARY}
@@ -15,7 +19,8 @@ Goal:
 - Resolve compatibility-related failures while preserving original behavioral intent.
 - If failures indicate real behavioral differences, keep them as evidence and explain them.
 - If failures are assertion/expected-value mismatches after compatibility fixes, do not edit assertions to force green; preserve them and report them.
+- Recover removed original tests whenever possible; do not keep tests deleted if they can be made portable.
 - In your final response, summarize:
   1) compatibility changes made,
   2) remaining failing tests that indicate behavioral differences,
-  3) tests that remain unportable and why.
+  3) tests that remain unportable and why (must match the removal manifest).

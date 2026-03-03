@@ -16,6 +16,7 @@ tp_write_reports() {
     "$TP_GENERATED_REPO_UNCHANGED" "$TP_GENERATED_BEFORE_HASH_PATH" "$TP_GENERATED_AFTER_HASH_PATH" \
     "$TP_WRITE_SCOPE_VIOLATION_COUNT" "$TP_WRITE_SCOPE_FAILURE_PATHS_FILE" "$TP_WRITE_SCOPE_DIFF_FILE" "$TP_WRITE_SCOPE_CHANGE_SET_PATH" \
     "$TP_WRITE_SCOPE_IGNORED_PREFIXES_CSV" \
+    "$TP_EVIDENCE_JSON_PATH" "$TP_REMOVED_TESTS_MANIFEST_REL" "$TP_RETENTION_POLICY_MODE" "$TP_RETENTION_DOCUMENTED_REMOVALS_REQUIRED" \
     "$TP_BASELINE_ORIGINAL_STATUS" "$TP_BASELINE_ORIGINAL_RC" "$TP_BASELINE_ORIGINAL_LOG" \
     "$TP_BASELINE_GENERATED_STATUS" "$TP_BASELINE_GENERATED_RC" "$TP_BASELINE_GENERATED_LOG" \
     "$TP_PORTED_ORIGINAL_TESTS_STATUS" "$TP_PORTED_ORIGINAL_TESTS_EXIT_CODE" "$TP_PORTED_ORIGINAL_TESTS_LOG" \
@@ -35,6 +36,7 @@ import xml.etree.ElementTree as ET
   generated_unchanged, generated_before_hash_path, generated_after_hash_path,
   write_scope_violation_count, write_scope_fail_paths, write_scope_diff_path, write_scope_change_set_path,
   write_scope_ignored_prefixes_csv,
+  evidence_json_path, removed_tests_manifest_rel, retention_policy_mode, retention_documented_removals_required,
   baseline_orig_status, baseline_orig_rc, baseline_orig_log,
   baseline_gen_status, baseline_gen_rc, baseline_gen_log,
   ported_status, ported_rc, ported_log,
@@ -55,6 +57,16 @@ def to_float(v):
         return float(v)
     except Exception:
         return None
+
+def load_evidence_json(path):
+    if not path or not os.path.exists(path):
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            obj = json.load(f)
+    except Exception:
+        return {}
+    return obj if isinstance(obj, dict) else {}
 
 def read_violation_entries(path):
     out = []
@@ -92,40 +104,6 @@ def parse_prefixes(csv_value):
     if not csv_value:
         return []
     return [part for part in csv_value.split(":") if part]
-
-def is_allowed_test_rel(rel):
-    if rel.startswith("./src/test/") or rel.startswith("./test/") or rel.startswith("./tests/"):
-        return True
-    if rel.startswith("./src/"):
-        parts = rel.split("/", 4)
-        return len(parts) > 2 and "Test" in parts[2]
-    return False
-
-def count_allowed_test_files(repo_dir):
-    if not repo_dir or not os.path.isdir(repo_dir):
-        return 0
-    excluded = {".git", "target", "build", ".gradle", ".scannerwork", "out"}
-    count = 0
-    for root, dirs, files in os.walk(repo_dir):
-        rel_root = os.path.relpath(root, repo_dir)
-        parts = [] if rel_root == "." else rel_root.split(os.sep)
-        dirs[:] = [d for d in dirs if d not in excluded]
-        if any(p in excluded for p in parts):
-            continue
-        for name in files:
-            rel = "./" + (name if rel_root == "." else os.path.join(rel_root, name))
-            rel = rel.replace(os.sep, "/")
-            if is_allowed_test_rel(rel):
-                count += 1
-    return count
-
-def count_all_files(path):
-    if not path or not os.path.isdir(path):
-        return 0
-    total = 0
-    for _, _, files in os.walk(path):
-        total += len(files)
-    return total
 
 def collect_junit_failing_cases(repo_dir, max_cases=200):
     out = {
@@ -195,12 +173,21 @@ def collect_junit_failing_cases(repo_dir, max_cases=200):
     return out
 
 suite_changes = read_change_set_stats(write_scope_change_set_path)
-orig_snapshot_file_count = count_all_files(original_tests_snapshot_dir)
-final_ported_test_file_count = count_allowed_test_files(ported_repo_dir)
-retention_ratio = None
-if orig_snapshot_file_count > 0:
-    retention_ratio = final_ported_test_file_count / orig_snapshot_file_count
+evidence_data = load_evidence_json(evidence_json_path)
+orig_snapshot_file_count = to_int(evidence_data.get("original_snapshot_file_count"), 0)
+final_ported_test_file_count = to_int(evidence_data.get("final_ported_test_file_count"), 0)
+retained_original_test_file_count = to_int(evidence_data.get("retained_original_test_file_count"), 0)
+removed_original_test_file_count = to_int(evidence_data.get("removed_original_test_file_count"), 0)
+retention_ratio = to_float(evidence_data.get("retention_ratio"))
+removed_original_tests = evidence_data.get("removed_original_tests")
+if not isinstance(removed_original_tests, list):
+    removed_original_tests = []
+undocumented_removed_test_count = to_int(evidence_data.get("undocumented_removed_test_count"), 0)
 behavioral_evidence = collect_junit_failing_cases(ported_repo_dir)
+if "junit_report_count" in evidence_data:
+    behavioral_evidence["junit_report_count"] = to_int(evidence_data.get("junit_report_count"), behavioral_evidence.get("junit_report_count", 0))
+if "junit_report_files" in evidence_data and isinstance(evidence_data.get("junit_report_files"), list):
+    behavioral_evidence["junit_report_files"] = evidence_data.get("junit_report_files")
 
 obj = {
     "version": 1,
@@ -265,7 +252,17 @@ obj = {
     "suite_shape": {
         "original_snapshot_file_count": orig_snapshot_file_count,
         "final_ported_test_file_count": final_ported_test_file_count,
+        "retained_original_test_file_count": retained_original_test_file_count,
+        "removed_original_test_file_count": removed_original_test_file_count,
         "retention_ratio": retention_ratio,
+    },
+    "removed_original_tests": removed_original_tests,
+    "retention_policy": {
+        "mode": retention_policy_mode,
+        "documented_removals_required": retention_documented_removals_required == "true",
+        "hard_cap_ratio": None,
+        "manifest_rel_path": removed_tests_manifest_rel,
+        "undocumented_removed_test_count": undocumented_removed_test_count,
     },
     "adapter": {
         "events_log": adapter_events_log,
@@ -304,8 +301,15 @@ summary_lines = [
     f"- Write-scope policy: **{obj['write_scope']['policy']}**",
     f"- Write-scope ignored prefixes: **{', '.join(obj['write_scope']['ignored_prefixes']) if obj['write_scope']['ignored_prefixes'] else '<none>'}**",
     f"- Write-scope violations: **{obj['write_scope']['violation_count']}**",
+    f"- Retention policy: **{obj['retention_policy']['mode']}**",
+    f"- Documented removals required: **{str(obj['retention_policy']['documented_removals_required']).lower()}**",
+    f"- Removal manifest: **{obj['retention_policy']['manifest_rel_path'] or '<none>'}**",
+    f"- Undocumented removed tests: **{obj['retention_policy']['undocumented_removed_test_count']}**",
     f"- Suite changes (A/M/D/total): **{obj['suite_changes']['added']}/{obj['suite_changes']['modified']}/{obj['suite_changes']['deleted']}/{obj['suite_changes']['total']}**",
     f"- Test files (original snapshot -> final ported): **{obj['suite_shape']['original_snapshot_file_count']} -> {obj['suite_shape']['final_ported_test_file_count']}**",
+    f"- Retained original tests: **{obj['suite_shape']['retained_original_test_file_count']}**",
+    f"- Removed original tests: **{obj['suite_shape']['removed_original_test_file_count']}**",
+    f"- Retention ratio: **{obj['suite_shape']['retention_ratio'] if obj['suite_shape']['retention_ratio'] is not None else '<none>'}**",
     f"- Observed failing test cases (from JUnit reports): **{obj['behavioral_evidence']['failing_case_count']}**",
     f"- Iterations used: **{obj['ported_original_tests']['iterations_used']}**",
     f"- Adapter non-zero runs: **{obj['ported_original_tests']['adapter_nonzero_runs']}**",

@@ -18,6 +18,21 @@ setup_fake_tools() {
 #!/usr/bin/env bash
 set -euo pipefail
 
+increment_call_counter() {
+  local counter_file="${TPT_CODEX_CALL_COUNT_FILE:-}"
+  if [[ -z "$counter_file" ]]; then
+    echo 1
+    return 0
+  fi
+  local current=0
+  if [[ -f "$counter_file" ]]; then
+    current="$(cat "$counter_file" 2>/dev/null || echo 0)"
+  fi
+  current=$((current + 1))
+  printf '%s\n' "$current" > "$counter_file"
+  printf '%s\n' "$current"
+}
+
 subcommand="${1:-}"
 case "$subcommand" in
   login)
@@ -50,6 +65,8 @@ case "$subcommand" in
       printf 'fake adapter message\n' > "$output_last"
     fi
 
+    call_no="$(increment_call_counter)"
+
     case "${TPT_CODEX_SCENARIO:-}" in
       ignored-writes)
         mkdir -p completion/proof/logs .mvn_repo/runtime src/test/java
@@ -60,6 +77,24 @@ case "$subcommand" in
       prod-write)
         mkdir -p src/main/java
         printf '// disallowed\n' >> src/main/java/Prod.java
+        ;;
+      undocumented-removal)
+        rm -f src/test/java/OriginalFixtureTest.java
+        ;;
+      maximize-retention)
+        mkdir -p completion/proof/logs src/test/java
+        if [[ "$call_no" -eq 1 ]]; then
+          rm -f src/test/java/OriginalFixtureTest.java
+          printf './src/test/java/OriginalFixtureTest.java\tunportable\ttemporary compatibility mismatch\n' > completion/proof/logs/test-port-removed-tests.tsv
+        else
+          cat > src/test/java/OriginalFixtureTest.java <<'JAVA'
+class OriginalFixtureTest {}
+JAVA
+          : > completion/proof/logs/test-port-removed-tests.tsv
+        fi
+        ;;
+      behavioral-evidence)
+        :
         ;;
       *)
         ;;
@@ -92,9 +127,30 @@ fi
 
 mkdir -p "$repo_local" target/surefire-reports
 printf 'downloaded\n' > "$repo_local/dependency.txt"
-cat > target/surefire-reports/TEST-fake.xml <<'XML'
+case "${TPT_CODEX_SCENARIO:-}" in
+  zero-junit)
+    printf 'BUILD SUCCESS\n'
+    exit 0
+    ;;
+  behavioral-evidence)
+    cat > target/surefire-reports/TEST-fake.xml <<'XML'
+<testsuite tests="1" failures="1" errors="0">
+  <testcase classname="fake.behavior" name="detectDifference">
+    <failure message="expected:&lt;1&gt; but was:&lt;2&gt;">AssertionFailedError</failure>
+  </testcase>
+</testsuite>
+XML
+    printf 'COMPILATION ERROR\n'
+    printf 'AssertionFailedError: expected:<1> but was:<2>\n'
+    exit 1
+    ;;
+  *)
+    cat > target/surefire-reports/TEST-fake.xml <<'XML'
 <testsuite tests="1" failures="0" errors="0"><testcase classname="fake" name="ok"/></testsuite>
 XML
+    exit 0
+    ;;
+esac
 MVN
 
   chmod +x "${fake_bin}/codex" "${fake_bin}/mvn"
@@ -118,6 +174,7 @@ prepare_fixture_repos() {
 run_test_port_case() {
   local scenario="$1"
   local root="$2"
+  local max_iter="${3:-0}"
 
   local original_repo generated_repo run_dir json_path
   IFS=$'\t' read -r original_repo generated_repo < <(prepare_fixture_repos "$root")
@@ -125,12 +182,14 @@ run_test_port_case() {
   json_path="${run_dir}/outputs/test_port.json"
 
   export TPT_CODEX_SCENARIO="$scenario"
+  export TPT_CODEX_CALL_COUNT_FILE="${root}/codex-call-count.txt"
+  printf '0\n' > "$TPT_CODEX_CALL_COUNT_FILE"
 
   "${REPO_ROOT}/test-port-run.sh" \
     --generated-repo "$generated_repo" \
     --original-repo "$original_repo" \
     --run-dir "$run_dir" \
-    --max-iter 0 \
+    --max-iter "$max_iter" \
     > "${root}/test-port.log" 2>&1
 
   tpt_assert_file_exists "$json_path" "test-port json output must exist"
@@ -184,7 +243,106 @@ if "./src/main/java/Prod.java" not in paths:
 PY
 }
 
+case_zero_junit_reports_fail_evidence_guard() {
+  local tmp json_path
+  tmp="$(tpt_mktemp_dir)"
+
+  setup_fake_tools "$tmp"
+  IFS=$'\t' read -r json_path _ < <(run_test_port_case "zero-junit" "$tmp")
+
+  python3 - <<'PY' "$json_path"
+import json, sys
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    obj = json.load(f)
+if obj.get("status") != "failed":
+    raise SystemExit(f"expected failed status, got {obj.get('status')}")
+if obj.get("reason") != "insufficient-test-evidence":
+    raise SystemExit(f"expected insufficient-test-evidence reason, got {obj.get('reason')}")
+if obj.get("failure_class") != "missing-junit-reports":
+    raise SystemExit(f"expected missing-junit-reports, got {obj.get('failure_class')}")
+if obj.get("behavioral_verdict") != "invalid":
+    raise SystemExit(f"expected invalid verdict, got {obj.get('behavioral_verdict')}")
+PY
+}
+
+case_undocumented_removed_test_fails_evidence_guard() {
+  local tmp json_path
+  tmp="$(tpt_mktemp_dir)"
+
+  setup_fake_tools "$tmp"
+  IFS=$'\t' read -r json_path _ < <(run_test_port_case "undocumented-removal" "$tmp")
+
+  python3 - <<'PY' "$json_path"
+import json, sys
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    obj = json.load(f)
+if obj.get("status") != "failed":
+    raise SystemExit(f"expected failed status, got {obj.get('status')}")
+if obj.get("reason") != "insufficient-test-evidence":
+    raise SystemExit(f"expected insufficient-test-evidence reason, got {obj.get('reason')}")
+if obj.get("failure_class") != "undocumented-test-removal":
+    raise SystemExit(f"expected undocumented-test-removal, got {obj.get('failure_class')}")
+removed = obj.get("removed_original_tests", [])
+if not removed or removed[0].get("documented") is not False:
+    raise SystemExit(f"expected undocumented removed tests, got {removed}")
+if obj.get("retention_policy", {}).get("undocumented_removed_test_count", 0) < 1:
+    raise SystemExit("expected undocumented removed test count >= 1")
+PY
+}
+
+case_retention_maximization_selects_best_iteration() {
+  local tmp json_path
+  tmp="$(tpt_mktemp_dir)"
+
+  setup_fake_tools "$tmp"
+  IFS=$'\t' read -r json_path _ < <(run_test_port_case "maximize-retention" "$tmp" 1)
+
+  python3 - <<'PY' "$json_path"
+import json, sys
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    obj = json.load(f)
+if obj.get("status") != "passed":
+    raise SystemExit(f"expected passed status, got {obj.get('status')}")
+ported = obj.get("ported_original_tests", {})
+if ported.get("iterations_used") != 1:
+    raise SystemExit(f"expected best iteration 1, got {ported.get('iterations_used')}")
+shape = obj.get("suite_shape", {})
+if shape.get("removed_original_test_file_count") != 0:
+    raise SystemExit(f"expected zero removed original tests, got {shape}")
+if shape.get("retained_original_test_file_count") != shape.get("original_snapshot_file_count"):
+    raise SystemExit(f"expected full retention, got {shape}")
+PY
+}
+
+case_verdict_prefers_junit_evidence_over_compatibility_class() {
+  local tmp json_path
+  tmp="$(tpt_mktemp_dir)"
+
+  setup_fake_tools "$tmp"
+  IFS=$'\t' read -r json_path _ < <(run_test_port_case "behavioral-evidence" "$tmp")
+
+  python3 - <<'PY' "$json_path"
+import json, sys
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    obj = json.load(f)
+if obj.get("status") != "failed":
+    raise SystemExit(f"expected failed status, got {obj.get('status')}")
+if obj.get("reason") != "tests-failed":
+    raise SystemExit(f"expected tests-failed reason, got {obj.get('reason')}")
+if obj.get("failure_class") != "compatibility-build":
+    raise SystemExit(f"expected compatibility-build classifier, got {obj.get('failure_class')}")
+if obj.get("behavioral_verdict") != "difference_detected":
+    raise SystemExit(f"expected difference_detected verdict, got {obj.get('behavioral_verdict')}")
+if obj.get("behavioral_evidence", {}).get("failing_case_count", 0) < 1:
+    raise SystemExit("expected junit failing_case_count >= 1")
+PY
+}
+
 tpt_run_case "ignored runtime writes do not fail write-scope" case_ignored_runtime_writes_do_not_fail
 tpt_run_case "disallowed source writes fail write-scope" case_disallowed_source_write_fails
+tpt_run_case "zero junit reports fail evidence guard" case_zero_junit_reports_fail_evidence_guard
+tpt_run_case "undocumented removed test fails evidence guard" case_undocumented_removed_test_fails_evidence_guard
+tpt_run_case "retention maximization selects best iteration" case_retention_maximization_selects_best_iteration
+tpt_run_case "verdict prefers junit evidence over compatibility classifier" case_verdict_prefers_junit_evidence_over_compatibility_class
 
 tpt_finish_suite

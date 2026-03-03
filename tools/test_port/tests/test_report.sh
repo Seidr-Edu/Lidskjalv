@@ -43,6 +43,10 @@ case_report_emits_ignored_prefixes() {
   TP_WRITE_SCOPE_DIFF_FILE="${tmp}/disallowed-change.diff"
   TP_WRITE_SCOPE_CHANGE_SET_PATH="${tmp}/ported-protected-change-set.tsv"
   TP_WRITE_SCOPE_IGNORED_PREFIXES_CSV="./completion/proof/logs/:./.mvn_repo/:./custom/cache/"
+  TP_EVIDENCE_JSON_PATH="${tmp}/retention-evidence.json"
+  TP_REMOVED_TESTS_MANIFEST_REL="./completion/proof/logs/test-port-removed-tests.tsv"
+  TP_RETENTION_POLICY_MODE="maximize-retained-original-tests"
+  TP_RETENTION_DOCUMENTED_REMOVALS_REQUIRED=true
   TP_BASELINE_ORIGINAL_STATUS="pass"
   TP_BASELINE_ORIGINAL_RC=0
   TP_BASELINE_ORIGINAL_LOG="${tmp}/baseline-original.log"
@@ -76,7 +80,33 @@ TSV
   cat > "$TP_WRITE_SCOPE_CHANGE_SET_PATH" <<'TSV'
 M	./src/test/java/AdaptedTest.java
 TSV
+  cat > "$TP_EVIDENCE_JSON_PATH" <<'JSON'
+{
+  "original_snapshot_file_count": 2,
+  "final_ported_test_file_count": 3,
+  "retained_original_test_file_count": 1,
+  "removed_original_test_file_count": 1,
+  "retention_ratio": 0.5,
+  "removed_original_tests": [
+    {
+      "path": "./src/test/java/OriginalRemovedTest.java",
+      "category": "unportable",
+      "reason": "requires unavailable runtime",
+      "documented": true
+    }
+  ],
+  "undocumented_removed_test_count": 0,
+  "junit_report_count": 1,
+  "junit_report_files": [
+    "target/surefire-reports/TEST-fake.xml"
+  ]
+}
+JSON
   echo "class AdaptedTest {}" > "${TP_PORTED_REPO}/src/test/java/AdaptedTest.java"
+  mkdir -p "${TP_PORTED_REPO}/target/surefire-reports"
+  cat > "${TP_PORTED_REPO}/target/surefire-reports/TEST-fake.xml" <<'XML'
+<testsuite tests="1" failures="0" errors="0"><testcase classname="fake" name="ok"/></testsuite>
+XML
   echo "class OriginalTest {}" > "${TP_ORIGINAL_TESTS_SNAPSHOT}/src/test/java/OriginalTest.java"
 
   tp_write_reports
@@ -94,10 +124,27 @@ if actual != expected:
     raise SystemExit(f"unexpected ignored_prefixes: {actual}")
 if obj["write_scope"].get("violation_count") != 1:
     raise SystemExit("unexpected violation_count")
+shape = obj.get("suite_shape", {})
+if shape.get("retained_original_test_file_count") != 1:
+    raise SystemExit(f"unexpected retained count: {shape}")
+if shape.get("removed_original_test_file_count") != 1:
+    raise SystemExit(f"unexpected removed count: {shape}")
+if shape.get("retention_ratio") != 0.5:
+    raise SystemExit(f"unexpected retention ratio: {shape}")
+removed = obj.get("removed_original_tests", [])
+if len(removed) != 1 or removed[0].get("path") != "./src/test/java/OriginalRemovedTest.java":
+    raise SystemExit(f"unexpected removed_original_tests: {removed}")
+policy = obj.get("retention_policy", {})
+if policy.get("mode") != "maximize-retained-original-tests":
+    raise SystemExit(f"unexpected retention policy mode: {policy}")
+if policy.get("undocumented_removed_test_count") != 0:
+    raise SystemExit(f"unexpected undocumented count: {policy}")
 PY
 
   tpt_assert_file_contains "$TP_SUMMARY_MD_PATH" "Write-scope ignored prefixes" "summary should mention ignored prefixes"
   tpt_assert_file_contains "$TP_SUMMARY_MD_PATH" "./completion/proof/logs/" "summary should include resolved ignored prefixes"
+  tpt_assert_file_contains "$TP_SUMMARY_MD_PATH" "Retention policy" "summary should mention retention policy"
+  tpt_assert_file_contains "$TP_SUMMARY_MD_PATH" "Removed original tests" "summary should include removed-test count"
 }
 
 tpt_run_case "report includes ignored prefixes in json and summary" case_report_emits_ignored_prefixes

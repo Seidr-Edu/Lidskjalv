@@ -57,3 +57,48 @@ When Maven is detected, test-port always runs Maven with:
 `-Dmaven.repo.local=<run-dir>/workspace/.m2/repository`
 
 This keeps dependency downloads out of copied repositories while reusing dependencies inside a single test-port run.
+
+## Retention policy
+
+Test-port maximizes retained original tests across iterations:
+
+- It does not stop at the first passing adaptation if original tests were removed.
+- It keeps iterating (up to `--max-iter`) and selects the best valid iteration with the highest retained original-test count.
+- It stops early only when full retention is reached.
+
+Retained/removed metrics are reported in `test_port.json` under `suite_shape`:
+
+- `retained_original_test_file_count`
+- `removed_original_test_file_count`
+- `retention_ratio` (`retained_original/original_snapshot`)
+
+## Removed-test manifest contract
+
+If an original test file is removed, it must be documented in:
+
+`./completion/proof/logs/test-port-removed-tests.tsv`
+
+Format (tab-separated):
+
+`<repo-relative-test-path>\t<category>\t<reason>`
+
+Allowed categories:
+
+- `unportable`
+- `missing-target-feature`
+
+Undocumented removed original tests fail the iteration with:
+
+- `reason=insufficient-test-evidence`
+- `failure_class=undocumented-test-removal`
+
+Detailed entries are reported in `test_port.json` under `removed_original_tests`.
+
+## JUnit evidence guard
+
+An adaptation run that exits `0` but produces zero JUnit XML reports is treated as invalid evidence:
+
+- `reason=insufficient-test-evidence`
+- `failure_class=missing-junit-reports`
+
+The pipeline keeps iterating so the adapter can recover a valid, evidence-producing run.

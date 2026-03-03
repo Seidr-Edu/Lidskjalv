@@ -31,7 +31,6 @@ tp_clean_junit_outputs() {
     "${repo}/target/surefire-reports" \
     "${repo}/target/failsafe-reports" \
     "${repo}/build/test-results" \
-    "${repo}/build/test-results/test" \
     >/dev/null 2>&1 || true
 }
 

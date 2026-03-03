@@ -11,6 +11,7 @@ This tool orchestrates diagram-driven reconstruction experiments:
 - Root wrapper: `./experiment-run.sh`
 - Internal runner: `tools/experiments/scripts/run-diagram-compare.sh`
 - Batch runner: `./experiment-batch-run.sh`
+- Sonar metadata backfill: `tools/experiments/scripts/refresh-sonar-metadata.sh`
 
 ## Orchestrator modules
 
@@ -47,4 +48,52 @@ Dry run (print commands only):
 
 ```bash
 ./experiment-batch-run.sh --manifest tools/experiments/runsets/batch-7-multi-repo.json --dry-run
+```
+
+## Sonar metadata timing
+
+Sonar measures can be unavailable immediately after scan submission because compute engine
+processing may still be in progress. The experiment runner supports bounded waiting:
+
+- `--sonar-wait on|off` (default `on`)
+- `--sonar-wait-timeout-sec <n>` (default `300`)
+- `--sonar-wait-poll-sec <n>` (default `5`)
+
+The experiment JSON includes per-scan status fields:
+
+- `scan_data_status` (`complete`, `pending`, `failed`, `unavailable`, `skipped`)
+- `sonar_task_id`
+- `ce_task_status`
+
+Backfill existing runs after Sonar processing completes:
+
+```bash
+tools/experiments/scripts/refresh-sonar-metadata.sh
+```
+
+Refresh one run:
+
+```bash
+tools/experiments/scripts/refresh-sonar-metadata.sh --run-id <experiment_id>
+```
+
+### Measures fetched
+
+By default, experiments fetch these Sonar metrics into `scans.*.measures`:
+
+- `bugs`
+- `vulnerabilities`
+- `code_smells`
+- `coverage`
+- `duplicated_lines_density`
+- `reliability_rating`
+- `security_rating`
+- `sqale_rating` (maintainability rating)
+- `ncloc`
+- `sqale_index`
+
+Override the metric list with:
+
+```bash
+EXP_SONAR_METRIC_KEYS="bugs,vulnerabilities,code_smells,coverage,duplicated_lines_density,reliability_rating,security_rating,sqale_rating"
 ```

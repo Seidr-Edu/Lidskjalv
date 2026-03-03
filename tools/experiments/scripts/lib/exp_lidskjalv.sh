@@ -10,6 +10,67 @@ _exp_scan_set_var() {
   printf -v "${prefix}_${field}" '%s' "$value"
 }
 
+_exp_sonar_get_task_status() {
+  local task_id="$1"
+  [[ -n "${SONAR_HOST_URL:-}" && -n "${SONAR_TOKEN:-}" ]] || { echo "UNKNOWN"; return 0; }
+
+  local response
+  response="$(curl -sf -u "${SONAR_TOKEN}:" \
+    "${SONAR_HOST_URL}/api/ce/task?id=${task_id}" 2>/dev/null || true)"
+  if [[ -z "$response" ]]; then
+    echo "UNKNOWN"
+    return 0
+  fi
+
+  echo "$response" | jq -r '.task.status // "UNKNOWN"' 2>/dev/null || echo "UNKNOWN"
+}
+
+_exp_wait_for_sonar_task() {
+  local task_id="$1"
+  local timeout_sec="$2"
+  local poll_sec="$3"
+
+  local elapsed=0
+  local status="UNKNOWN"
+  while true; do
+    status="$(_exp_sonar_get_task_status "$task_id")"
+    case "$status" in
+      SUCCESS|FAILED|CANCELED)
+        echo "$status"
+        return 0
+        ;;
+    esac
+
+    if [[ "$elapsed" -ge "$timeout_sec" ]]; then
+      echo "TIMEOUT"
+      return 1
+    fi
+
+    sleep "$poll_sec"
+    elapsed=$((elapsed + poll_sec))
+  done
+}
+
+_exp_fetch_sonar_quality_gate() {
+  local project_key="$1"
+  local qg_json qg_status
+
+  qg_json="$(curl -sf -u "${SONAR_TOKEN}:" \
+    "${SONAR_HOST_URL}/api/qualitygates/project_status?projectKey=${project_key}" 2>/dev/null || echo "{}")"
+  qg_status="$(echo "$qg_json" | jq -r '.projectStatus.status // empty' 2>/dev/null || true)"
+  echo "$qg_status"
+}
+
+_exp_fetch_sonar_measures_json() {
+  local project_key="$1"
+  local metric_keys
+  metric_keys="${EXP_SONAR_METRIC_KEYS:-bugs,vulnerabilities,code_smells,coverage,duplicated_lines_density,reliability_rating,security_rating,sqale_rating,ncloc,sqale_index}"
+  curl -sf -u "${SONAR_TOKEN}:" \
+    "${SONAR_HOST_URL}/api/measures/component?component=${project_key}&metricKeys=${metric_keys}" \
+    2>/dev/null \
+    | jq -c 'reduce (.component.measures // [])[] as $m ({}; .[$m.metric]=$m.value)' 2>/dev/null || echo "{}"
+}
+
 _exp_collect_scan_metadata() {
   local prefix="$1"
   local project_key="$2"
@@ -19,29 +80,67 @@ _exp_collect_scan_metadata() {
   _exp_scan_set_var "$prefix" "QUALITY_GATE" ""
   _exp_scan_set_var "$prefix" "MEASURES_JSON" "{}"
   _exp_scan_set_var "$prefix" "STATE_LOG_DIR" "${LOG_DIR}/${project_key}"
+  _exp_scan_set_var "$prefix" "SONAR_TASK_ID" ""
+  _exp_scan_set_var "$prefix" "CE_TASK_STATUS" ""
+  _exp_scan_set_var "$prefix" "DATA_STATUS" "unavailable"
 
   if [[ -n "${SONAR_HOST_URL:-}" ]]; then
     _exp_scan_set_var "$prefix" "SONAR_URL" "${SONAR_HOST_URL}/dashboard?id=${project_key}"
   fi
 
-  if $SKIP_SONAR || [[ "$scan_status" != "success" ]]; then
+  local task_id=""
+  if declare -f state_get >/dev/null 2>&1; then
+    task_id="$(state_get "$project_key" "sonar_task_id" 2>/dev/null || true)"
+  fi
+  _exp_scan_set_var "$prefix" "SONAR_TASK_ID" "$task_id"
+
+  if $SKIP_SONAR; then
+    _exp_scan_set_var "$prefix" "DATA_STATUS" "skipped"
     return 0
   fi
+
+  if [[ "$scan_status" != "success" ]]; then
+    _exp_scan_set_var "$prefix" "DATA_STATUS" "unavailable"
+    return 0
+  fi
+
   [[ -n "${SONAR_HOST_URL:-}" && -n "${SONAR_TOKEN:-}" ]] || return 0
   command -v curl >/dev/null 2>&1 || return 0
   command -v jq >/dev/null 2>&1 || return 0
 
-  local qg_json qg_status measures_json
-  qg_json="$(curl -sf -u "${SONAR_TOKEN}:" \
-    "${SONAR_HOST_URL}/api/qualitygates/project_status?projectKey=${project_key}" 2>/dev/null || echo "{}")"
-  qg_status="$(echo "$qg_json" | jq -r '.projectStatus.status // empty' 2>/dev/null || true)"
+  local ce_status=""
+  if [[ -n "$task_id" ]]; then
+    if [[ "${SONAR_WAIT:-on}" == "on" ]]; then
+      ce_status="$(_exp_wait_for_sonar_task "$task_id" "${SONAR_WAIT_TIMEOUT_SEC:-300}" "${SONAR_WAIT_POLL_SEC:-5}" || true)"
+    else
+      ce_status="$(_exp_sonar_get_task_status "$task_id")"
+    fi
+  fi
+  _exp_scan_set_var "$prefix" "CE_TASK_STATUS" "$ce_status"
+
+  local qg_status measures_json
+  qg_status="$(_exp_fetch_sonar_quality_gate "$project_key")"
   _exp_scan_set_var "$prefix" "QUALITY_GATE" "$qg_status"
 
-  measures_json="$(curl -sf -u "${SONAR_TOKEN}:" \
-    "${SONAR_HOST_URL}/api/measures/component?component=${project_key}&metricKeys=bugs,vulnerabilities,code_smells,coverage,duplicated_lines_density" \
-    2>/dev/null \
-    | jq -c 'reduce (.component.measures // [])[] as $m ({}; .[$m.metric]=$m.value)' 2>/dev/null || echo "{}")"
+  measures_json="$(_exp_fetch_sonar_measures_json "$project_key")"
   _exp_scan_set_var "$prefix" "MEASURES_JSON" "$measures_json"
+
+  local data_status="unavailable"
+  if [[ "$measures_json" != "{}" ]]; then
+    data_status="complete"
+  else
+    case "$ce_status" in
+      PENDING|IN_PROGRESS|TIMEOUT) data_status="pending" ;;
+      FAILED|CANCELED) data_status="failed" ;;
+      *) data_status="unavailable" ;;
+    esac
+  fi
+
+  _exp_scan_set_var "$prefix" "DATA_STATUS" "$data_status"
+
+  if [[ "$data_status" == "pending" ]]; then
+    exp_warn "Sonar metrics not ready yet for ${project_key} (task=${task_id:-<none>} status=${ce_status:-UNKNOWN})"
+  fi
 }
 
 exp_scan_original() {

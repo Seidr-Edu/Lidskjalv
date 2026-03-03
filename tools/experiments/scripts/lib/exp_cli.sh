@@ -18,6 +18,9 @@ Options:
   --model-gate-timeout-sec <n>
   --scan-original <auto|force|skip>   (default: auto)
   --skip-sonar
+  --sonar-wait <on|off>               (default: on)
+  --sonar-wait-timeout-sec <n>        (default: 300)
+  --sonar-wait-poll-sec <n>           (default: 5)
   --test-port <on|off>                (default: on)
   --test-port-max-iter <n>            (default: 5)
   --strict-test-port
@@ -36,6 +39,9 @@ exp_parse_args() {
   MODEL_GATE_TIMEOUT_SEC="120"
   SCAN_ORIGINAL_MODE="auto"
   SKIP_SONAR=false
+  SONAR_WAIT="on"
+  SONAR_WAIT_TIMEOUT_SEC="300"
+  SONAR_WAIT_POLL_SEC="5"
   TEST_PORT_MODE="on"
   TEST_PORT_MAX_ITER="5"
   STRICT_TEST_PORT=false
@@ -52,6 +58,9 @@ exp_parse_args() {
       --model-gate-timeout-sec) MODEL_GATE_TIMEOUT_SEC="${2:-}"; shift 2 ;;
       --scan-original) SCAN_ORIGINAL_MODE="${2:-}"; shift 2 ;;
       --skip-sonar) SKIP_SONAR=true; shift ;;
+      --sonar-wait) SONAR_WAIT="${2:-}"; shift 2 ;;
+      --sonar-wait-timeout-sec) SONAR_WAIT_TIMEOUT_SEC="${2:-}"; shift 2 ;;
+      --sonar-wait-poll-sec) SONAR_WAIT_POLL_SEC="${2:-}"; shift 2 ;;
       --test-port) TEST_PORT_MODE="${2:-}"; shift 2 ;;
       --test-port-max-iter) TEST_PORT_MAX_ITER="${2:-}"; shift 2 ;;
       --strict-test-port) STRICT_TEST_PORT=true; shift ;;
@@ -68,10 +77,14 @@ exp_validate_args() {
 
   case "$GATING_MODE" in model|fixed) ;; *) exp_fail "--gating-mode must be model|fixed";; esac
   case "$SCAN_ORIGINAL_MODE" in auto|force|skip) ;; *) exp_fail "--scan-original must be auto|force|skip";; esac
+  case "$SONAR_WAIT" in on|off) ;; *) exp_fail "--sonar-wait must be on|off";; esac
   case "$TEST_PORT_MODE" in on|off) ;; *) exp_fail "--test-port must be on|off";; esac
 
   [[ "$MAX_ITER" =~ ^[0-9]+$ ]] || exp_fail "--max-iter must be non-negative integer"
   [[ "$MAX_GATE_REVISIONS" =~ ^[0-9]+$ ]] || exp_fail "--max-gate-revisions must be non-negative integer"
   [[ "$MODEL_GATE_TIMEOUT_SEC" =~ ^[0-9]+$ ]] || exp_fail "--model-gate-timeout-sec must be non-negative integer"
+  [[ "$SONAR_WAIT_TIMEOUT_SEC" =~ ^[0-9]+$ ]] || exp_fail "--sonar-wait-timeout-sec must be non-negative integer"
+  [[ "$SONAR_WAIT_POLL_SEC" =~ ^[0-9]+$ ]] || exp_fail "--sonar-wait-poll-sec must be non-negative integer"
+  [[ "$SONAR_WAIT_POLL_SEC" -gt 0 ]] || exp_fail "--sonar-wait-poll-sec must be > 0"
   [[ "$TEST_PORT_MAX_ITER" =~ ^[0-9]+$ ]] || exp_fail "--test-port-max-iter must be non-negative integer"
 }

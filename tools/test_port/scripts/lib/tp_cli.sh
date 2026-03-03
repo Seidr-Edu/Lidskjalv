@@ -50,7 +50,7 @@ tp_resolve_write_scope_ignored_prefixes() {
   local raw
   local normalized
   for raw in "${all_raw[@]}"; do
-    normalized="$(tp_normalize_repo_prefix "$raw")" || tp_fail "invalid --write-scope-ignore-prefix value: '$raw'"
+    normalized="$(tp_normalize_repo_prefix "$raw")" || tp_fail "invalid write-scope ignore prefix: '$raw'"
     case "$seen" in
       *"|${normalized}|"*) continue ;;
     esac

@@ -70,6 +70,7 @@ tp_normalize_repo_prefix() {
   local raw="$1"
   [[ -n "$raw" ]] || return 1
   [[ "$raw" != /* ]] || return 1
+  [[ "$raw" != *:* ]] || return 1
 
   while [[ "$raw" == ./* ]]; do
     raw="${raw#./}"
@@ -83,7 +84,7 @@ tp_normalize_repo_prefix() {
 
   [[ -n "$raw" ]] || return 1
   case "$raw" in
-    .|..|../*|*/..|*"/../"*|./*|*/.|*"/./"*)
+    .|..|../*|*/..|*/../*|./*|*/.|*/./*)
       return 1
       ;;
   esac

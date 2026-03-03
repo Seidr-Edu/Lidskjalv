@@ -114,10 +114,30 @@ case_rejects_empty_env_prefix_entries() {
   fi
 }
 
+case_rejects_colon_in_prefix() {
+  local tmp
+  tmp="$(tpt_mktemp_dir)"
+  create_minimal_repos "$tmp"
+
+  if (
+    unset TP_WRITE_SCOPE_IGNORE_PREFIXES || true
+    tp_parse_args \
+      --generated-repo "${tmp}/generated" \
+      --original-repo "${tmp}/original" \
+      --run-dir "${tmp}/run" \
+      --write-scope-ignore-prefix custom:cache
+    tp_validate_and_finalize_args
+  ); then
+    echo "expected colon-containing prefix validation to fail" >&2
+    return 1
+  fi
+}
+
 tpt_run_case "defaults include built-in ignored prefixes" case_defaults_include_builtins
 tpt_run_case "env and cli prefixes normalize and dedupe" case_env_cli_normalization_and_dedupe
 tpt_run_case "absolute ignore prefix is rejected" case_rejects_absolute_prefix
 tpt_run_case "parent traversal ignore prefix is rejected" case_rejects_parent_traversal_prefix
 tpt_run_case "empty env ignore entries are rejected" case_rejects_empty_env_prefix_entries
+tpt_run_case "colon in prefix is rejected" case_rejects_colon_in_prefix
 
 tpt_finish_suite

@@ -10,6 +10,7 @@ source "${TOOLS_DIR}/scripts/lib/tp_cli.sh"
 source "${TOOLS_DIR}/scripts/lib/tp_runner.sh"
 source "${TOOLS_DIR}/scripts/lib/tp_write_guard.sh"
 source "${TOOLS_DIR}/scripts/lib/tp_copy.sh"
+source "${TOOLS_DIR}/scripts/lib/tp_evidence.sh"
 source "${TOOLS_DIR}/scripts/lib/tp_verdict.sh"
 source "${TOOLS_DIR}/scripts/lib/tp_report.sh"
 
@@ -44,7 +45,64 @@ tp_init_result_state() {
   TP_GENERATED_REPO_BEFORE_HASH=""
   TP_GENERATED_REPO_AFTER_HASH=""
 
+  TP_EVIDENCE_ORIGINAL_SNAPSHOT_FILE_COUNT=0
+  TP_EVIDENCE_FINAL_PORTED_TEST_FILE_COUNT=0
+  TP_EVIDENCE_RETAINED_ORIGINAL_TEST_FILE_COUNT=0
+  TP_EVIDENCE_REMOVED_ORIGINAL_TEST_FILE_COUNT=0
+  TP_EVIDENCE_RETENTION_RATIO=""
+  TP_EVIDENCE_UNDOCUMENTED_REMOVED_TEST_COUNT=0
+  TP_EVIDENCE_JUNIT_REPORT_COUNT=0
+  TP_EVIDENCE_JUNIT_FAILING_CASE_COUNT=0
+
+  TP_BEST_VALID_ITERATION=-1
+  TP_BEST_VALID_RETAINED=-1
+  TP_BEST_VALID_REMOVED=2147483647
+  TP_BEST_VALID_LOG=""
+  TP_RETENTION_POLICY_MODE="maximize-retained-original-tests"
+  TP_RETENTION_DOCUMENTED_REMOVALS_REQUIRED=true
+
   mkdir -p "$TP_RUN_DIR" "$TP_LOG_DIR" "$TP_OUTPUT_DIR"
+}
+
+tp_stage_best_valid_candidate() {
+  local iteration="$1"
+  local adapt_log="$2"
+  local retained removed
+  retained="${TP_EVIDENCE_RETAINED_ORIGINAL_TEST_FILE_COUNT:-0}"
+  removed="${TP_EVIDENCE_REMOVED_ORIGINAL_TEST_FILE_COUNT:-0}"
+
+  if [[ "$retained" -lt "$TP_BEST_VALID_RETAINED" ]]; then
+    return 0
+  fi
+  if [[ "$retained" -eq "$TP_BEST_VALID_RETAINED" && "$removed" -ge "$TP_BEST_VALID_REMOVED" ]]; then
+    return 0
+  fi
+
+  tp_copy_dir "$TP_PORTED_REPO" "$TP_BEST_VALID_PORTED_REPO"
+  cp "$TP_EVIDENCE_JSON_PATH" "$TP_BEST_VALID_EVIDENCE_JSON_PATH"
+  TP_BEST_VALID_ITERATION="$iteration"
+  TP_BEST_VALID_RETAINED="$retained"
+  TP_BEST_VALID_REMOVED="$removed"
+  TP_BEST_VALID_LOG="$adapt_log"
+}
+
+tp_restore_best_valid_candidate() {
+  [[ "$TP_BEST_VALID_ITERATION" -ge 0 ]] || return 1
+  [[ -d "$TP_BEST_VALID_PORTED_REPO" ]] || return 1
+  [[ -f "$TP_BEST_VALID_EVIDENCE_JSON_PATH" ]] || return 1
+
+  tp_copy_dir "$TP_BEST_VALID_PORTED_REPO" "$TP_PORTED_REPO"
+  cp "$TP_BEST_VALID_EVIDENCE_JSON_PATH" "$TP_EVIDENCE_JSON_PATH"
+  tp_load_evidence_state "$TP_EVIDENCE_JSON_PATH"
+
+  TP_PORTED_ORIGINAL_TESTS_EXIT_CODE=0
+  TP_PORTED_ORIGINAL_TESTS_STATUS="pass"
+  TP_STATUS="passed"
+  TP_REASON=""
+  TP_FAILURE_CLASS=""
+  TP_ITERATIONS_USED="$TP_BEST_VALID_ITERATION"
+  TP_PORTED_ORIGINAL_TESTS_LOG="$TP_BEST_VALID_LOG"
+  return 0
 }
 
 tp_execute() {
@@ -110,6 +168,8 @@ tp_execute() {
   : > "$TP_LAST_TEST_FAILURE_SUMMARY_FILE"
   : > "$TP_WRITE_SCOPE_FAILURE_PATHS_FILE"
   : > "$TP_WRITE_SCOPE_DIFF_FILE"
+  rm -rf "$TP_BEST_VALID_PORTED_REPO"
+  rm -f "$TP_EVIDENCE_JSON_PATH" "$TP_BEST_VALID_EVIDENCE_JSON_PATH"
 
   TP_STATUS="failed"
   TP_REASON="max-iterations-reached"
@@ -147,10 +207,61 @@ tp_execute() {
     if tp_run_tests "$TP_PORTED_REPO" "$adapt_log"; then
       TP_PORTED_ORIGINAL_TESTS_EXIT_CODE=0
       TP_PORTED_ORIGINAL_TESTS_STATUS="pass"
+      TP_ITERATIONS_USED="$i"
+
+      tp_refresh_evidence_state "$TP_PORTED_REPO" "$TP_ORIGINAL_TESTS_SNAPSHOT" "$TP_REMOVED_TESTS_MANIFEST_PATH" "$TP_EVIDENCE_JSON_PATH"
+
+      if [[ "${TP_EVIDENCE_JUNIT_REPORT_COUNT:-0}" -eq 0 ]]; then
+        TP_STATUS="failed"
+        TP_REASON="insufficient-test-evidence"
+        TP_FAILURE_CLASS="missing-junit-reports"
+        TP_PORTED_ORIGINAL_TESTS_STATUS="fail"
+        TP_PORTED_ORIGINAL_TESTS_EXIT_CODE=1
+        tp_write_evidence_feedback_summary \
+          "$TP_LAST_TEST_FAILURE_SUMMARY_FILE" \
+          "$TP_EVIDENCE_JSON_PATH" \
+          "Tests exited 0 but produced zero JUnit reports. Preserve and adapt original tests so they execute and emit JUnit XML." \
+          "$TP_REMOVED_TESTS_MANIFEST_REL"
+        if [[ "$i" -lt "$TP_MAX_ITER" ]]; then
+          continue
+        fi
+        break
+      fi
+
+      if [[ "${TP_EVIDENCE_UNDOCUMENTED_REMOVED_TEST_COUNT:-0}" -gt 0 ]]; then
+        TP_STATUS="failed"
+        TP_REASON="insufficient-test-evidence"
+        TP_FAILURE_CLASS="undocumented-test-removal"
+        TP_PORTED_ORIGINAL_TESTS_STATUS="fail"
+        TP_PORTED_ORIGINAL_TESTS_EXIT_CODE=1
+        tp_write_evidence_feedback_summary \
+          "$TP_LAST_TEST_FAILURE_SUMMARY_FILE" \
+          "$TP_EVIDENCE_JSON_PATH" \
+          "Original tests were removed without valid documentation. Restore them or document each removal in the required manifest." \
+          "$TP_REMOVED_TESTS_MANIFEST_REL"
+        if [[ "$i" -lt "$TP_MAX_ITER" ]]; then
+          continue
+        fi
+        break
+      fi
+
+      tp_stage_best_valid_candidate "$i" "$adapt_log"
+
       TP_STATUS="passed"
       TP_REASON=""
       TP_FAILURE_CLASS=""
-      TP_ITERATIONS_USED="$i"
+
+      if [[ "${TP_EVIDENCE_REMOVED_ORIGINAL_TEST_FILE_COUNT:-0}" -eq 0 ]]; then
+        break
+      fi
+      if [[ "$i" -lt "$TP_MAX_ITER" ]]; then
+        tp_write_evidence_feedback_summary \
+          "$TP_LAST_TEST_FAILURE_SUMMARY_FILE" \
+          "$TP_EVIDENCE_JSON_PATH" \
+          "Tests pass, but retention policy requires restoring as many removed original tests as possible before finishing." \
+          "$TP_REMOVED_TESTS_MANIFEST_REL"
+        continue
+      fi
       break
     fi
 
@@ -175,6 +286,12 @@ tp_execute() {
     TP_REASON="tests-failed"
   done
 
+  if [[ "$TP_BEST_VALID_ITERATION" -ge 0 && "$TP_REASON" != "write-scope-violation" && "$TP_REASON" != "write-scope-check-failed" ]]; then
+    tp_restore_best_valid_candidate || true
+  elif [[ -f "$TP_EVIDENCE_JSON_PATH" ]]; then
+    tp_load_evidence_state "$TP_EVIDENCE_JSON_PATH"
+  fi
+
   return 0
 }
 
@@ -196,6 +313,10 @@ main() {
 
   if $TP_WORKSPACE_PREPARED; then
     tp_finalize_generated_repo_immutability_guard
+  fi
+
+  if [[ -d "${TP_PORTED_REPO:-}" && -d "${TP_ORIGINAL_TESTS_SNAPSHOT:-}" ]]; then
+    tp_refresh_evidence_state "$TP_PORTED_REPO" "$TP_ORIGINAL_TESTS_SNAPSHOT" "$TP_REMOVED_TESTS_MANIFEST_PATH" "$TP_EVIDENCE_JSON_PATH" || true
   fi
 
   tp_compute_behavioral_verdict

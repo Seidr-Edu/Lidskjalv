@@ -25,6 +25,16 @@ tp_test_rc_status() {
   esac
 }
 
+tp_clean_junit_outputs() {
+  local repo="$1"
+  rm -rf \
+    "${repo}/target/surefire-reports" \
+    "${repo}/target/failsafe-reports" \
+    "${repo}/build/test-results" \
+    "${repo}/build/test-results/test" \
+    >/dev/null 2>&1 || true
+}
+
 tp_run_tests() {
   local repo="$1"
   local log_file="$2"
@@ -34,6 +44,7 @@ tp_run_tests() {
   [[ $- == *e* ]] && had_errexit=true
 
   mkdir -p "$(dirname "$log_file")"
+  tp_clean_junit_outputs "$repo"
 
   set +e
   case "$runner" in

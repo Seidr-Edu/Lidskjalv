@@ -267,9 +267,16 @@ tp_retention_ratio = None
 if tp_original_snapshot_file_count > 0:
     tp_retention_ratio = tp_final_test_file_count / tp_original_snapshot_file_count
 
-if tp_status == "failed" and (
-    test_port_reason == "behavioral-difference-evidence" or
-    test_port_failure_class == "behavioral-mismatch"
+if tp_status == "failed" and test_port_reason == "write-scope-violation":
+    tp_behavioral_verdict = "invalid"
+    tp_behavioral_verdict_reason = "write-scope-violation"
+elif tp_status == "failed" and test_port_reason == "insufficient-test-evidence":
+    tp_behavioral_verdict = "invalid"
+    tp_behavioral_verdict_reason = test_port_failure_class or "insufficient-test-evidence"
+elif tp_status == "failed" and (
+    tp_behavioral_evidence.get("failing_case_count", 0) > 0
+    or test_port_reason == "behavioral-difference-evidence"
+    or test_port_failure_class == "behavioral-mismatch"
 ):
     tp_behavioral_verdict = "difference_detected"
     tp_behavioral_verdict_reason = "assertion-mismatch-evidence"
@@ -277,7 +284,7 @@ elif tp_status == "failed" and test_port_reason == "tests-failed":
     tp_behavioral_verdict = "inconclusive"
     tp_behavioral_verdict_reason = test_port_failure_class or "ported-tests-failed"
 elif tp_status == "passed":
-    if tp_change_stats["D"] > 0:
+    if tp_original_snapshot_file_count > 0 and tp_final_test_file_count < tp_original_snapshot_file_count:
         tp_behavioral_verdict = "inconclusive"
         tp_behavioral_verdict_reason = "suite-reduced-during-adaptation"
     else:
@@ -286,9 +293,6 @@ elif tp_status == "passed":
 elif tp_status == "skipped":
     tp_behavioral_verdict = "skipped"
     tp_behavioral_verdict_reason = test_port_reason or "stage-skipped"
-elif tp_status == "failed" and test_port_reason == "write-scope-violation":
-    tp_behavioral_verdict = "invalid"
-    tp_behavioral_verdict_reason = "write-scope-violation"
 else:
     tp_behavioral_verdict = "inconclusive"
     tp_behavioral_verdict_reason = test_port_reason or "stage-failed"
@@ -434,9 +438,13 @@ PY
   local tp_total_changes=0
   local tp_orig_snapshot_files=0
   local tp_final_test_files=0
+  local tp_retained_original_files=0
+  local tp_removed_original_files=0
   local tp_behavioral_verdict="inconclusive"
   local tp_behavioral_verdict_reason="unknown"
   local tp_behavioral_case_count=0
+  local tp_retention_policy_mode="maximize-retained-original-tests"
+  local tp_undocumented_removed_count=0
 
   tp_change_set_path="${TEST_PORT_WRITE_SCOPE_CHANGE_SET_PATH:-}"
   tp_add="${TEST_PORT_SUITE_CHANGES_ADDED:-0}"
@@ -445,9 +453,13 @@ PY
   tp_total_changes="${TEST_PORT_SUITE_CHANGES_TOTAL:-0}"
   tp_orig_snapshot_files="${TEST_PORT_SUITE_SHAPE_ORIGINAL_SNAPSHOT_FILE_COUNT:-0}"
   tp_final_test_files="${TEST_PORT_SUITE_SHAPE_FINAL_PORTED_TEST_FILE_COUNT:-0}"
+  tp_retained_original_files="${TEST_PORT_SUITE_SHAPE_RETAINED_ORIGINAL_TEST_FILE_COUNT:-0}"
+  tp_removed_original_files="${TEST_PORT_SUITE_SHAPE_REMOVED_ORIGINAL_TEST_FILE_COUNT:-0}"
   tp_behavioral_verdict="${TEST_PORT_BEHAVIORAL_VERDICT:-inconclusive}"
   tp_behavioral_verdict_reason="${TEST_PORT_BEHAVIORAL_VERDICT_REASON:-unknown}"
   tp_behavioral_case_count="${TEST_PORT_BEHAVIORAL_FAILING_CASE_COUNT:-0}"
+  tp_retention_policy_mode="${TEST_PORT_RETENTION_POLICY_MODE:-maximize-retained-original-tests}"
+  tp_undocumented_removed_count="${TEST_PORT_RETENTION_UNDOCUMENTED_REMOVED_TEST_COUNT:-0}"
 
   cat > "$EXP_SUMMARY_MD" <<MD
 # Experiment Summary
@@ -484,8 +496,12 @@ PY
 - New repo unchanged: **${TEST_PORT_NEW_REPO_UNCHANGED}**
 - Write-scope policy: **${TEST_PORT_WRITE_SCOPE_POLICY}**
 - Write-scope violations: **${TEST_PORT_WRITE_SCOPE_VIOLATION_COUNT}**
+- Retention policy: **${tp_retention_policy_mode}**
 - Suite changes (A/M/D/total): **${tp_add}/${tp_mod}/${tp_del}/${tp_total_changes}**
 - Test files (original snapshot -> final ported): **${tp_orig_snapshot_files} -> ${tp_final_test_files}**
+- Retained original tests: **${tp_retained_original_files}**
+- Removed original tests: **${tp_removed_original_files}**
+- Undocumented removed tests: **${tp_undocumented_removed_count}**
 - Iterations used: **${TEST_PORT_ITERATIONS_USED}**
 - Adapter non-zero runs: **${TEST_PORT_ADAPTER_NONZERO}**
 - Baseline original tests: **${BASELINE_ORIGINAL_STATUS}** (exit ${BASELINE_ORIGINAL_RC}) log: ${BASELINE_ORIGINAL_LOG_PATH:-<none>}

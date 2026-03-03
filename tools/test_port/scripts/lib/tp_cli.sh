@@ -154,12 +154,17 @@ tp_validate_and_finalize_args() {
 
   TP_WRITE_SCOPE_FAILURE_PATHS_FILE="${TP_SUMMARY_DIR}/last-write-scope-failure.txt"
   TP_LAST_TEST_FAILURE_SUMMARY_FILE="${TP_SUMMARY_DIR}/last-test-failure.txt"
+  TP_EVIDENCE_JSON_PATH="${TP_SUMMARY_DIR}/retention-evidence.json"
+  TP_BEST_VALID_EVIDENCE_JSON_PATH="${TP_SUMMARY_DIR}/best-valid-retention-evidence.json"
   TP_WRITE_SCOPE_DIFF_FILE="${TP_GUARDS_DIR}/disallowed-change.diff"
   TP_WRITE_SCOPE_BEFORE_FILE="${TP_GUARDS_DIR}/ported-protected-before.sha256"
   TP_WRITE_SCOPE_AFTER_FILE="${TP_GUARDS_DIR}/ported-protected-after.sha256"
   TP_WRITE_SCOPE_CHANGE_SET_PATH="${TP_GUARDS_DIR}/ported-protected-change-set.tsv"
   TP_GENERATED_BEFORE_HASH_PATH="${TP_GUARDS_DIR}/new-repo-before.sha256"
   TP_GENERATED_AFTER_HASH_PATH="${TP_GUARDS_DIR}/new-repo-after.sha256"
+  TP_BEST_VALID_PORTED_REPO="${TP_WORKSPACE_DIR}/best-valid-ported-tests-repo"
+  TP_REMOVED_TESTS_MANIFEST_REL="./completion/proof/logs/test-port-removed-tests.tsv"
+  TP_REMOVED_TESTS_MANIFEST_PATH="${TP_PORTED_REPO}/${TP_REMOVED_TESTS_MANIFEST_REL#./}"
 
   TP_JSON_PATH="${TP_OUTPUT_DIR}/test_port.json"
   TP_SUMMARY_MD_PATH="${TP_OUTPUT_DIR}/summary.md"

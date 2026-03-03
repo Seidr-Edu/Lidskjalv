@@ -50,9 +50,19 @@ case_report_emits_ignored_prefixes() {
   TP_BASELINE_ORIGINAL_STATUS="pass"
   TP_BASELINE_ORIGINAL_RC=0
   TP_BASELINE_ORIGINAL_LOG="${tmp}/baseline-original.log"
+  TP_BASELINE_ORIGINAL_STRATEGY="maven-unit-first-fallback-full"
+  TP_BASELINE_ORIGINAL_UNIT_ONLY_RC=0
+  TP_BASELINE_ORIGINAL_FULL_RC=-1
+  TP_BASELINE_ORIGINAL_FAILURE_CLASS=""
+  TP_BASELINE_ORIGINAL_FAILURE_TYPE=""
   TP_BASELINE_GENERATED_STATUS="pass"
   TP_BASELINE_GENERATED_RC=0
   TP_BASELINE_GENERATED_LOG="${tmp}/baseline-generated.log"
+  TP_BASELINE_GENERATED_STRATEGY="maven-unit-first-fallback-full"
+  TP_BASELINE_GENERATED_UNIT_ONLY_RC=0
+  TP_BASELINE_GENERATED_FULL_RC=-1
+  TP_BASELINE_GENERATED_FAILURE_CLASS=""
+  TP_BASELINE_GENERATED_FAILURE_TYPE=""
   TP_PORTED_ORIGINAL_TESTS_STATUS="fail"
   TP_PORTED_ORIGINAL_TESTS_EXIT_CODE=1
   TP_PORTED_ORIGINAL_TESTS_LOG="${tmp}/ported.log"
@@ -139,6 +149,11 @@ if policy.get("mode") != "maximize-retained-original-tests":
     raise SystemExit(f"unexpected retention policy mode: {policy}")
 if policy.get("undocumented_removed_test_count") != 0:
     raise SystemExit(f"unexpected undocumented count: {policy}")
+baseline = obj.get("baseline_original_tests", {})
+if baseline.get("strategy") != "maven-unit-first-fallback-full":
+    raise SystemExit(f"unexpected baseline strategy: {baseline}")
+if baseline.get("unit_only_exit_code") != 0:
+    raise SystemExit(f"unexpected baseline unit-only rc: {baseline}")
 PY
 
   tpt_assert_file_contains "$TP_SUMMARY_MD_PATH" "Write-scope ignored prefixes" "summary should mention ignored prefixes"

@@ -133,6 +133,16 @@ case "${TPT_CODEX_SCENARIO:-}" in
     exit 0
     ;;
   behavioral-evidence)
+    case "${PWD:-}" in
+      *original-baseline-repo|*generated-baseline-repo)
+        if [[ "$*" == *"-DskipITs"* ]]; then
+          echo "Connection refused"
+          exit 1
+        fi
+        echo "Non-resolvable parent POM"
+        exit 1
+        ;;
+    esac
     cat > target/surefire-reports/TEST-fake.xml <<'XML'
 <testsuite tests="1" failures="1" errors="0">
   <testcase classname="fake.behavior" name="detectDifference">
@@ -335,6 +345,11 @@ if obj.get("behavioral_verdict") != "difference_detected":
     raise SystemExit(f"expected difference_detected verdict, got {obj.get('behavioral_verdict')}")
 if obj.get("behavioral_evidence", {}).get("failing_case_count", 0) < 1:
     raise SystemExit("expected junit failing_case_count >= 1")
+baseline = obj.get("baseline_original_tests", {})
+if baseline.get("status") != "fail-with-integration-skip":
+    raise SystemExit(f"expected baseline fail-with-integration-skip, got {baseline}")
+if baseline.get("failure_type") != "environmental-noise":
+    raise SystemExit(f"expected baseline environmental-noise failure type, got {baseline}")
 PY
 }
 

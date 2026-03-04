@@ -97,3 +97,37 @@ Override the metric list with:
 ```bash
 EXP_SONAR_METRIC_KEYS="bugs,vulnerabilities,code_smells,coverage,duplicated_lines_density,reliability_rating,security_rating,sqale_rating"
 ```
+
+## Run Inspector Frontend
+
+A local frontend can visualize exported experiment runs (status, codegen, test-port, and sonar original vs generated).
+
+### 1) Export frontend data
+
+```bash
+tools/experiments/scripts/export-frontend-data.sh --dataset-id local --all
+```
+
+This writes JSON payloads under:
+
+- `tools/experiments/frontend-data/datasets.json`
+- `tools/experiments/frontend-data/<dataset_id>/runs/index.json`
+- `tools/experiments/frontend-data/<dataset_id>/runs/<run_id>.json`
+
+### 2) Start the frontend
+
+```bash
+cd tools/experiments/frontend
+npm install
+npm run dev
+```
+
+The app runs as a static SPA and reads data from `/frontend-data` (served from sibling `tools/experiments/frontend-data` by Vite middleware).  
+You can override the base path with `VITE_DATA_BASE`.
+
+### 3) Deep links
+
+The UI supports query params for direct navigation:
+
+- `?dataset=<dataset_id>`
+- `?dataset=<dataset_id>&run=<run_id>`

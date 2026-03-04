@@ -20,3 +20,8 @@ tools/lidskjalv/repos/
 
 # Experiment and run artifacts (large/noisy/non-deterministic)
 .data/
+
+# Frontend build/test artifacts
+tools/experiments/frontend/node_modules/
+tools/experiments/frontend/dist/
+tools/experiments/frontend/coverage/

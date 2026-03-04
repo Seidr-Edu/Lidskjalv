@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "run.v1",
+  "type": "object",
+  "required": ["schema_version", "run_id", "status", "stages", "derived", "provenance", "extensions"],
+  "properties": {
+    "schema_version": { "const": "run.v1" },
+    "run_id": { "type": "string" },
+    "started_at": { "type": ["string", "null"] },
+    "finished_at": { "type": ["string", "null"] },
+    "status": { "type": ["string", "null"] },
+    "source": { "type": "object" },
+    "diagram": { "type": "object" },
+    "stages": { "type": "object" },
+    "derived": { "type": "object" },
+    "provenance": { "type": "object" },
+    "extensions": { "type": "object" }
+  },
+  "additionalProperties": true
+}

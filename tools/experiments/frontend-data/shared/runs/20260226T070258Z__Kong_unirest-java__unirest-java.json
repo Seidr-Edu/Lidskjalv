@@ -1,0 +1,113 @@
+{
+  "derived": {
+    "sonar_delta": {
+      "bugs": -11.0,
+      "code_smells": -174.0,
+      "coverage": 0.0,
+      "duplicated_lines_density": -0.5,
+      "ncloc": -3335.0,
+      "sqale_index": -904.0,
+      "vulnerabilities": -6.0
+    }
+  },
+  "diagram": {
+    "path": null,
+    "sha256": "944b4b1b840727e5c9af132e74a2f3cb872d4af3c6ebd6e64dd79f07224328ce"
+  },
+  "extensions": {},
+  "finished_at": "2026-02-26T08:18:45Z",
+  "provenance": {
+    "source_root": null,
+    "source_run_file": "20260226T070258Z__Kong_unirest-java__unirest-java/outputs/experiment.json"
+  },
+  "run_id": "20260226T070258Z__Kong_unirest-java__unirest-java",
+  "schema_version": "run.v1",
+  "source": {
+    "display_name": "Kong/unirest-java",
+    "git": {
+      "commit": "3afd2b0f0d2148ea732fe457f79199d0c3b86df4",
+      "remote": "https://github.com/Kong/unirest-java.git"
+    },
+    "key": "Kong_unirest-java",
+    "normalized_ref": "https://github.com/Kong/unirest-java.git",
+    "raw": "https://github.com/Kong/unirest-java.git",
+    "subdir": "unirest",
+    "type": "url"
+  },
+  "stages": {
+    "codegen": {
+      "exit_code": 0,
+      "metrics": {},
+      "status": "passed"
+    },
+    "sonar": {
+      "generated": {
+        "ce_task_status": "SUCCESS",
+        "measures": {
+          "bugs": "4",
+          "code_smells": "45",
+          "coverage": "0.0",
+          "duplicated_lines_density": "0.0",
+          "ncloc": "3870",
+          "reliability_rating": "3.0",
+          "security_rating": "1.0",
+          "sqale_index": "378",
+          "sqale_rating": "1.0",
+          "vulnerabilities": "0"
+        },
+        "project_key": "Kong_unirest-java__gen__unirest-java__20260226T070258Z",
+        "project_name": "Kong/unirest-java [andvari gen:unirest-java @ 20260226T070258Z]",
+        "quality_gate": "",
+        "scan_data_status": "complete",
+        "sonar_task_id": "AZys6OcdQ-S2adFc817z",
+        "sonar_url": "https://sonarcloud.io/dashboard?id=Kong_unirest-java__gen__unirest-java__20260226T070258Z",
+        "state_log_dir": null,
+        "status": "success"
+      },
+      "original": {
+        "ce_task_status": "SUCCESS",
+        "measures": {
+          "bugs": "15",
+          "code_smells": "219",
+          "coverage": "0.0",
+          "duplicated_lines_density": "0.5",
+          "ncloc": "7205",
+          "reliability_rating": "4.0",
+          "security_rating": "4.0",
+          "sqale_index": "1282",
+          "sqale_rating": "1.0",
+          "vulnerabilities": "6"
+        },
+        "mode": "auto",
+        "project_key": "Kong_unirest-java__subdir__unirest",
+        "project_name": "Kong/unirest-java [subdir:unirest]",
+        "quality_gate": "",
+        "reused": false,
+        "scan_data_status": "complete",
+        "sonar_task_id": "AZys6C7rFT95F1vSOxCI",
+        "sonar_url": "https://sonarcloud.io/dashboard?id=Kong_unirest-java__subdir__unirest",
+        "state_log_dir": null,
+        "status": "success"
+      }
+    },
+    "test_port": {
+      "behavioral_verdict": "inconclusive",
+      "failure_class": "compatibility-build",
+      "reason": "tests-failed",
+      "status": "failed",
+      "suite_changes": {
+        "added": 0,
+        "deleted": 0,
+        "modified": 26,
+        "total": 26
+      },
+      "suite_shape": {
+        "final_ported_test_file_count": 32,
+        "original_snapshot_file_count": 32,
+        "retention_ratio": 1.0
+      }
+    }
+  },
+  "started_at": "2026-02-26T07:02:58Z",
+  "status": "completed_with_warnings"
+}

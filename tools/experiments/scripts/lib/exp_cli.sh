@@ -12,6 +12,7 @@ Options:
   --source-repo <https://...\|url:https://...\|path:/path\>
   --source-subdir <path>
   --run-id <id>
+  --runs-root <path>
   --gating-mode <model|fixed>
   --max-iter <n>
   --max-gate-revisions <n>
@@ -33,6 +34,7 @@ exp_parse_args() {
   SOURCE_REPO_RAW=""
   SOURCE_SUBDIR=""
   RUN_ID=""
+  EXPERIMENT_RUNS_ROOT="${EXPERIMENT_RUNS_ROOT:-}"
   GATING_MODE="model"
   MAX_ITER="8"
   MAX_GATE_REVISIONS="3"
@@ -52,6 +54,7 @@ exp_parse_args() {
       --source-repo) SOURCE_REPO_RAW="${2:-}"; shift 2 ;;
       --source-subdir) SOURCE_SUBDIR="${2:-}"; shift 2 ;;
       --run-id) RUN_ID="${2:-}"; shift 2 ;;
+      --runs-root) EXPERIMENT_RUNS_ROOT="${2:-}"; shift 2 ;;
       --gating-mode) GATING_MODE="${2:-}"; shift 2 ;;
       --max-iter) MAX_ITER="${2:-}"; shift 2 ;;
       --max-gate-revisions) MAX_GATE_REVISIONS="${2:-}"; shift 2 ;;
@@ -75,6 +78,10 @@ exp_validate_args() {
   [[ -f "$DIAGRAM_PATH" ]] || exp_fail "diagram not found: $DIAGRAM_PATH"
   [[ -n "$SOURCE_REPO_RAW" ]] || exp_fail "--source-repo is required"
 
+  if [[ -z "$EXPERIMENT_RUNS_ROOT" ]]; then
+    EXPERIMENT_RUNS_ROOT="${REPO_ROOT}/.data/experiments/runs"
+  fi
+
   case "$GATING_MODE" in model|fixed) ;; *) exp_fail "--gating-mode must be model|fixed";; esac
   case "$SCAN_ORIGINAL_MODE" in auto|force|skip) ;; *) exp_fail "--scan-original must be auto|force|skip";; esac
   case "$SONAR_WAIT" in on|off) ;; *) exp_fail "--sonar-wait must be on|off";; esac
@@ -87,4 +94,5 @@ exp_validate_args() {
   [[ "$SONAR_WAIT_POLL_SEC" =~ ^[0-9]+$ ]] || exp_fail "--sonar-wait-poll-sec must be non-negative integer"
   [[ "$SONAR_WAIT_POLL_SEC" -gt 0 ]] || exp_fail "--sonar-wait-poll-sec must be > 0"
   [[ "$TEST_PORT_MAX_ITER" =~ ^[0-9]+$ ]] || exp_fail "--test-port-max-iter must be non-negative integer"
+  [[ -n "$EXPERIMENT_RUNS_ROOT" ]] || exp_fail "--runs-root must not be empty"
 }

@@ -1,0 +1,113 @@
+{
+  "derived": {
+    "sonar_delta": {
+      "bugs": -8.0,
+      "code_smells": -17.0,
+      "coverage": 0.0,
+      "duplicated_lines_density": -1.4,
+      "ncloc": -334.0,
+      "sqale_index": -380.0,
+      "vulnerabilities": 0.0
+    }
+  },
+  "diagram": {
+    "path": null,
+    "sha256": "50e6fb7f16c6a187a730101c04174cdb7283f7542cf420b99716cf76a6146e11"
+  },
+  "extensions": {},
+  "finished_at": "2026-03-02T04:46:17Z",
+  "provenance": {
+    "source_root": null,
+    "source_run_file": "20260302T042426Z__apache_cordova-plugin-inappbrowser__cordova-plugin-inappbrowser/outputs/experiment.json"
+  },
+  "run_id": "20260302T042426Z__apache_cordova-plugin-inappbrowser__cordova-plugin-inappbrowser",
+  "schema_version": "run.v1",
+  "source": {
+    "display_name": "apache/cordova-plugin-inappbrowser",
+    "git": {
+      "commit": "b83a9b732005cad6ccda1f23527b90a61dcf5a98",
+      "remote": "https://github.com/apache/cordova-plugin-inappbrowser.git"
+    },
+    "key": "apache_cordova-plugin-inappbrowser",
+    "normalized_ref": "https://github.com/apache/cordova-plugin-inappbrowser.git",
+    "raw": "https://github.com/apache/cordova-plugin-inappbrowser.git",
+    "subdir": "",
+    "type": "url"
+  },
+  "stages": {
+    "codegen": {
+      "exit_code": 0,
+      "metrics": {},
+      "status": "passed"
+    },
+    "sonar": {
+      "generated": {
+        "ce_task_status": "SUCCESS",
+        "measures": {
+          "bugs": "0",
+          "code_smells": "50",
+          "coverage": "0.0",
+          "duplicated_lines_density": "0.0",
+          "ncloc": "1090",
+          "reliability_rating": "1.0",
+          "security_rating": "1.0",
+          "sqale_index": "364",
+          "sqale_rating": "1.0",
+          "vulnerabilities": "0"
+        },
+        "project_key": "apache_cordova-plugin-inappbrowser__gen__cordova-plugin-inappbrowser__20260302T042426Z",
+        "project_name": "apache/cordova-plugin-inappbrowser [andvari gen:cordova-plugin-inappbrowser @ 20260302T042426Z]",
+        "quality_gate": "",
+        "scan_data_status": "complete",
+        "sonar_task_id": "AZytAxL3Q-S2adFc82dJ",
+        "sonar_url": "https://sonarcloud.io/dashboard?id=apache_cordova-plugin-inappbrowser__gen__cordova-plugin-inappbrowser__20260302T042426Z",
+        "state_log_dir": null,
+        "status": "failed"
+      },
+      "original": {
+        "ce_task_status": "",
+        "measures": {
+          "bugs": "8",
+          "code_smells": "67",
+          "coverage": "0.0",
+          "duplicated_lines_density": "1.4",
+          "ncloc": "1424",
+          "reliability_rating": "3.0",
+          "security_rating": "1.0",
+          "sqale_index": "744",
+          "sqale_rating": "1.0",
+          "vulnerabilities": "0"
+        },
+        "mode": "auto",
+        "project_key": "apache_cordova-plugin-inappbrowser",
+        "project_name": "apache/cordova-plugin-inappbrowser",
+        "quality_gate": "",
+        "reused": false,
+        "scan_data_status": "complete",
+        "sonar_task_id": "",
+        "sonar_url": "https://sonarcloud.io/dashboard?id=apache_cordova-plugin-inappbrowser",
+        "state_log_dir": null,
+        "status": "failed"
+      }
+    },
+    "test_port": {
+      "behavioral_verdict": "no_difference_detected",
+      "failure_class": "",
+      "reason": "",
+      "status": "passed",
+      "suite_changes": {
+        "added": 4,
+        "deleted": 0,
+        "modified": 0,
+        "total": 4
+      },
+      "suite_shape": {
+        "final_ported_test_file_count": 13,
+        "original_snapshot_file_count": 9,
+        "retention_ratio": 1.4444444444444444
+      }
+    }
+  },
+  "started_at": "2026-03-02T04:24:26Z",
+  "status": "failed"
+}

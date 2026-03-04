@@ -83,6 +83,10 @@ _exp_collect_scan_metadata() {
   _exp_scan_set_var "$prefix" "SONAR_TASK_ID" ""
   _exp_scan_set_var "$prefix" "CE_TASK_STATUS" ""
   _exp_scan_set_var "$prefix" "DATA_STATUS" "unavailable"
+  _exp_scan_set_var "$prefix" "BUILD_TOOL" ""
+  _exp_scan_set_var "$prefix" "BUILD_JDK" ""
+  _exp_scan_set_var "$prefix" "FAILURE_REASON" ""
+  _exp_scan_set_var "$prefix" "FAILURE_MESSAGE" ""
 
   if [[ -n "${SONAR_HOST_URL:-}" ]]; then
     _exp_scan_set_var "$prefix" "SONAR_URL" "${SONAR_HOST_URL}/dashboard?id=${project_key}"
@@ -91,6 +95,10 @@ _exp_collect_scan_metadata() {
   local task_id=""
   if declare -f state_get >/dev/null 2>&1; then
     task_id="$(state_get "$project_key" "sonar_task_id" 2>/dev/null || true)"
+    _exp_scan_set_var "$prefix" "BUILD_TOOL" "$(state_get "$project_key" "build_tool" 2>/dev/null || true)"
+    _exp_scan_set_var "$prefix" "BUILD_JDK" "$(state_get "$project_key" "jdk_version" 2>/dev/null || true)"
+    _exp_scan_set_var "$prefix" "FAILURE_REASON" "$(state_get "$project_key" "failure_reason" 2>/dev/null || true)"
+    _exp_scan_set_var "$prefix" "FAILURE_MESSAGE" "$(state_get "$project_key" "failure_message" 2>/dev/null || true)"
   fi
   _exp_scan_set_var "$prefix" "SONAR_TASK_ID" "$task_id"
 

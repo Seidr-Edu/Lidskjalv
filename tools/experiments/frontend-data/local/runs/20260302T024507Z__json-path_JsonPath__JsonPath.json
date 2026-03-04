@@ -1,0 +1,113 @@
+{
+  "derived": {
+    "sonar_delta": {
+      "bugs": -3.0,
+      "code_smells": -116.0,
+      "coverage": 0.0,
+      "duplicated_lines_density": -5.0,
+      "ncloc": -3737.0,
+      "sqale_index": -627.0,
+      "vulnerabilities": 0.0
+    }
+  },
+  "diagram": {
+    "path": null,
+    "sha256": "44467ed96d3ab57994781cd7307e6c435c831506d65795c38ea899df352725d2"
+  },
+  "extensions": {},
+  "finished_at": "2026-03-02T03:53:06Z",
+  "provenance": {
+    "source_root": null,
+    "source_run_file": "20260302T024507Z__json-path_JsonPath__JsonPath/outputs/experiment.json"
+  },
+  "run_id": "20260302T024507Z__json-path_JsonPath__JsonPath",
+  "schema_version": "run.v1",
+  "source": {
+    "display_name": "json-path/JsonPath",
+    "git": {
+      "commit": "62a4c9f0f65ba3f625aa0867d64c528ba72d09ec",
+      "remote": "https://github.com/json-path/JsonPath.git"
+    },
+    "key": "json-path_JsonPath",
+    "normalized_ref": "https://github.com/json-path/JsonPath.git",
+    "raw": "https://github.com/json-path/JsonPath.git",
+    "subdir": "json-path",
+    "type": "url"
+  },
+  "stages": {
+    "codegen": {
+      "exit_code": 0,
+      "metrics": {},
+      "status": "passed"
+    },
+    "sonar": {
+      "generated": {
+        "ce_task_status": "",
+        "measures": {
+          "bugs": "12",
+          "code_smells": "106",
+          "coverage": "0.0",
+          "duplicated_lines_density": "0.0",
+          "ncloc": "6087",
+          "reliability_rating": "2.0",
+          "security_rating": "1.0",
+          "sqale_index": "1183",
+          "sqale_rating": "1.0",
+          "vulnerabilities": "0"
+        },
+        "project_key": "json-path_JsonPath__gen__JsonPath__20260302T024507Z",
+        "project_name": "json-path/JsonPath [andvari gen:JsonPath @ 20260302T024507Z]",
+        "quality_gate": "",
+        "scan_data_status": "complete",
+        "sonar_task_id": "",
+        "sonar_url": "https://sonarcloud.io/dashboard?id=json-path_JsonPath__gen__JsonPath__20260302T024507Z",
+        "state_log_dir": null,
+        "status": "failed"
+      },
+      "original": {
+        "ce_task_status": "SUCCESS",
+        "measures": {
+          "bugs": "15",
+          "code_smells": "222",
+          "coverage": "0.0",
+          "duplicated_lines_density": "5.0",
+          "ncloc": "9824",
+          "reliability_rating": "3.0",
+          "security_rating": "1.0",
+          "sqale_index": "1810",
+          "sqale_rating": "1.0",
+          "vulnerabilities": "0"
+        },
+        "mode": "auto",
+        "project_key": "json-path_JsonPath__subdir__json-path",
+        "project_name": "json-path/JsonPath [subdir:json-path]",
+        "quality_gate": "",
+        "reused": false,
+        "scan_data_status": "complete",
+        "sonar_task_id": "AZys_k8FSeJ-cwClMTaR",
+        "sonar_url": "https://sonarcloud.io/dashboard?id=json-path_JsonPath__subdir__json-path",
+        "state_log_dir": null,
+        "status": "failed"
+      }
+    },
+    "test_port": {
+      "behavioral_verdict": "inconclusive",
+      "failure_class": "compatibility-build",
+      "reason": "tests-failed",
+      "status": "failed",
+      "suite_changes": {
+        "added": 8,
+        "deleted": 73,
+        "modified": 0,
+        "total": 81
+      },
+      "suite_shape": {
+        "final_ported_test_file_count": 17,
+        "original_snapshot_file_count": 82,
+        "retention_ratio": 0.2073170731707317
+      }
+    }
+  },
+  "started_at": "2026-03-02T02:45:07Z",
+  "status": "failed"
+}

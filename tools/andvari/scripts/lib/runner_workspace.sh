@@ -40,6 +40,7 @@ andvari_init_artifact_paths() {
   LAST_MODEL_VERIFY_OUTPUT="${LOGS_DIR}/gate_model_verify_last.log"
   GATE_SUMMARY_FILE="${LOGS_DIR}/gate_summary.txt"
   RUN_REPORT="${OUTPUTS_DIR}/run_report.md"
+  RUN_REPORT_JSON="${OUTPUTS_DIR}/run_report.json"
 
   touch "$EVENTS_LOG" "$CODEX_STDERR_LOG" "$GATE_LOG"
 }

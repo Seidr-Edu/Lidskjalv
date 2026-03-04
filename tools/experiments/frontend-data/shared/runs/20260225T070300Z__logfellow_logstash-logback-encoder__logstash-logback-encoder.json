@@ -1,0 +1,113 @@
+{
+  "derived": {
+    "sonar_delta": {
+      "bugs": -7.0,
+      "code_smells": -722.0,
+      "coverage": 0.0,
+      "duplicated_lines_density": 0.0,
+      "ncloc": -5827.0,
+      "sqale_index": -3173.0,
+      "vulnerabilities": 0.0
+    }
+  },
+  "diagram": {
+    "path": null,
+    "sha256": "80515885fb91048a6cdebd22770ab043a7a1f2df9ddf16610d326a9b518452a6"
+  },
+  "extensions": {},
+  "finished_at": "2026-02-25T08:00:23Z",
+  "provenance": {
+    "source_root": null,
+    "source_run_file": "20260225T070300Z__logfellow_logstash-logback-encoder__logstash-logback-encoder/outputs/experiment.json"
+  },
+  "run_id": "20260225T070300Z__logfellow_logstash-logback-encoder__logstash-logback-encoder",
+  "schema_version": "run.v1",
+  "source": {
+    "display_name": "logfellow/logstash-logback-encoder",
+    "git": {
+      "commit": "5ea5ec1badd5d8e3cf35219d8f155b95f398b287",
+      "remote": "https://github.com/logfellow/logstash-logback-encoder.git"
+    },
+    "key": "logfellow_logstash-logback-encoder",
+    "normalized_ref": "https://github.com/logfellow/logstash-logback-encoder.git",
+    "raw": "https://github.com/logfellow/logstash-logback-encoder.git",
+    "subdir": "",
+    "type": "url"
+  },
+  "stages": {
+    "codegen": {
+      "exit_code": 0,
+      "metrics": {},
+      "status": "passed"
+    },
+    "sonar": {
+      "generated": {
+        "ce_task_status": "SUCCESS",
+        "measures": {
+          "bugs": "8",
+          "code_smells": "140",
+          "coverage": "0.0",
+          "duplicated_lines_density": "3.1",
+          "ncloc": "5861",
+          "reliability_rating": "5.0",
+          "security_rating": "1.0",
+          "sqale_index": "1220",
+          "sqale_rating": "1.0",
+          "vulnerabilities": "0"
+        },
+        "project_key": "logfellow_logstash-logback-encoder__gen__logstash-logback-encoder__20260225T070300Z",
+        "project_name": "logfellow/logstash-logback-encoder [andvari gen:logstash-logback-encoder @ 20260225T070300Z]",
+        "quality_gate": "",
+        "scan_data_status": "complete",
+        "sonar_task_id": "AZyT0C3-h0-kLm35TpvX",
+        "sonar_url": "https://sonarcloud.io/dashboard?id=logfellow_logstash-logback-encoder__gen__logstash-logback-encoder__20260225T070300Z",
+        "state_log_dir": null,
+        "status": "success"
+      },
+      "original": {
+        "ce_task_status": "SUCCESS",
+        "measures": {
+          "bugs": "15",
+          "code_smells": "862",
+          "coverage": "0.0",
+          "duplicated_lines_density": "3.1",
+          "ncloc": "11688",
+          "reliability_rating": "4.0",
+          "security_rating": "1.0",
+          "sqale_index": "4393",
+          "sqale_rating": "1.0",
+          "vulnerabilities": "0"
+        },
+        "mode": "auto",
+        "project_key": "logfellow_logstash-logback-encoder",
+        "project_name": "logfellow/logstash-logback-encoder",
+        "quality_gate": "",
+        "reused": true,
+        "scan_data_status": "complete",
+        "sonar_task_id": "AZyTc95Bh0-kLm35Tm0G",
+        "sonar_url": "https://sonarcloud.io/dashboard?id=logfellow_logstash-logback-encoder",
+        "state_log_dir": null,
+        "status": "success"
+      }
+    },
+    "test_port": {
+      "behavioral_verdict": null,
+      "failure_class": null,
+      "reason": "",
+      "status": "passed",
+      "suite_changes": {
+        "added": 0,
+        "deleted": 0,
+        "modified": 0,
+        "total": 0
+      },
+      "suite_shape": {
+        "final_ported_test_file_count": 0,
+        "original_snapshot_file_count": 0,
+        "retention_ratio": null
+      }
+    }
+  },
+  "started_at": "2026-02-25T07:03:00Z",
+  "status": "completed"
+}

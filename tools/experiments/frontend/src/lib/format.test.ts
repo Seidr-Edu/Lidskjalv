@@ -22,6 +22,8 @@ describe("format helpers", () => {
     expect(deltaTone("bugs", 1)).toBe("danger");
     expect(deltaTone("coverage", 4)).toBe("success");
     expect(deltaTone("coverage", -4)).toBe("danger");
+    expect(deltaTone("sqale_rating", -1)).toBe("success");
+    expect(deltaTone("security_rating", 1)).toBe("danger");
     expect(deltaTone("custom_metric", 1)).toBe("neutral");
   });
 });

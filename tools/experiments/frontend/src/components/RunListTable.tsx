@@ -2,7 +2,8 @@ import type { KeyboardEvent } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { badgeVariantFromTone, deltaTone, formatDateTime, formatDelta, getStatusTone } from "@/lib/format";
+import { badgeVariantFromTone, deltaTone, formatDateTime, getStatusTone } from "@/lib/format";
+import { formatMetricDelta, metricLabel } from "@/lib/sonar-metrics";
 import type { RunIndexEntry } from "@/lib/types";
 
 import { StatusBadge } from "./StatusBadge";
@@ -26,7 +27,7 @@ function deltaBadge(metric: string, value: number | null | undefined) {
   if (value === undefined || value === null) {
     return (
       <Badge key={metric} variant="outline">
-        {metric}: —
+        {metricLabel(metric)}: —
       </Badge>
     );
   }
@@ -36,7 +37,7 @@ function deltaBadge(metric: string, value: number | null | undefined) {
 
   return (
     <Badge key={metric} variant={variant}>
-      {metric}: {formatDelta(value)}
+      {metricLabel(metric)}: {formatMetricDelta(metric, value)}
     </Badge>
   );
 }

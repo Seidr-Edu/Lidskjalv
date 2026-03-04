@@ -1,0 +1,177 @@
+{
+  "dataset_id": "shared",
+  "runs": [
+    {
+      "codegen_status": "partial",
+      "diagram_sha256": "80515885fb91048a6cdebd22770ab043a7a1f2df9ddf16610d326a9b518452a6",
+      "finished_at": "2026-02-25T06:59:34Z",
+      "run_id": "20260225T065918Z__logfellow_logstash-logback-encoder__logstash-logback-encoder",
+      "sonar_delta": {
+        "bugs": null,
+        "code_smells": null,
+        "coverage": null,
+        "duplicated_lines_density": null,
+        "ncloc": null,
+        "sqale_index": null,
+        "vulnerabilities": null
+      },
+      "source": "logfellow/logstash-logback-encoder",
+      "started_at": "2026-02-25T06:59:18Z",
+      "status": "failed",
+      "test_port_status": "skipped"
+    },
+    {
+      "codegen_status": "passed",
+      "diagram_sha256": "80515885fb91048a6cdebd22770ab043a7a1f2df9ddf16610d326a9b518452a6",
+      "finished_at": "2026-02-25T08:00:23Z",
+      "run_id": "20260225T070300Z__logfellow_logstash-logback-encoder__logstash-logback-encoder",
+      "sonar_delta": {
+        "bugs": -7.0,
+        "code_smells": -722.0,
+        "coverage": 0.0,
+        "duplicated_lines_density": 0.0,
+        "ncloc": -5827.0,
+        "sqale_index": -3173.0,
+        "vulnerabilities": 0.0
+      },
+      "source": "logfellow/logstash-logback-encoder",
+      "started_at": "2026-02-25T07:03:00Z",
+      "status": "completed",
+      "test_port_status": "passed"
+    },
+    {
+      "codegen_status": "passed",
+      "diagram_sha256": "944b4b1b840727e5c9af132e74a2f3cb872d4af3c6ebd6e64dd79f07224328ce",
+      "finished_at": "2026-02-26T08:18:45Z",
+      "run_id": "20260226T070258Z__Kong_unirest-java__unirest-java",
+      "sonar_delta": {
+        "bugs": -11.0,
+        "code_smells": -174.0,
+        "coverage": 0.0,
+        "duplicated_lines_density": -0.5,
+        "ncloc": -3335.0,
+        "sqale_index": -904.0,
+        "vulnerabilities": -6.0
+      },
+      "source": "Kong/unirest-java",
+      "started_at": "2026-02-26T07:02:58Z",
+      "status": "completed_with_warnings",
+      "test_port_status": "failed"
+    },
+    {
+      "codegen_status": "passed",
+      "diagram_sha256": "80a6996fd046a8de45f77dc69e4170b13ca5c25f378f4bf50bb32e2e6a676053",
+      "finished_at": "2026-02-26T09:32:10Z",
+      "run_id": "20260226T081845Z__casbin_jcasbin__jcasbin",
+      "sonar_delta": {
+        "bugs": -12.0,
+        "code_smells": 2183.0,
+        "coverage": 0.0,
+        "duplicated_lines_density": -0.7,
+        "ncloc": -171.0,
+        "sqale_index": 2477.0,
+        "vulnerabilities": 0.0
+      },
+      "source": "casbin/jcasbin",
+      "started_at": "2026-02-26T08:18:45Z",
+      "status": "completed_with_warnings",
+      "test_port_status": "failed"
+    },
+    {
+      "codegen_status": "passed",
+      "diagram_sha256": "49c2c9265a7afc78668fd8a6f6d93d5840a9440c49bde54fea3189dc464b9275",
+      "finished_at": "2026-02-26T09:58:03Z",
+      "run_id": "20260226T093210Z__reactor_BlockHound__BlockHound",
+      "sonar_delta": {
+        "bugs": -27.0,
+        "code_smells": -11.0,
+        "coverage": 0.0,
+        "duplicated_lines_density": -3.1,
+        "ncloc": 94.0,
+        "sqale_index": -128.0,
+        "vulnerabilities": 0.0
+      },
+      "source": "reactor/BlockHound",
+      "started_at": "2026-02-26T09:32:10Z",
+      "status": "failed",
+      "test_port_status": "failed"
+    },
+    {
+      "codegen_status": "passed",
+      "diagram_sha256": "1fef928bea8b6ec883c26614a20dfd9f39abab7e52eaab3c7522189bdd43eb1d",
+      "finished_at": "2026-03-02T02:45:06Z",
+      "run_id": "20260226T095803Z__obsidiandynamics_kafdrop__kafdrop",
+      "sonar_delta": {
+        "bugs": -7.0,
+        "code_smells": -43.0,
+        "coverage": 0.0,
+        "duplicated_lines_density": 0.0,
+        "ncloc": -1225.0,
+        "sqale_index": -198.0,
+        "vulnerabilities": -1.0
+      },
+      "source": "obsidiandynamics/kafdrop",
+      "started_at": "2026-02-26T09:58:03Z",
+      "status": "failed",
+      "test_port_status": "failed"
+    },
+    {
+      "codegen_status": "passed",
+      "diagram_sha256": "44467ed96d3ab57994781cd7307e6c435c831506d65795c38ea899df352725d2",
+      "finished_at": "2026-03-02T03:53:06Z",
+      "run_id": "20260302T024507Z__json-path_JsonPath__JsonPath",
+      "sonar_delta": {
+        "bugs": -3.0,
+        "code_smells": -116.0,
+        "coverage": 0.0,
+        "duplicated_lines_density": -5.0,
+        "ncloc": -3737.0,
+        "sqale_index": -627.0,
+        "vulnerabilities": 0.0
+      },
+      "source": "json-path/JsonPath",
+      "started_at": "2026-03-02T02:45:07Z",
+      "status": "failed",
+      "test_port_status": "failed"
+    },
+    {
+      "codegen_status": "passed",
+      "diagram_sha256": "2658371f449181e7af9cd4835a62c9e1189b7d3ce73726afe4e9182decd1dfd2",
+      "finished_at": "2026-03-02T04:24:26Z",
+      "run_id": "20260302T035307Z__pengrad_java-telegram-bot-api__java-telegram-bot-api",
+      "sonar_delta": {
+        "bugs": -3.0,
+        "code_smells": -1183.0,
+        "coverage": 0.0,
+        "duplicated_lines_density": -2.8,
+        "ncloc": -16703.0,
+        "sqale_index": -3459.0,
+        "vulnerabilities": 0.0
+      },
+      "source": "pengrad/java-telegram-bot-api",
+      "started_at": "2026-03-02T03:53:07Z",
+      "status": "failed",
+      "test_port_status": "failed"
+    },
+    {
+      "codegen_status": "passed",
+      "diagram_sha256": "50e6fb7f16c6a187a730101c04174cdb7283f7542cf420b99716cf76a6146e11",
+      "finished_at": "2026-03-02T04:46:17Z",
+      "run_id": "20260302T042426Z__apache_cordova-plugin-inappbrowser__cordova-plugin-inappbrowser",
+      "sonar_delta": {
+        "bugs": -8.0,
+        "code_smells": -17.0,
+        "coverage": 0.0,
+        "duplicated_lines_density": -1.4,
+        "ncloc": -334.0,
+        "sqale_index": -380.0,
+        "vulnerabilities": 0.0
+      },
+      "source": "apache/cordova-plugin-inappbrowser",
+      "started_at": "2026-03-02T04:24:26Z",
+      "status": "failed",
+      "test_port_status": "passed"
+    }
+  ],
+  "schema_version": "index.v1"
+}

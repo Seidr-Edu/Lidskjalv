@@ -25,3 +25,6 @@ tools/lidskjalv/repos/
 tools/experiments/frontend/node_modules/
 tools/experiments/frontend/dist/
 tools/experiments/frontend/coverage/
+tools/experiments/frontend/*.tsbuildinfo
+tools/experiments/frontend/vite.config.js
+tools/experiments/frontend/vite.config.d.ts

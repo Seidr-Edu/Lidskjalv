@@ -1,0 +1,113 @@
+{
+  "derived": {
+    "sonar_delta": {
+      "bugs": -12.0,
+      "code_smells": 2183.0,
+      "coverage": 0.0,
+      "duplicated_lines_density": -0.7,
+      "ncloc": -171.0,
+      "sqale_index": 2477.0,
+      "vulnerabilities": 0.0
+    }
+  },
+  "diagram": {
+    "path": null,
+    "sha256": "80a6996fd046a8de45f77dc69e4170b13ca5c25f378f4bf50bb32e2e6a676053"
+  },
+  "extensions": {},
+  "finished_at": "2026-02-26T09:32:10Z",
+  "provenance": {
+    "source_root": null,
+    "source_run_file": "20260226T081845Z__casbin_jcasbin__jcasbin/outputs/experiment.json"
+  },
+  "run_id": "20260226T081845Z__casbin_jcasbin__jcasbin",
+  "schema_version": "run.v1",
+  "source": {
+    "display_name": "casbin/jcasbin",
+    "git": {
+      "commit": "ab2403e291474f921f7c8f6f0be3f6ac176dbeef",
+      "remote": "https://github.com/casbin/jcasbin.git"
+    },
+    "key": "casbin_jcasbin",
+    "normalized_ref": "https://github.com/casbin/jcasbin.git",
+    "raw": "https://github.com/casbin/jcasbin.git",
+    "subdir": "",
+    "type": "url"
+  },
+  "stages": {
+    "codegen": {
+      "exit_code": 0,
+      "metrics": {},
+      "status": "passed"
+    },
+    "sonar": {
+      "generated": {
+        "ce_task_status": "SUCCESS",
+        "measures": {
+          "bugs": "0",
+          "code_smells": "2513",
+          "coverage": "0.0",
+          "duplicated_lines_density": "0.8",
+          "ncloc": "6120",
+          "reliability_rating": "1.0",
+          "security_rating": "1.0",
+          "sqale_index": "5260",
+          "sqale_rating": "1.0",
+          "vulnerabilities": "0"
+        },
+        "project_key": "casbin_jcasbin__gen__jcasbin__20260226T081845Z",
+        "project_name": "casbin/jcasbin [andvari gen:jcasbin @ 20260226T081845Z]",
+        "quality_gate": "",
+        "scan_data_status": "complete",
+        "sonar_task_id": "AZys6m23FT95F1vSOxEt",
+        "sonar_url": "https://sonarcloud.io/dashboard?id=casbin_jcasbin__gen__jcasbin__20260226T081845Z",
+        "state_log_dir": null,
+        "status": "success"
+      },
+      "original": {
+        "ce_task_status": "SUCCESS",
+        "measures": {
+          "bugs": "12",
+          "code_smells": "330",
+          "coverage": "0.0",
+          "duplicated_lines_density": "1.5",
+          "ncloc": "6291",
+          "reliability_rating": "5.0",
+          "security_rating": "1.0",
+          "sqale_index": "2783",
+          "sqale_rating": "1.0",
+          "vulnerabilities": "0"
+        },
+        "mode": "auto",
+        "project_key": "casbin_jcasbin",
+        "project_name": "casbin/jcasbin",
+        "quality_gate": "",
+        "reused": false,
+        "scan_data_status": "complete",
+        "sonar_task_id": "AZys6Zy761m2OIsFqOKy",
+        "sonar_url": "https://sonarcloud.io/dashboard?id=casbin_jcasbin",
+        "state_log_dir": null,
+        "status": "success"
+      }
+    },
+    "test_port": {
+      "behavioral_verdict": "invalid",
+      "failure_class": "write-scope-violation",
+      "reason": "write-scope-violation",
+      "status": "failed",
+      "suite_changes": {
+        "added": 438,
+        "deleted": 1,
+        "modified": 34,
+        "total": 473
+      },
+      "suite_shape": {
+        "final_ported_test_file_count": 52,
+        "original_snapshot_file_count": 35,
+        "retention_ratio": 1.4857142857142858
+      }
+    }
+  },
+  "started_at": "2026-02-26T08:18:45Z",
+  "status": "completed_with_warnings"
+}

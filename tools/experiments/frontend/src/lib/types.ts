@@ -8,6 +8,9 @@ export type SonarMetricKey =
   | "code_smells"
   | "coverage"
   | "duplicated_lines_density"
+  | "reliability_rating"
+  | "security_rating"
+  | "sqale_rating"
   | "ncloc"
   | "sqale_index";
 

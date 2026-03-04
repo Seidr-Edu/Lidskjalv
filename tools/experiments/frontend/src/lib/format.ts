@@ -5,6 +5,9 @@ const LOWER_IS_BETTER: SonarMetricKey[] = [
   "vulnerabilities",
   "code_smells",
   "duplicated_lines_density",
+  "reliability_rating",
+  "security_rating",
+  "sqale_rating",
   "sqale_index",
   "ncloc",
 ];

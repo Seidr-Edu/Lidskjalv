@@ -40,12 +40,12 @@ describe("App", () => {
     render(<App />);
 
     await screen.findByText("Runs (2)");
-    await screen.findByText(/"run_id": "run-a"/);
+    const runList = screen.getByTestId("run-list");
+    await within(runList).findByText("run-a");
 
     const user = userEvent.setup();
     await user.type(screen.getByRole("textbox", { name: "Search runs" }), "repo-b");
 
-    const runList = screen.getByTestId("run-list");
     expect(within(runList).queryByText("run-a")).not.toBeInTheDocument();
     expect(within(runList).getByText("run-b")).toBeInTheDocument();
 
@@ -60,7 +60,7 @@ describe("App", () => {
     }
 
     await waitFor(() => {
-      expect(screen.getByText(/"run_id": "run-b"/)).toBeInTheDocument();
+      expect(window.location.search).toContain("run=run-b");
     });
   });
 

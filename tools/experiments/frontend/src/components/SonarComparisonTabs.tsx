@@ -2,14 +2,24 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { badgeVariantFromTone, deltaTone, formatDelta, formatNumber, getStatusTone, toNumber } from "@/lib/format";
+import { badgeVariantFromTone, deltaTone, getStatusTone, toNumber } from "@/lib/format";
+import {
+  formatRatingDelta,
+  formatMetricDelta,
+  formatMetricValue,
+  isRatingMetric,
+  metricLabel,
+  ratingDeltaClassName,
+  ratingClassName,
+  SONAR_CORE_METRICS,
+  toRating,
+} from "@/lib/sonar-metrics";
 import type { RunRecord, SonarScan } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 interface SonarComparisonTabsProps {
   run: RunRecord;
 }
-
-const CORE_METRICS = ["bugs", "vulnerabilities", "code_smells", "coverage", "duplicated_lines_density", "ncloc", "sqale_index"];
 
 function extractMetrics(scan?: SonarScan): Record<string, number | null> {
   const out: Record<string, number | null> = {};
@@ -23,12 +33,37 @@ function extractMetrics(scan?: SonarScan): Record<string, number | null> {
   return out;
 }
 
-function deltaBadge(metric: string, value: number | null | undefined) {
+function deltaBadge(metric: string, value: number | null | undefined, originalValue: unknown, generatedValue: unknown) {
   if (value === undefined || value === null) {
     return <Badge variant="outline">—</Badge>;
   }
+
+  if (isRatingMetric(metric)) {
+    return (
+      <Badge className={cn("font-semibold", ratingDeltaClassName(value))} variant="outline">
+        {formatRatingDelta(value, originalValue, generatedValue)}
+      </Badge>
+    );
+  }
+
   const tone = deltaTone(metric, value);
-  return <Badge variant={badgeVariantFromTone(tone)}>{formatDelta(value)}</Badge>;
+  return <Badge variant={badgeVariantFromTone(tone)}>{formatMetricDelta(metric, value)}</Badge>;
+}
+
+function metricValueCell(metric: string, value: unknown) {
+  if (isRatingMetric(metric)) {
+    const rating = toRating(value);
+    if (!rating) {
+      return "—";
+    }
+    return (
+      <Badge className={cn("font-semibold", ratingClassName(rating))} variant="outline">
+        {rating}
+      </Badge>
+    );
+  }
+
+  return formatMetricValue(metric, value);
 }
 
 function scanDetails(scan: SonarScan | undefined, label: string) {
@@ -105,7 +140,22 @@ export function SonarComparisonTabs({ run }: SonarComparisonTabsProps) {
   const generatedMetrics = extractMetrics(generated);
   const delta = run.derived?.sonar_delta || {};
 
-  const metrics = new Set<string>([...CORE_METRICS]);
+  function metricDelta(metric: string): number | null {
+    const explicitDelta = toNumber((delta as Record<string, unknown>)[metric]);
+    if (explicitDelta !== null) {
+      return explicitDelta;
+    }
+
+    const originalValue = originalMetrics[metric];
+    const generatedValue = generatedMetrics[metric];
+    if (originalValue === null || generatedValue === null || originalValue === undefined || generatedValue === undefined) {
+      return null;
+    }
+
+    return generatedValue - originalValue;
+  }
+
+  const metrics = new Set<string>([...SONAR_CORE_METRICS]);
   for (const key of Object.keys(originalMetrics)) {
     metrics.add(key);
   }
@@ -117,8 +167,8 @@ export function SonarComparisonTabs({ run }: SonarComparisonTabsProps) {
   }
 
   const orderedMetrics = Array.from(metrics).sort((a, b) => {
-    const ai = CORE_METRICS.indexOf(a);
-    const bi = CORE_METRICS.indexOf(b);
+    const ai = SONAR_CORE_METRICS.indexOf(a as (typeof SONAR_CORE_METRICS)[number]);
+    const bi = SONAR_CORE_METRICS.indexOf(b as (typeof SONAR_CORE_METRICS)[number]);
     if (ai !== -1 || bi !== -1) {
       if (ai === -1) return 1;
       if (bi === -1) return -1;
@@ -153,10 +203,10 @@ export function SonarComparisonTabs({ run }: SonarComparisonTabsProps) {
               <TableBody>
                 {orderedMetrics.map((metric) => (
                   <TableRow key={metric}>
-                    <TableCell className="font-mono text-xs">{metric}</TableCell>
-                    <TableCell>{formatNumber(originalMetrics[metric])}</TableCell>
-                    <TableCell>{formatNumber(generatedMetrics[metric])}</TableCell>
-                    <TableCell>{deltaBadge(metric, (delta[metric] as number | null | undefined) ?? null)}</TableCell>
+                    <TableCell className="text-xs font-medium">{metricLabel(metric)}</TableCell>
+                    <TableCell>{metricValueCell(metric, originalMetrics[metric])}</TableCell>
+                    <TableCell>{metricValueCell(metric, generatedMetrics[metric])}</TableCell>
+                    <TableCell>{deltaBadge(metric, metricDelta(metric), originalMetrics[metric], generatedMetrics[metric])}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

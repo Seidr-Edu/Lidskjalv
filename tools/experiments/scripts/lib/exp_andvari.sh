@@ -19,4 +19,5 @@ exp_run_andvari() {
   ANDVARI_RUN_DIR="${REPO_ROOT}/.data/andvari/runs/${RUN_ID}"
   ANDVARI_NEW_REPO="${ANDVARI_RUN_DIR}/new_repo"
   ANDVARI_RUN_REPORT="${ANDVARI_RUN_DIR}/outputs/run_report.md"
+  ANDVARI_RUN_REPORT_JSON="${ANDVARI_RUN_DIR}/outputs/run_report.json"
 }

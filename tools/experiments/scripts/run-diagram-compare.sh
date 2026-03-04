@@ -28,7 +28,7 @@ main() {
   EXP_STARTED_AT="$(exp_timestamp_iso_utc)"
   DIAGRAM_SHA="$(exp_sha256_file "$DIAGRAM_PATH")"
 
-  EXP_RUN_DIR="${REPO_ROOT}/.data/experiments/runs/${RUN_ID}"
+  EXP_RUN_DIR="${EXPERIMENT_RUNS_ROOT}/${RUN_ID}"
   EXP_LOG_DIR="${EXP_RUN_DIR}/logs"
   EXP_WORKSPACE_DIR="${EXP_RUN_DIR}/workspace"
   EXP_WORKSPACE_SCAN_DIR="${EXP_WORKSPACE_DIR}/scan"

@@ -2,9 +2,12 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Connect, type Plugin, type PreviewServer, type ViteDevServer } from "vite";
+
+const CONFIG_DIR = path.dirname(fileURLToPath(import.meta.url));
 
 function frontendDataMiddleware(dataRoot: string): Connect.NextHandleFunction {
   return (req, res, next) => {
@@ -13,11 +16,20 @@ function frontendDataMiddleware(dataRoot: string): Connect.NextHandleFunction {
       return;
     }
 
-    const cleanPath = decodeURIComponent(req.url.split("?")[0] || "");
+    let cleanPath = "";
+    try {
+      cleanPath = decodeURIComponent(req.url.split("?")[0] || "");
+    } catch {
+      res.statusCode = 400;
+      res.end("Bad Request");
+      return;
+    }
+
     const relPath = cleanPath.replace(/^\/+/, "");
     const fullPath = path.resolve(dataRoot, relPath);
+    const relativePath = path.relative(dataRoot, fullPath);
 
-    if (!fullPath.startsWith(dataRoot)) {
+    if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
       res.statusCode = 403;
       res.end("Forbidden");
       return;
@@ -48,7 +60,7 @@ function frontendDataMiddleware(dataRoot: string): Connect.NextHandleFunction {
 }
 
 function serveFrontendData(): Plugin {
-  const dataRoot = path.resolve(__dirname, "../frontend-data");
+  const dataRoot = path.resolve(CONFIG_DIR, "../frontend-data");
   const middleware = frontendDataMiddleware(dataRoot);
 
   return {
@@ -66,7 +78,7 @@ export default defineConfig({
   plugins: [react(), serveFrontendData()],
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      "@": path.resolve(CONFIG_DIR, "./src"),
     },
   },
   test: {
@@ -77,7 +89,7 @@ export default defineConfig({
   },
   server: {
     fs: {
-      allow: [path.resolve(__dirname, "..")],
+      allow: [path.resolve(CONFIG_DIR, "..")],
     },
   },
 });

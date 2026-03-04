@@ -3,10 +3,10 @@ import argparse
 import json
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List, Optional
 
 
-def load_json(path: Path) -> dict[str, Any] | None:
+def load_json(path: Path) -> Optional[Dict[str, Any]]:
     if not path.exists():
         return None
     try:
@@ -26,7 +26,7 @@ def sanitize(value: Any) -> Any:
     return value
 
 
-def to_float_or_none(value: Any) -> float | None:
+def to_float_or_none(value: Any) -> Optional[float]:
     try:
         if value is None or value == "":
             return None
@@ -35,9 +35,9 @@ def to_float_or_none(value: Any) -> float | None:
         return None
 
 
-def sonar_delta(orig: dict[str, Any], gen: dict[str, Any]) -> dict[str, Any]:
+def sonar_delta(orig: Dict[str, Any], gen: Dict[str, Any]) -> Dict[str, Any]:
     metrics = ["bugs", "vulnerabilities", "code_smells", "coverage", "duplicated_lines_density", "ncloc", "sqale_index"]
-    out: dict[str, Any] = {}
+    out: Dict[str, Any] = {}
     for m in metrics:
         o = to_float_or_none((orig.get("measures") or {}).get(m) if isinstance(orig.get("measures"), dict) else None)
         g = to_float_or_none((gen.get("measures") or {}).get(m) if isinstance(gen.get("measures"), dict) else None)
@@ -45,7 +45,7 @@ def sonar_delta(orig: dict[str, Any], gen: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-def normalize_run(exp: dict[str, Any], run_id: str, source_root: Path) -> dict[str, Any]:
+def normalize_run(exp: Dict[str, Any], run_id: str, source_root: Path) -> Dict[str, Any]:
     scans = exp.get("scans") if isinstance(exp.get("scans"), dict) else {}
     orig = scans.get("original") if isinstance(scans.get("original"), dict) else {}
     gen = scans.get("generated") if isinstance(scans.get("generated"), dict) else {}
@@ -112,7 +112,7 @@ def write_json(path: Path, obj: Any) -> None:
     path.write_text(text + "\n", encoding="utf-8")
 
 
-def collect_run_ids(source_root: Path, explicit_ids: list[str], all_runs: bool) -> list[str]:
+def collect_run_ids(source_root: Path, explicit_ids: List[str], all_runs: bool) -> List[str]:
     if explicit_ids:
         return sorted(set(explicit_ids))
     if all_runs:
@@ -143,7 +143,7 @@ def main() -> int:
     runs_out = ds_root / "runs"
 
     run_ids = collect_run_ids(source_root, args.run_id, args.all or not args.run_id)
-    index_runs: list[dict[str, Any]] = []
+    index_runs: List[Dict[str, Any]] = []
     exported = set()
 
     for run_id in run_ids:

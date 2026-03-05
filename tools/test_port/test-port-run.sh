@@ -319,6 +319,7 @@ tp_execute() {
 main() {
   tp_parse_args "$@"
   tp_validate_and_finalize_args
+  tp_adapter_validate_supported "$TP_ADAPTER"
   tp_init_result_state
 
   # Codex adapter requires a diagram path to derive a readable context dir. When no

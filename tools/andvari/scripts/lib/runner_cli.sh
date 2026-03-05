@@ -43,6 +43,11 @@ andvari_parse_args() {
         MODEL_GATE_TIMEOUT_SEC="$2"
         shift 2
         ;;
+      --adapter)
+        [[ $# -ge 2 ]] || andvari_fail "--adapter requires a value"
+        ADAPTER="$2"
+        shift 2
+        ;;
       -h|--help)
         andvari_usage
         exit 0

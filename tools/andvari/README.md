@@ -1,6 +1,6 @@
 # Andvari
 
-Andvari runs a local diagram-to-Java reconstruction pipeline using Codex CLI.
+Andvari runs a local diagram-to-Java reconstruction pipeline using an adapter-backed CLI (`codex` or `claude`).
 
 This README assumes commands are run from `tools/andvari/`.
 From monorepo root, use `./andvari-run.sh`.
@@ -19,6 +19,7 @@ Output: isolated reconstructed repository, gate logs, and run report
 - `--diagram` (required): path to input diagram.
 - `--run-id` (optional): explicit run id (defaults to UTC timestamp).
 - `--max-iter` (optional): max repair loops after first implementation attempt.
+- `--adapter` (optional): adapter backend (default `ANDVARI_ADAPTER` or `codex`).
 - `--gating-mode model|fixed` (optional):
   - `model` (default): adaptive self-gating with model-defined outcomes/gates.
   - `fixed`: legacy `gate_recon.sh` flow.
@@ -38,12 +39,12 @@ Output: isolated reconstructed repository, gate logs, and run report
    - `gate_hard.sh`
    - `scripts/verify_outcome_coverage.sh`
    - `gate_recon.sh` (legacy compatibility)
-4. Runs declaration phase via Codex:
+4. Runs declaration phase via selected adapter:
    - model creates `completion/outcomes.initial.json`
    - model creates `completion/gates.v1.json`
    - model creates `completion/run_all_gates.sh`
 5. Runner locks hash of `completion/outcomes.initial.json`.
-6. Runs implementation phase via Codex.
+6. Runs implementation phase via selected adapter.
 7. Runner evaluates acceptance:
    - `./gate_hard.sh`
    - `./scripts/verify_outcome_coverage.sh --max-gate-revisions <N> --model-gate-timeout-sec <S>`
@@ -68,8 +69,8 @@ Output: isolated reconstructed repository, gate logs, and run report
 
 Per run:
 
-- `runs/<run_id>/logs/codex_events.jsonl`
-- `runs/<run_id>/logs/codex_stderr.log`
+- `runs/<run_id>/logs/adapter_events.jsonl`
+- `runs/<run_id>/logs/adapter_stderr.log`
 - `runs/<run_id>/logs/gate.log`
 - `runs/<run_id>/outputs/run_report.md`
 
@@ -98,14 +99,14 @@ Model-mode generated repo artifacts (inside `new_repo`):
 
 ## Prerequisites
 
-- `codex` CLI installed and on `PATH`
-- active Codex auth (`codex login status` must succeed)
+- `codex` or `claude` CLI installed and on `PATH` (matching selected adapter)
+- active auth/configuration for the selected adapter
 - Bash
 - Java + build tooling required by the generated project
 - `rg`
 - `perl` (used for JSON proof validation in `verify_outcome_coverage.sh`)
 
-The runner fails fast with actionable errors if Codex CLI is missing, unauthenticated, or cannot write its local session directory.
+The runner fails fast with actionable errors if the selected adapter cannot run non-interactively.
 
 ## Runner modules
 
@@ -123,5 +124,23 @@ The runner uses an adapter entrypoint:
 
 - `scripts/adapters/adapter.sh`
 - `scripts/adapters/codex.sh`
+- `scripts/adapters/claude.sh`
 
-Codex adapter supports fixed mode (legacy initial/fix prompts), model mode (declaration + implementation prompts), and experiment test-port adaptation prompts.
+Supported adapters are:
+
+- `codex` (default)
+- `claude`
+
+You can select an adapter with either:
+
+```bash
+ANDVARI_ADAPTER=claude ./andvari-run.sh --diagram /path/to/diagram.puml
+```
+
+or:
+
+```bash
+./andvari-run.sh --diagram /path/to/diagram.puml --adapter claude
+```
+
+Both adapters support fixed mode (legacy initial/fix prompts), model mode (declaration + implementation prompts), and test-port adaptation prompts.

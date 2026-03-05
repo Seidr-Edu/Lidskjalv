@@ -32,8 +32,8 @@ andvari_init_workspace() {
 }
 
 andvari_init_artifact_paths() {
-  EVENTS_LOG="${LOGS_DIR}/codex_events.jsonl"
-  CODEX_STDERR_LOG="${LOGS_DIR}/codex_stderr.log"
+  EVENTS_LOG="${LOGS_DIR}/adapter_events.jsonl"
+  CODEX_STDERR_LOG="${LOGS_DIR}/adapter_stderr.log"
   GATE_LOG="${LOGS_DIR}/gate.log"
   LAST_FIXED_GATE_OUTPUT="${LOGS_DIR}/gate_fixed_last.log"
   LAST_HARD_GATE_OUTPUT="${LOGS_DIR}/gate_hard_last.log"

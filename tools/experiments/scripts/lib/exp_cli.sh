@@ -15,6 +15,7 @@ Options:
   --runs-root <path>
   --gating-mode <model|fixed>
   --max-iter <n>
+  --adapter <codex|claude>            (required)
   --max-gate-revisions <n>
   --model-gate-timeout-sec <n>
   --scan-original <auto|force|skip>   (default: auto)
@@ -37,6 +38,7 @@ exp_parse_args() {
   EXPERIMENT_RUNS_ROOT="${EXPERIMENT_RUNS_ROOT:-}"
   GATING_MODE="model"
   MAX_ITER="8"
+  ADAPTER=""
   MAX_GATE_REVISIONS="3"
   MODEL_GATE_TIMEOUT_SEC="120"
   SCAN_ORIGINAL_MODE="auto"
@@ -57,6 +59,7 @@ exp_parse_args() {
       --runs-root) EXPERIMENT_RUNS_ROOT="${2:-}"; shift 2 ;;
       --gating-mode) GATING_MODE="${2:-}"; shift 2 ;;
       --max-iter) MAX_ITER="${2:-}"; shift 2 ;;
+      --adapter) ADAPTER="${2:-}"; shift 2 ;;
       --max-gate-revisions) MAX_GATE_REVISIONS="${2:-}"; shift 2 ;;
       --model-gate-timeout-sec) MODEL_GATE_TIMEOUT_SEC="${2:-}"; shift 2 ;;
       --scan-original) SCAN_ORIGINAL_MODE="${2:-}"; shift 2 ;;
@@ -88,6 +91,8 @@ exp_validate_args() {
   case "$TEST_PORT_MODE" in on|off) ;; *) exp_fail "--test-port must be on|off";; esac
 
   [[ "$MAX_ITER" =~ ^[0-9]+$ ]] || exp_fail "--max-iter must be non-negative integer"
+  [[ -n "$ADAPTER" ]] || exp_fail "--adapter is required"
+  case "$ADAPTER" in codex|claude) ;; *) exp_fail "--adapter must be codex|claude" ;; esac
   [[ "$MAX_GATE_REVISIONS" =~ ^[0-9]+$ ]] || exp_fail "--max-gate-revisions must be non-negative integer"
   [[ "$MODEL_GATE_TIMEOUT_SEC" =~ ^[0-9]+$ ]] || exp_fail "--model-gate-timeout-sec must be non-negative integer"
   [[ "$SONAR_WAIT_TIMEOUT_SEC" =~ ^[0-9]+$ ]] || exp_fail "--sonar-wait-timeout-sec must be non-negative integer"

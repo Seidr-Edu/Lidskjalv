@@ -9,6 +9,7 @@ exp_run_andvari() {
   "${REPO_ROOT}/andvari-run.sh" \
     --diagram "$DIAGRAM_PATH" \
     --run-id "$RUN_ID" \
+    --adapter "$ADAPTER" \
     --gating-mode "$GATING_MODE" \
     --max-iter "$MAX_ITER" \
     --max-gate-revisions "$MAX_GATE_REVISIONS" \

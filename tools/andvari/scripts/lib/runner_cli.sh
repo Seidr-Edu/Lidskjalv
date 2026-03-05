@@ -9,7 +9,7 @@ andvari_parse_args() {
   GATING_MODE="${ANDVARI_GATING_MODE:-model}"
   MAX_GATE_REVISIONS="${ANDVARI_MAX_GATE_REVISIONS:-3}"
   MODEL_GATE_TIMEOUT_SEC="${ANDVARI_MODEL_GATE_TIMEOUT_SEC:-120}"
-  ADAPTER="${ANDVARI_ADAPTER:-codex}"
+  ADAPTER=""
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -82,6 +82,11 @@ andvari_validate_config() {
       andvari_fail "--gating-mode must be one of: model, fixed"
       ;;
   esac
+
+  [[ -n "$ADAPTER" ]] || andvari_fail "--adapter is required"
+  if ! adapter_is_supported "$ADAPTER"; then
+    andvari_fail "Unsupported adapter: ${ADAPTER}. Supported adapters: $(adapter_list)"
+  fi
 
   if [[ "$GATING_MODE" == "model" ]]; then
     AGENTS_TEMPLATE_PATH="${ROOT_DIR}/AGENTS.model.md"

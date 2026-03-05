@@ -41,7 +41,6 @@ main() {
   EVENTS_LOG=""
   CODEX_STDERR_LOG=""
   OUTPUT_LAST_MESSAGE=""
-  ADAPTER="${ANDVARI_ADAPTER:-codex}"
 
   state_init
 

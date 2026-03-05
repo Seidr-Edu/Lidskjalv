@@ -6,6 +6,8 @@ This tool orchestrates diagram-driven reconstruction experiments:
 2. Scan the original source and generated repo with Lidskjalv.
 3. Invoke the standalone test-port tool for isolated test adaptation/evaluation.
 
+Adapter selection is explicit: pass `--adapter codex|claude`.
+
 ## Entrypoint
 
 - Root wrapper: `./experiment-run.sh`

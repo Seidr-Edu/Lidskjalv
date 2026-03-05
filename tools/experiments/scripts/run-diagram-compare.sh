@@ -42,11 +42,26 @@ main() {
   CODEX_STDERR_LOG=""
   OUTPUT_LAST_MESSAGE=""
   ADAPTER="${ANDVARI_ADAPTER:-codex}"
+  ANDVARI_REUSED=false
+  ANDVARI_REUSE_SOURCE_RUN_ID=""
+  ANDVARI_REUSE_GENERATED_REPO=""
 
   state_init
 
-  exp_log "running andvari"
-  exp_run_andvari
+  if [[ -n "${REUSE_GENERATED_REPO:-}" ]]; then
+    exp_log "reusing generated repo (skip andvari): ${REUSE_GENERATED_REPO}"
+    ANDVARI_REUSED=true
+    ANDVARI_REUSE_SOURCE_RUN_ID="${REUSE_GENERATED_RUN_ID:-}"
+    ANDVARI_REUSE_GENERATED_REPO="$REUSE_GENERATED_REPO"
+    ANDVARI_EXIT_CODE=0
+    ANDVARI_RUN_DIR=""
+    ANDVARI_NEW_REPO="$REUSE_GENERATED_REPO"
+    ANDVARI_RUN_REPORT=""
+    ANDVARI_RUN_REPORT_JSON=""
+  else
+    exp_log "running andvari"
+    exp_run_andvari
+  fi
 
   exp_log "materializing original source"
   exp_materialize_original_repo

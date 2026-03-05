@@ -12,6 +12,7 @@ exp_write_reports() {
     "$SOURCE_REPO_RAW" "$SOURCE_TYPE" "$SOURCE_REF" "$SOURCE_SUBDIR" "$ORIGINAL_SOURCE_KEY" "$ORIGINAL_DISPLAY_NAME" \
     "$ORIGINAL_GIT_COMMIT" "$ORIGINAL_GIT_REMOTE" \
     "$ANDVARI_RUN_DIR" "$ANDVARI_EXIT_CODE" "$ANDVARI_RUN_REPORT" "$ANDVARI_RUN_REPORT_JSON" \
+    "${ANDVARI_REUSED:-false}" "${ANDVARI_REUSE_SOURCE_RUN_ID:-}" "${ANDVARI_REUSE_GENERATED_REPO:-}" \
     "$SCAN_ORIGINAL_MODE" "$ORIGINAL_SCAN_STATUS" "$ORIGINAL_SCAN_REUSED" "$ORIGINAL_SCAN_KEY" "$ORIGINAL_SCAN_DISPLAY_NAME" \
     "$ORIGINAL_SCAN_SONAR_URL" "$ORIGINAL_SCAN_QUALITY_GATE" "$ORIGINAL_SCAN_MEASURES_JSON" "$ORIGINAL_SCAN_STATE_LOG_DIR" \
     "$ORIGINAL_SCAN_SONAR_TASK_ID" "$ORIGINAL_SCAN_CE_TASK_STATUS" "$ORIGINAL_SCAN_DATA_STATUS" \
@@ -38,6 +39,7 @@ import xml.etree.ElementTree as ET
  src_raw, src_type, src_ref, src_subdir, src_key, src_name,
  src_commit, src_remote,
  andvari_dir, andvari_exit, andvari_report, andvari_report_json,
+ andvari_reused, andvari_reuse_source_run_id, andvari_reuse_generated_repo,
  scan_orig_mode, scan_orig_status, scan_orig_reused, scan_orig_key, scan_orig_name,
  scan_orig_url, scan_orig_qg, scan_orig_measures_json, scan_orig_state_log_dir,
  scan_orig_task_id, scan_orig_ce_status, scan_orig_data_status,
@@ -359,6 +361,9 @@ obj = {
     "run_dir": andvari_dir,
     "exit_code": andvari_exit_i,
     "status": andvari_status,
+    "reused": andvari_reused == "true",
+    "reuse_source_run_id": andvari_reuse_source_run_id,
+    "reuse_generated_repo": andvari_reuse_generated_repo,
     "run_report_path": andvari_report,
     "run_report_json_path": andvari_report_json,
     "metrics": andvari_metrics
@@ -546,6 +551,9 @@ PY
 - Source: ${SOURCE_REPO_RAW}
 - Source subdir: ${SOURCE_SUBDIR:-<none>}
 - Andvari exit code: ${ANDVARI_EXIT_CODE}
+- Andvari reused: **${ANDVARI_REUSED:-false}**
+- Andvari reuse source run id: ${ANDVARI_REUSE_SOURCE_RUN_ID:-<none>}
+- Andvari reuse generated repo: ${ANDVARI_REUSE_GENERATED_REPO:-<none>}
 - Andvari report: ${ANDVARI_RUN_REPORT}
 
 ## Scans
@@ -600,6 +608,6 @@ PY
 - Baseline generated executed tests: **${tp_baseline_generated_exec_tests_executed}**
 - Ported original tests: **${PORTED_ORIGINAL_TESTS_STATUS}** (exit ${PORTED_ORIGINAL_TESTS_EXIT_CODE}) log: ${PORTED_ORIGINAL_TESTS_LOG_PATH:-<none>}
 - Ported executed tests: **${tp_ported_exec_tests_executed}**
-- Note: test-port `Status` is execution status of the adapted suite; `Behavioral verdict` estimates evidentiary strength for functional equivalence/difference. Detailed failing cases are in `experiment.json` under `test_port.behavioral_evidence.failing_cases`.
+- Note: test-port \`Status\` is execution status of the adapted suite; \`Behavioral verdict\` estimates evidentiary strength for functional equivalence/difference. Detailed failing cases are in \`experiment.json\` under \`test_port.behavioral_evidence.failing_cases\`.
 MD
 }

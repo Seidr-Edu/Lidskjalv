@@ -13,6 +13,8 @@ Usage: ./experiment-batch-run.sh --manifest <path> [options]
 
 Options:
   --manifest <path>   JSON runset manifest (required)
+  --reuse-codegen-auto
+                      Reuse latest compatible prior generated repo and skip codegen
   --fail-fast         Stop after the first non-zero experiment exit
   --dry-run           Print commands without executing
   -h, --help          Show help
@@ -67,12 +69,14 @@ append_bool_flag_if_true() {
 
 parse_args() {
   MANIFEST_PATH=""
+  REUSE_CODEGEN_AUTO=false
   FAIL_FAST=false
   DRY_RUN=false
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --manifest) MANIFEST_PATH="${2:-}"; shift 2 ;;
+      --reuse-codegen-auto) REUSE_CODEGEN_AUTO=true; shift ;;
       --fail-fast) FAIL_FAST=true; shift ;;
       --dry-run) DRY_RUN=true; shift ;;
       -h|--help) usage; exit 0 ;;
@@ -103,7 +107,82 @@ setup_batch_dirs() {
   BATCH_SUMMARY_MD="${BATCH_RUN_DIR}/summary.md"
 
   mkdir -p "$BATCH_LOG_DIR"
-  printf 'index\tid\tdiagram\tsource_repo\tsource_subdir\texit_code\tresult\n' > "$BATCH_RESULTS_TSV"
+  printf 'index\tid\tdiagram\tsource_repo\tsource_subdir\texit_code\tresult\tdetail\n' > "$BATCH_RESULTS_TSV"
+}
+
+resolve_reuse_codegen_candidate() {
+  local diagram="$1"
+  local source_repo="$2"
+  local source_subdir="$3"
+  local exclude_run_id="${4:-}"
+
+  python3 - <<'PY' "${REPO_ROOT}/.data/experiments/runs" "$diagram" "$source_repo" "$source_subdir" "$exclude_run_id"
+import glob
+import json
+import os
+import sys
+
+runs_root, diagram, source_repo, source_subdir, exclude_run_id = sys.argv[1:]
+target_diagram = os.path.abspath(diagram)
+target_source = source_repo
+target_subdir = source_subdir or ""
+
+candidates = []
+for path in glob.glob(os.path.join(runs_root, "*", "outputs", "experiment.json")):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            obj = json.load(f)
+    except Exception:
+        continue
+
+    exp_id = obj.get("experiment_id") or ""
+    if exclude_run_id and exp_id == exclude_run_id:
+        continue
+
+    inputs = obj.get("inputs") if isinstance(obj.get("inputs"), dict) else {}
+    src = inputs.get("source_repo") if isinstance(inputs.get("source_repo"), dict) else {}
+    diagram_path = os.path.abspath(str(inputs.get("diagram_path") or ""))
+    src_raw = str(src.get("raw") or "")
+    src_subdir = str(src.get("subdir") or "")
+    if diagram_path != target_diagram:
+        continue
+    if src_raw != target_source:
+        continue
+    if src_subdir != target_subdir:
+        continue
+
+    andvari = obj.get("andvari") if isinstance(obj.get("andvari"), dict) else {}
+    try:
+        andvari_exit = int(andvari.get("exit_code"))
+    except Exception:
+        continue
+    if andvari_exit != 0:
+        continue
+
+    run_dir = str(andvari.get("run_dir") or "")
+    if not run_dir:
+        continue
+    new_repo = os.path.abspath(os.path.join(run_dir, "new_repo"))
+    if not os.path.isdir(new_repo):
+        continue
+    has_content = False
+    for _root, _dirs, files in os.walk(new_repo):
+        if files:
+            has_content = True
+            break
+    if not has_content:
+        continue
+
+    finished_at = str(obj.get("finished_at") or "")
+    started_at = str(obj.get("started_at") or "")
+    candidates.append((finished_at, started_at, exp_id, new_repo))
+
+if not candidates:
+    raise SystemExit(1)
+
+best = max(candidates, key=lambda item: (item[0], item[1], item[2]))
+print(f"{best[2]}\t{best[3]}")
+PY
 }
 
 materialize_run_case() {
@@ -171,6 +250,7 @@ materialize_run_case() {
   RUN_CASE_SOURCE_REPO="$source_repo"
   RUN_CASE_SOURCE_SUBDIR="${source_subdir:-}"
   RUN_CASE_CMD_JSON="$merged"
+  RUN_CASE_DETAIL=""
   RUN_CASE_CMD=("${cmd[@]}")
 }
 
@@ -198,6 +278,7 @@ main() {
 
   log "manifest: $MANIFEST_PATH"
   log "batch run dir: $BATCH_RUN_DIR"
+  log "reuse codegen auto: ${REUSE_CODEGEN_AUTO}"
 
   local run_count
   run_count="$(jq '.runs | length' "$MANIFEST_PATH")"
@@ -213,17 +294,44 @@ main() {
     log "[$((idx+1))/${run_count}] ${RUN_CASE_ID}"
     log "diagram=$(realpath "$RUN_CASE_DIAGRAM" 2>/dev/null || printf '%s' "$RUN_CASE_DIAGRAM") source=${RUN_CASE_SOURCE_REPO}${RUN_CASE_SOURCE_SUBDIR:+ subdir=${RUN_CASE_SOURCE_SUBDIR}}"
 
+    local skip_case=false
+    if $REUSE_CODEGEN_AUTO; then
+      local reuse_result=""
+      if reuse_result="$(resolve_reuse_codegen_candidate "$RUN_CASE_DIAGRAM" "$RUN_CASE_SOURCE_REPO" "${RUN_CASE_SOURCE_SUBDIR:-}" "$RUN_CASE_ID")"; then
+        local reuse_run_id=""
+        local reuse_repo=""
+        IFS=$'\t' read -r reuse_run_id reuse_repo <<< "$reuse_result"
+        RUN_CASE_CMD+=(--reuse-generated-repo "$reuse_repo" --reuse-generated-run-id "$reuse_run_id")
+        RUN_CASE_DETAIL="reused-codegen:${reuse_run_id}"
+        log "resolved reuse candidate: ${reuse_run_id}"
+      else
+        RUN_CASE_DETAIL="no-reusable-codegen"
+        skip_case=true
+      fi
+    fi
+
     local rc=0
-    if $DRY_RUN; then
-      printf 'DRY RUN: ' | tee "$case_log" >/dev/null
-      printf '%q ' "${RUN_CASE_CMD[@]}" | tee -a "$case_log" >/dev/null
-      printf '\n' | tee -a "$case_log" >/dev/null
-      rc=0
+    if $skip_case; then
+      {
+        printf 'AUTO-REUSE RESOLUTION FAILED\n'
+        printf 'detail=%s\n' "$RUN_CASE_DETAIL"
+        printf 'diagram=%s\n' "$RUN_CASE_DIAGRAM"
+        printf 'source_repo=%s\n' "$RUN_CASE_SOURCE_REPO"
+        printf 'source_subdir=%s\n' "${RUN_CASE_SOURCE_SUBDIR:-}"
+      } > "$case_log"
+      rc=1
     else
-      set +e
-      "${RUN_CASE_CMD[@]}" >"$case_log" 2>&1
-      rc=$?
-      set -e
+      if $DRY_RUN; then
+        printf 'DRY RUN: ' | tee "$case_log" >/dev/null
+        printf '%q ' "${RUN_CASE_CMD[@]}" | tee -a "$case_log" >/dev/null
+        printf '\n' | tee -a "$case_log" >/dev/null
+        rc=0
+      else
+        set +e
+        "${RUN_CASE_CMD[@]}" >"$case_log" 2>&1
+        rc=$?
+        set -e
+      fi
     fi
 
     local result_word="ok"
@@ -235,14 +343,15 @@ main() {
       warn "case ${RUN_CASE_ID} exited ${rc} (log: ${case_log})"
     fi
 
-    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
       "$((idx+1))" \
       "$RUN_CASE_ID" \
       "$RUN_CASE_DIAGRAM" \
       "$RUN_CASE_SOURCE_REPO" \
       "${RUN_CASE_SOURCE_SUBDIR:-}" \
       "$rc" \
-      "$result_word" >> "$BATCH_RESULTS_TSV"
+      "$result_word" \
+      "${RUN_CASE_DETAIL:-}" >> "$BATCH_RESULTS_TSV"
     executed_count=$((executed_count + 1))
 
     if $FAIL_FAST && [[ "$rc" -ne 0 ]]; then

@@ -50,6 +50,30 @@ Dry run (print commands only):
 ./experiment-batch-run.sh --manifest tools/experiments/runsets/batch-7-multi-repo.json --dry-run
 ```
 
+Rerun a batch without codegen (reuse latest compatible prior generated repo for each case):
+
+```bash
+./experiment-batch-run.sh --manifest tools/experiments/runsets/batch-7-multi-repo.json --reuse-codegen-auto
+```
+
+### Codegen Reuse Resolution
+
+`--reuse-codegen-auto` resolves prior runs from `.data/experiments/runs/*/outputs/experiment.json` by exact match on:
+
+- absolute `inputs.diagram_path`
+- `inputs.source_repo.raw`
+- `inputs.source_repo.subdir` (empty when unset)
+
+A prior run is considered reusable when:
+
+- `andvari.exit_code == 0`
+- `andvari.run_dir` exists
+- `<andvari.run_dir>/new_repo` exists and is non-empty
+
+Selection is deterministic: latest `finished_at`, then latest `started_at`, then highest `experiment_id` lexicographically.
+
+If no compatible reusable run is found, the batch case fails with `detail=no-reusable-codegen` and batch execution continues unless `--fail-fast` is set.
+
 ## Sonar metadata timing
 
 Sonar measures can be unavailable immediately after scan submission because compute engine

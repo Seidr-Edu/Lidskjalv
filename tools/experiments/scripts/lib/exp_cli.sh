@@ -24,9 +24,18 @@ Options:
   --sonar-wait-poll-sec <n>           (default: 5)
   --test-port <on|off>                (default: on)
   --test-port-max-iter <n>            (default: 5)
+  --reuse-generated-repo <path>       Skip codegen and reuse generated repo at path
+  --reuse-generated-run-id <id>       Metadata-only: source run id for reused generated repo
   --strict-test-port
   -h, --help
 USAGE
+}
+
+_exp_abs_path() {
+  python3 - <<'PY' "$1"
+import os,sys
+print(os.path.abspath(sys.argv[1]))
+PY
 }
 
 exp_parse_args() {
@@ -46,6 +55,8 @@ exp_parse_args() {
   SONAR_WAIT_POLL_SEC="5"
   TEST_PORT_MODE="on"
   TEST_PORT_MAX_ITER="5"
+  REUSE_GENERATED_REPO=""
+  REUSE_GENERATED_RUN_ID=""
   STRICT_TEST_PORT=false
 
   while [[ $# -gt 0 ]]; do
@@ -66,6 +77,8 @@ exp_parse_args() {
       --sonar-wait-poll-sec) SONAR_WAIT_POLL_SEC="${2:-}"; shift 2 ;;
       --test-port) TEST_PORT_MODE="${2:-}"; shift 2 ;;
       --test-port-max-iter) TEST_PORT_MAX_ITER="${2:-}"; shift 2 ;;
+      --reuse-generated-repo) REUSE_GENERATED_REPO="${2:-}"; shift 2 ;;
+      --reuse-generated-run-id) REUSE_GENERATED_RUN_ID="${2:-}"; shift 2 ;;
       --strict-test-port) STRICT_TEST_PORT=true; shift ;;
       -h|--help) exp_usage; exit 0 ;;
       *) exp_fail "Unknown argument: $1" ;;
@@ -95,4 +108,15 @@ exp_validate_args() {
   [[ "$SONAR_WAIT_POLL_SEC" -gt 0 ]] || exp_fail "--sonar-wait-poll-sec must be > 0"
   [[ "$TEST_PORT_MAX_ITER" =~ ^[0-9]+$ ]] || exp_fail "--test-port-max-iter must be non-negative integer"
   [[ -n "$EXPERIMENT_RUNS_ROOT" ]] || exp_fail "--runs-root must not be empty"
+
+  if [[ -n "$REUSE_GENERATED_REPO" ]]; then
+    REUSE_GENERATED_REPO="$(_exp_abs_path "$REUSE_GENERATED_REPO")"
+    [[ -d "$REUSE_GENERATED_REPO" ]] || exp_fail "reuse generated repo not found: $REUSE_GENERATED_REPO"
+    find "$REUSE_GENERATED_REPO" -mindepth 1 -print -quit | grep -q . \
+      || exp_fail "reuse generated repo is empty: $REUSE_GENERATED_REPO"
+  fi
+
+  if [[ -n "$REUSE_GENERATED_RUN_ID" && -z "$REUSE_GENERATED_REPO" ]]; then
+    exp_fail "--reuse-generated-run-id requires --reuse-generated-repo"
+  fi
 }

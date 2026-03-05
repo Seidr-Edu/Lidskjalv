@@ -32,6 +32,10 @@ Write-scope policy remains `tests-only`, but known runtime/internal paths are ig
 
 - `./completion/proof/logs/`
 - `./.mvn_repo/`
+- `./.m2/`
+- `./.gradle/`
+- `./target/`
+- `./build/`
 
 You can add more repo-relative ignored prefixes with:
 
@@ -57,6 +61,21 @@ When Maven is detected, test-port always runs Maven with:
 `-Dmaven.repo.local=<run-dir>/workspace/.m2/repository`
 
 This keeps dependency downloads out of copied repositories while reusing dependencies inside a single test-port run.
+
+## Gradle cache and temp directories
+
+When Gradle is detected, test-port runs with:
+
+- `GRADLE_USER_HOME=<run-dir>/workspace/.gradle`
+- `TMPDIR=<run-dir>/workspace/tmp`
+
+This keeps Gradle cache/temp writes hermetic to the run workspace.
+
+## Module/subdir selection
+
+- `--original-subdir` selects the original module root for baseline snapshotting.
+- `--generated-subdir` selects the generated module root for generated baseline and ported execution.
+- If `--generated-subdir` is omitted, test-port attempts auto-detection from copied original tests and build markers.
 
 ## Retention policy
 
@@ -94,11 +113,49 @@ Undocumented removed original tests fail the iteration with:
 
 Detailed entries are reported in `test_port.json` under `removed_original_tests`.
 
-## JUnit evidence guard
+## Runner preflight and no-test-signal
 
-An adaptation run that exits `0` but produces zero JUnit XML reports is treated as invalid evidence:
+Before running adaptation/baselines, test-port captures `runner_preflight` in `test_port.json`:
 
-- `reason=insufficient-test-evidence`
-- `failure_class=missing-junit-reports`
+- `detected_runner`
+- `supported`
+- `missing_capabilities[]`
+- `module_root`
+- `frameworks_detected[]`
 
-The pipeline keeps iterating so the adapter can recover a valid, evidence-producing run.
+Unsupported/missing capabilities produce:
+
+- `status=skipped`
+- `reason=unsupported-test-runner`
+- `status_detail=unsupported_runner`
+
+If tests exit `0` but `tests_executed == 0`, test-port does not emit a pass verdict:
+
+- `status=skipped`
+- `reason=no-test-signal`
+- `status_detail=no_test_signal`
+- `behavioral_verdict=no_test_signal`
+
+## Output schema v2 highlights
+
+`outputs/test_port.json` is now schema `version: 2` with additive compatibility fields:
+
+- `status_detail`
+- `failure_class_legacy`
+- `runner_preflight`
+- `failure_diagnostics`
+- per-suite `execution_summary` for baseline/generated/ported suites
+- suite rewrite metrics: `retained_modified_count`, `retained_unchanged_count`, `assertion_line_change_count`
+
+`no_difference_detected` is only emitted when baseline original is comparable/pass, ported tests pass, and non-zero tests executed.
+
+## Runner support roadmap
+
+Current execution support:
+
+- Maven Surefire/Failsafe (JUnit4/JUnit5/TestNG via Maven runner)
+- Gradle `test` (wrapper or system Gradle)
+
+Current preflight-only / planned:
+
+- Node/Jest and non-Java runners: detected as unsupported today, surfaced via `runner_preflight.missing_capabilities`.

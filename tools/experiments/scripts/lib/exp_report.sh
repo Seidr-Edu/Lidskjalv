@@ -12,6 +12,7 @@ exp_write_reports() {
     "$SOURCE_REPO_RAW" "$SOURCE_TYPE" "$SOURCE_REF" "$SOURCE_SUBDIR" "$ORIGINAL_SOURCE_KEY" "$ORIGINAL_DISPLAY_NAME" \
     "$ORIGINAL_GIT_COMMIT" "$ORIGINAL_GIT_REMOTE" \
     "$ANDVARI_RUN_DIR" "$ANDVARI_EXIT_CODE" "$ANDVARI_RUN_REPORT" "$ANDVARI_RUN_REPORT_JSON" \
+    "${ANDVARI_REUSED:-false}" "${ANDVARI_REUSE_SOURCE_RUN_ID:-}" "${ANDVARI_REUSE_GENERATED_REPO:-}" \
     "$SCAN_ORIGINAL_MODE" "$ORIGINAL_SCAN_STATUS" "$ORIGINAL_SCAN_REUSED" "$ORIGINAL_SCAN_KEY" "$ORIGINAL_SCAN_DISPLAY_NAME" \
     "$ORIGINAL_SCAN_SONAR_URL" "$ORIGINAL_SCAN_QUALITY_GATE" "$ORIGINAL_SCAN_MEASURES_JSON" "$ORIGINAL_SCAN_STATE_LOG_DIR" \
     "$ORIGINAL_SCAN_SONAR_TASK_ID" "$ORIGINAL_SCAN_CE_TASK_STATUS" "$ORIGINAL_SCAN_DATA_STATUS" \
@@ -38,6 +39,7 @@ import xml.etree.ElementTree as ET
  src_raw, src_type, src_ref, src_subdir, src_key, src_name,
  src_commit, src_remote,
  andvari_dir, andvari_exit, andvari_report, andvari_report_json,
+ andvari_reused, andvari_reuse_source_run_id, andvari_reuse_generated_repo,
  scan_orig_mode, scan_orig_status, scan_orig_reused, scan_orig_key, scan_orig_name,
  scan_orig_url, scan_orig_qg, scan_orig_measures_json, scan_orig_state_log_dir,
  scan_orig_task_id, scan_orig_ce_status, scan_orig_data_status,
@@ -359,6 +361,9 @@ obj = {
     "run_dir": andvari_dir,
     "exit_code": andvari_exit_i,
     "status": andvari_status,
+    "reused": andvari_reused == "true",
+    "reuse_source_run_id": andvari_reuse_source_run_id,
+    "reuse_generated_repo": andvari_reuse_generated_repo,
     "run_report_path": andvari_report,
     "run_report_json_path": andvari_report_json,
     "metrics": andvari_metrics
@@ -491,9 +496,22 @@ PY
   local tp_final_test_files=0
   local tp_retained_original_files=0
   local tp_removed_original_files=0
+  local tp_retained_modified_files=0
+  local tp_retained_unchanged_files=0
+  local tp_assertion_line_change_count=0
   local tp_behavioral_verdict="inconclusive"
   local tp_behavioral_verdict_reason="unknown"
+  local tp_status_detail=""
   local tp_behavioral_case_count=0
+  local tp_failure_class_legacy=""
+  local tp_runner_preflight_runner=""
+  local tp_runner_preflight_supported=""
+  local tp_runner_preflight_missing=""
+  local tp_runner_preflight_frameworks=""
+  local tp_runner_preflight_module_root=""
+  local tp_ported_exec_tests_executed=0
+  local tp_baseline_original_exec_tests_executed=0
+  local tp_baseline_generated_exec_tests_executed=0
   local tp_retention_policy_mode="maximize-retained-original-tests"
   local tp_undocumented_removed_count=0
 
@@ -506,9 +524,22 @@ PY
   tp_final_test_files="${TEST_PORT_SUITE_SHAPE_FINAL_PORTED_TEST_FILE_COUNT:-0}"
   tp_retained_original_files="${TEST_PORT_SUITE_SHAPE_RETAINED_ORIGINAL_TEST_FILE_COUNT:-0}"
   tp_removed_original_files="${TEST_PORT_SUITE_SHAPE_REMOVED_ORIGINAL_TEST_FILE_COUNT:-0}"
+  tp_retained_modified_files="${TEST_PORT_SUITE_SHAPE_RETAINED_MODIFIED_COUNT:-0}"
+  tp_retained_unchanged_files="${TEST_PORT_SUITE_SHAPE_RETAINED_UNCHANGED_COUNT:-0}"
+  tp_assertion_line_change_count="${TEST_PORT_SUITE_SHAPE_ASSERTION_LINE_CHANGE_COUNT:-0}"
   tp_behavioral_verdict="${TEST_PORT_BEHAVIORAL_VERDICT:-inconclusive}"
   tp_behavioral_verdict_reason="${TEST_PORT_BEHAVIORAL_VERDICT_REASON:-unknown}"
+  tp_status_detail="${TEST_PORT_STATUS_DETAIL:-}"
   tp_behavioral_case_count="${TEST_PORT_BEHAVIORAL_FAILING_CASE_COUNT:-0}"
+  tp_failure_class_legacy="${TEST_PORT_FAILURE_CLASS_LEGACY:-}"
+  tp_runner_preflight_runner="${TEST_PORT_RUNNER_PREFLIGHT_RUNNER:-}"
+  tp_runner_preflight_supported="${TEST_PORT_RUNNER_PREFLIGHT_SUPPORTED:-}"
+  tp_runner_preflight_missing="${TEST_PORT_RUNNER_PREFLIGHT_MISSING:-}"
+  tp_runner_preflight_frameworks="${TEST_PORT_RUNNER_PREFLIGHT_FRAMEWORKS:-}"
+  tp_runner_preflight_module_root="${TEST_PORT_RUNNER_PREFLIGHT_MODULE_ROOT:-}"
+  tp_ported_exec_tests_executed="${PORTED_EXEC_TESTS_EXECUTED:-0}"
+  tp_baseline_original_exec_tests_executed="${BASELINE_ORIGINAL_EXEC_TESTS_EXECUTED:-0}"
+  tp_baseline_generated_exec_tests_executed="${BASELINE_GENERATED_EXEC_TESTS_EXECUTED:-0}"
   tp_retention_policy_mode="${TEST_PORT_RETENTION_POLICY_MODE:-maximize-retained-original-tests}"
   tp_undocumented_removed_count="${TEST_PORT_RETENTION_UNDOCUMENTED_REMOVED_TEST_COUNT:-0}"
 
@@ -520,6 +551,9 @@ PY
 - Source: ${SOURCE_REPO_RAW}
 - Source subdir: ${SOURCE_SUBDIR:-<none>}
 - Andvari exit code: ${ANDVARI_EXIT_CODE}
+- Andvari reused: **${ANDVARI_REUSED:-false}**
+- Andvari reuse source run id: ${ANDVARI_REUSE_SOURCE_RUN_ID:-<none>}
+- Andvari reuse generated repo: ${ANDVARI_REUSE_GENERATED_REPO:-<none>}
 - Andvari report: ${ANDVARI_RUN_REPORT}
 
 ## Scans
@@ -540,11 +574,16 @@ PY
 ## Test-port
 - Enabled: **${TEST_PORT_MODE}**
 - Status: **${TEST_PORT_STATUS}**
+- Status detail: ${tp_status_detail:-<none>}
 - Behavioral verdict: **${tp_behavioral_verdict}**
 - Behavioral verdict reason: ${tp_behavioral_verdict_reason}
 - Reason: ${TEST_PORT_REASON:-<none>}
 - Failure classifier: ${TEST_PORT_FAILURE_CLASS:-<none>}
+- Failure classifier (legacy): ${tp_failure_class_legacy:-<none>}
 - Observed failing test cases (from JUnit reports): **${tp_behavioral_case_count}**
+- Runner preflight: runner=${tp_runner_preflight_runner:-<none>}, supported=${tp_runner_preflight_supported:-<none>}, module_root=${tp_runner_preflight_module_root:-<none>}
+- Runner missing capabilities: ${tp_runner_preflight_missing:-<none>}
+- Runner frameworks detected: ${tp_runner_preflight_frameworks:-<none>}
 - Adapter prereqs OK: **${TEST_PORT_ADAPTER_PREREQS_OK}**
 - Tool run dir: ${TEST_PORT_TOOL_RUN_DIR:-<none>}
 - Tool summary: ${TEST_PORT_TOOL_SUMMARY_PATH:-<none>}
@@ -558,12 +597,17 @@ PY
 - Test files (original snapshot -> final ported): **${tp_orig_snapshot_files} -> ${tp_final_test_files}**
 - Retained original tests: **${tp_retained_original_files}**
 - Removed original tests: **${tp_removed_original_files}**
+- Retained modified/unchanged: **${tp_retained_modified_files}/${tp_retained_unchanged_files}**
+- Assertion line changes in retained tests: **${tp_assertion_line_change_count}**
 - Undocumented removed tests: **${tp_undocumented_removed_count}**
 - Iterations used: **${TEST_PORT_ITERATIONS_USED}**
 - Adapter non-zero runs: **${TEST_PORT_ADAPTER_NONZERO}**
 - Baseline original tests: **${BASELINE_ORIGINAL_STATUS}** (exit ${BASELINE_ORIGINAL_RC}) log: ${BASELINE_ORIGINAL_LOG_PATH:-<none>}
+- Baseline original executed tests: **${tp_baseline_original_exec_tests_executed}**
 - Baseline generated tests: **${BASELINE_GENERATED_STATUS}** (exit ${BASELINE_GENERATED_RC}) log: ${BASELINE_GENERATED_LOG_PATH:-<none>}
+- Baseline generated executed tests: **${tp_baseline_generated_exec_tests_executed}**
 - Ported original tests: **${PORTED_ORIGINAL_TESTS_STATUS}** (exit ${PORTED_ORIGINAL_TESTS_EXIT_CODE}) log: ${PORTED_ORIGINAL_TESTS_LOG_PATH:-<none>}
-- Note: test-port `Status` is execution status of the adapted suite; `Behavioral verdict` estimates evidentiary strength for functional equivalence/difference. Detailed failing cases are in `experiment.json` under `test_port.behavioral_evidence.failing_cases`.
+- Ported executed tests: **${tp_ported_exec_tests_executed}**
+- Note: test-port \`Status\` is execution status of the adapted suite; \`Behavioral verdict\` estimates evidentiary strength for functional equivalence/difference. Detailed failing cases are in \`experiment.json\` under \`test_port.behavioral_evidence.failing_cases\`.
 MD
 }

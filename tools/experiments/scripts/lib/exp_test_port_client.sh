@@ -31,7 +31,9 @@ def g(*keys, default=""):
 assignments = {
     "TEST_PORT_STATUS": s(g("status")),
     "TEST_PORT_REASON": s(g("reason")),
+    "TEST_PORT_STATUS_DETAIL": s(g("status_detail")),
     "TEST_PORT_FAILURE_CLASS": s(g("failure_class")),
+    "TEST_PORT_FAILURE_CLASS_LEGACY": s(g("failure_class_legacy")),
     "TEST_PORT_ADAPTER_PREREQS_OK": s(g("adapter_prereqs_ok", default=False)),
     "TEST_PORT_NEW_REPO_UNCHANGED": s(g("immutability", "generated_repo_unchanged", default=False)),
     "TEST_PORT_WRITE_SCOPE_POLICY": s(g("write_scope", "policy")),
@@ -50,6 +52,23 @@ assignments = {
     "PORTED_ORIGINAL_TESTS_STATUS": s(g("ported_original_tests", "status")),
     "PORTED_ORIGINAL_TESTS_EXIT_CODE": s(g("ported_original_tests", "exit_code", default=-1)),
     "PORTED_ORIGINAL_TESTS_LOG_PATH": s(g("ported_original_tests", "log_path")),
+    "PORTED_EXEC_TESTS_DISCOVERED": s(g("ported_original_tests", "execution_summary", "tests_discovered", default=0)),
+    "PORTED_EXEC_TESTS_EXECUTED": s(g("ported_original_tests", "execution_summary", "tests_executed", default=0)),
+    "PORTED_EXEC_TESTS_FAILED": s(g("ported_original_tests", "execution_summary", "tests_failed", default=0)),
+    "PORTED_EXEC_TESTS_ERRORS": s(g("ported_original_tests", "execution_summary", "tests_errors", default=0)),
+    "PORTED_EXEC_TESTS_SKIPPED": s(g("ported_original_tests", "execution_summary", "tests_skipped", default=0)),
+    "PORTED_EXEC_JUNIT_REPORTS_FOUND": s(g("ported_original_tests", "execution_summary", "junit_reports_found", default=0)),
+    "BASELINE_ORIGINAL_EXEC_TESTS_EXECUTED": s(g("baseline_original_tests", "execution_summary", "tests_executed", default=0)),
+    "BASELINE_GENERATED_EXEC_TESTS_EXECUTED": s(g("baseline_generated_tests", "execution_summary", "tests_executed", default=0)),
+    "TEST_PORT_RUNNER_PREFLIGHT_RUNNER": s(g("runner_preflight", "detected_runner")),
+    "TEST_PORT_RUNNER_PREFLIGHT_SUPPORTED": s(g("runner_preflight", "supported", default=False)),
+    "TEST_PORT_RUNNER_PREFLIGHT_MISSING": s(":".join(g("runner_preflight", "missing_capabilities", default=[]) or [])),
+    "TEST_PORT_RUNNER_PREFLIGHT_FRAMEWORKS": s(":".join(g("runner_preflight", "frameworks_detected", default=[]) or [])),
+    "TEST_PORT_RUNNER_PREFLIGHT_MODULE_ROOT": s(g("runner_preflight", "module_root")),
+    "TEST_PORT_FAILURE_PHASE": s(g("failure_diagnostics", "phase")),
+    "TEST_PORT_FAILURE_SUBCLASS": s(g("failure_diagnostics", "subclass")),
+    "TEST_PORT_FAILURE_FIRST_LINE": s(g("failure_diagnostics", "first_failure_line")),
+    "TEST_PORT_FAILURE_LOG_EXCERPT_PATH": s(g("failure_diagnostics", "log_excerpt_path")),
     "EVENTS_LOG": s(g("adapter", "events_log")),
     "CODEX_STDERR_LOG": s(g("adapter", "stderr_log")),
     "OUTPUT_LAST_MESSAGE": s(g("adapter", "last_message_path")),
@@ -65,6 +84,9 @@ assignments = {
     "TEST_PORT_SUITE_SHAPE_RETAINED_ORIGINAL_TEST_FILE_COUNT": s(g("suite_shape", "retained_original_test_file_count", default=0)),
     "TEST_PORT_SUITE_SHAPE_REMOVED_ORIGINAL_TEST_FILE_COUNT": s(g("suite_shape", "removed_original_test_file_count", default=0)),
     "TEST_PORT_SUITE_SHAPE_RETENTION_RATIO": s(g("suite_shape", "retention_ratio")),
+    "TEST_PORT_SUITE_SHAPE_RETAINED_MODIFIED_COUNT": s(g("suite_shape", "retained_modified_count", default=0)),
+    "TEST_PORT_SUITE_SHAPE_RETAINED_UNCHANGED_COUNT": s(g("suite_shape", "retained_unchanged_count", default=0)),
+    "TEST_PORT_SUITE_SHAPE_ASSERTION_LINE_CHANGE_COUNT": s(g("suite_shape", "assertion_line_change_count", default=0)),
     "TEST_PORT_RETENTION_POLICY_MODE": s(g("retention_policy", "mode")),
     "TEST_PORT_RETENTION_UNDOCUMENTED_REMOVED_TEST_COUNT": s(g("retention_policy", "undocumented_removed_test_count", default=0)),
     "TEST_PORT_TOOL_RUN_DIR": s(g("artifacts", "run_dir")),
@@ -95,6 +117,9 @@ exp_run_test_port() {
   )
   [[ -n "${DIAGRAM_PATH:-}" ]] && test_port_cmd+=(--diagram "$DIAGRAM_PATH")
   [[ -n "${SOURCE_SUBDIR:-}" ]] && test_port_cmd+=(--original-subdir "$SOURCE_SUBDIR")
+  if [[ -n "${SOURCE_SUBDIR:-}" && -d "${ANDVARI_NEW_REPO}/${SOURCE_SUBDIR}" ]]; then
+    test_port_cmd+=(--generated-subdir "$SOURCE_SUBDIR")
+  fi
   $STRICT_TEST_PORT && test_port_cmd+=(--strict)
 
   set +e

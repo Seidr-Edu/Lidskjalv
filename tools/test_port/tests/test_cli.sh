@@ -38,7 +38,7 @@ case_defaults_include_builtins() {
 
   local expected_maven_repo
   expected_maven_repo="$(tp_abs_path "${tmp}/run/workspace/.m2/repository")"
-  tpt_assert_eq "./completion/proof/logs/:./.mvn_repo/" "$TP_WRITE_SCOPE_IGNORED_PREFIXES_CSV" "built-in ignored prefixes must be present"
+  tpt_assert_eq "./completion/proof/logs/:./.mvn_repo/:./.m2/:./.gradle/:./target/:./build/" "$TP_WRITE_SCOPE_IGNORED_PREFIXES_CSV" "built-in ignored prefixes must be present"
   tpt_assert_eq "$expected_maven_repo" "$TP_MAVEN_LOCAL_REPO" "maven local repo must be pinned to run workspace"
 }
 
@@ -56,7 +56,7 @@ case_env_cli_normalization_and_dedupe() {
     --write-scope-ignore-prefix tmp//artifacts/
   tp_validate_and_finalize_args
 
-  tpt_assert_eq "./completion/proof/logs/:./.mvn_repo/:./custom/cache/:./tmp/artifacts/" "$TP_WRITE_SCOPE_IGNORED_PREFIXES_CSV" "resolved ignored prefixes must normalize and deduplicate"
+  tpt_assert_eq "./completion/proof/logs/:./.mvn_repo/:./.m2/:./.gradle/:./target/:./build/:./custom/cache/:./tmp/artifacts/" "$TP_WRITE_SCOPE_IGNORED_PREFIXES_CSV" "resolved ignored prefixes must normalize and deduplicate"
 }
 
 case_rejects_absolute_prefix() {

@@ -205,7 +205,7 @@ MVN
   tpt_assert_eq "fail-with-integration-skip" "$TP_BASELINE_LAST_STATUS" "failed baseline after integration skip should use dedicated status"
   tpt_assert_eq "1" "$TP_BASELINE_LAST_UNIT_ONLY_RC" "unit-only baseline should fail"
   tpt_assert_eq "1" "$TP_BASELINE_LAST_FULL_RC" "full fallback should fail"
-  tpt_assert_eq "environmental-build" "$TP_BASELINE_LAST_FAILURE_CLASS" "full fallback log should classify as environmental-build"
+  tpt_assert_eq "dependency-resolution-failure" "$TP_BASELINE_LAST_FAILURE_CLASS" "full fallback log should classify as dependency-resolution-failure"
   tpt_assert_eq "environmental-noise" "$TP_BASELINE_LAST_FAILURE_TYPE" "failure type should be environmental-noise"
   tpt_assert_file_contains "$log" "baseline unit-only run" "combined baseline log should include unit-only section"
   tpt_assert_file_contains "$log" "baseline full test fallback" "combined baseline log should include fallback section"

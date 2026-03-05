@@ -44,6 +44,8 @@ tp_write_repo_manifest() {
   done < <(
     cd "$repo" && find . -type f \
       ! -path './.git/*' \
+      ! -path './.mvn_repo/*' \
+      ! -path './.m2/*' \
       ! -path './target/*' \
       ! -path './build/*' \
       ! -path './.gradle/*' \

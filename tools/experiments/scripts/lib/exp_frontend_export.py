@@ -53,6 +53,15 @@ def as_list(value: Any) -> List[Any]:
     return value if isinstance(value, list) else []
 
 
+def to_int_or_none(value: Any) -> Optional[int]:
+    try:
+        if value is None or value == "":
+            return None
+        return int(value)
+    except Exception:
+        return None
+
+
 def normalize_rel_ref(value: Any) -> Optional[str]:
     if not isinstance(value, str):
         return None
@@ -137,6 +146,30 @@ def normalize_write_scope_violations(violations: Any) -> List[Dict[str, Any]]:
     return out
 
 
+def normalize_string_list(value: Any) -> List[str]:
+    out: List[str] = []
+    for item in as_list(value):
+        if not isinstance(item, str):
+            continue
+        text = item.strip()
+        if not text:
+            continue
+        out.append(text)
+    return out
+
+
+def normalize_execution_summary(summary: Any) -> Dict[str, Any]:
+    src = as_dict(summary)
+    return {
+        "tests_discovered": to_int_or_none(src.get("tests_discovered")),
+        "tests_executed": to_int_or_none(src.get("tests_executed")),
+        "tests_failed": to_int_or_none(src.get("tests_failed")),
+        "tests_errors": to_int_or_none(src.get("tests_errors")),
+        "tests_skipped": to_int_or_none(src.get("tests_skipped")),
+        "junit_reports_found": to_int_or_none(src.get("junit_reports_found")),
+    }
+
+
 def normalize_run(exp: Dict[str, Any], run_id: str, source_root: Path) -> Dict[str, Any]:
     run_root = (source_root / run_id).resolve()
 
@@ -156,6 +189,8 @@ def normalize_run(exp: Dict[str, Any], run_id: str, source_root: Path) -> Dict[s
     adapter = as_dict(test_port.get("adapter"))
     artifacts = as_dict(test_port.get("artifacts"))
     behavioral_evidence = as_dict(test_port.get("behavioral_evidence"))
+    runner_preflight = as_dict(test_port.get("runner_preflight"))
+    failure_diagnostics = as_dict(test_port.get("failure_diagnostics"))
 
     tool_run_dir = to_run_relative_ref(test_port.get("tool_run_dir"), run_root)
     tool_json_path = to_run_relative_ref(test_port.get("tool_json_path"), run_root)
@@ -189,17 +224,35 @@ def normalize_run(exp: Dict[str, Any], run_id: str, source_root: Path) -> Dict[s
                 "informational": test_port.get("informational"),
                 "status": test_port.get("status"),
                 "reason": test_port.get("reason"),
+                "status_detail": test_port.get("status_detail"),
                 "failure_class": test_port.get("failure_class"),
+                "failure_class_legacy": test_port.get("failure_class_legacy"),
                 "behavioral_verdict": test_port.get("behavioral_verdict"),
                 "behavioral_verdict_reason": test_port.get("behavioral_verdict_reason"),
                 "adapter_prereqs_ok": test_port.get("adapter_prereqs_ok"),
                 "new_repo_unchanged": test_port.get("new_repo_unchanged"),
+                "runner_preflight": {
+                    "detected_runner": runner_preflight.get("detected_runner"),
+                    "supported": runner_preflight.get("supported"),
+                    "missing_capabilities": normalize_string_list(runner_preflight.get("missing_capabilities")),
+                    "module_root": to_run_relative_ref(runner_preflight.get("module_root"), run_root),
+                    "frameworks_detected": normalize_string_list(runner_preflight.get("frameworks_detected")),
+                },
+                "failure_diagnostics": {
+                    "phase": failure_diagnostics.get("phase"),
+                    "subclass": failure_diagnostics.get("subclass"),
+                    "first_failure_line": failure_diagnostics.get("first_failure_line"),
+                    "log_excerpt_path": to_run_relative_ref(failure_diagnostics.get("log_excerpt_path"), run_root),
+                },
                 "suite_shape": {
                     "original_snapshot_file_count": suite_shape.get("original_snapshot_file_count", 0),
                     "final_ported_test_file_count": suite_shape.get("final_ported_test_file_count", 0),
                     "retained_original_test_file_count": suite_shape.get("retained_original_test_file_count"),
                     "removed_original_test_file_count": suite_shape.get("removed_original_test_file_count"),
                     "retention_ratio": suite_shape.get("retention_ratio"),
+                    "retained_modified_count": suite_shape.get("retained_modified_count"),
+                    "retained_unchanged_count": suite_shape.get("retained_unchanged_count"),
+                    "assertion_line_change_count": suite_shape.get("assertion_line_change_count"),
                 },
                 "suite_changes": {
                     "added": suite_changes.get("added", 0),
@@ -221,7 +274,14 @@ def normalize_run(exp: Dict[str, Any], run_id: str, source_root: Path) -> Dict[s
                     "exit_code": baseline_original_tests.get("exit_code"),
                     "strategy": baseline_original_tests.get("strategy"),
                     "failure_class": baseline_original_tests.get("failure_class"),
+                    "failure_class_legacy": baseline_original_tests.get("failure_class_legacy"),
                     "failure_type": baseline_original_tests.get("failure_type"),
+                    "failure_diagnostics": {
+                        "phase": as_dict(baseline_original_tests.get("failure_diagnostics")).get("phase"),
+                        "subclass": as_dict(baseline_original_tests.get("failure_diagnostics")).get("subclass"),
+                        "first_failure_line": as_dict(baseline_original_tests.get("failure_diagnostics")).get("first_failure_line"),
+                    },
+                    "execution_summary": normalize_execution_summary(baseline_original_tests.get("execution_summary")),
                     "log_path": to_run_relative_ref(baseline_original_tests.get("log_path"), run_root),
                 },
                 "baseline_generated_tests": {
@@ -229,7 +289,14 @@ def normalize_run(exp: Dict[str, Any], run_id: str, source_root: Path) -> Dict[s
                     "exit_code": baseline_generated_tests.get("exit_code"),
                     "strategy": baseline_generated_tests.get("strategy"),
                     "failure_class": baseline_generated_tests.get("failure_class"),
+                    "failure_class_legacy": baseline_generated_tests.get("failure_class_legacy"),
                     "failure_type": baseline_generated_tests.get("failure_type"),
+                    "failure_diagnostics": {
+                        "phase": as_dict(baseline_generated_tests.get("failure_diagnostics")).get("phase"),
+                        "subclass": as_dict(baseline_generated_tests.get("failure_diagnostics")).get("subclass"),
+                        "first_failure_line": as_dict(baseline_generated_tests.get("failure_diagnostics")).get("first_failure_line"),
+                    },
+                    "execution_summary": normalize_execution_summary(baseline_generated_tests.get("execution_summary")),
                     "log_path": to_run_relative_ref(baseline_generated_tests.get("log_path"), run_root),
                 },
                 "ported_original_tests": {
@@ -237,6 +304,7 @@ def normalize_run(exp: Dict[str, Any], run_id: str, source_root: Path) -> Dict[s
                     "exit_code": ported_original_tests.get("exit_code"),
                     "iterations_used": ported_original_tests.get("iterations_used"),
                     "adapter_nonzero_runs": ported_original_tests.get("adapter_nonzero_runs"),
+                    "execution_summary": normalize_execution_summary(ported_original_tests.get("execution_summary")),
                     "log_path": to_run_relative_ref(ported_original_tests.get("log_path"), run_root),
                 },
                 "retention_policy": {

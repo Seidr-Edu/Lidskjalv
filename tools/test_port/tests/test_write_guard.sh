@@ -27,6 +27,7 @@ setup_guard_env() {
   TP_WRITE_SCOPE_IGNORED_PREFIXES=(
     "./completion/proof/logs/"
     "./.mvn_repo/"
+    "./.m2/"
   )
   mkdir -p "$TP_GUARDS_DIR"
   : > "$TP_WRITE_SCOPE_FAILURE_PATHS_FILE"
@@ -115,6 +116,26 @@ case_ignores_mvn_repo_changes() {
   [[ ! -s "${TP_GUARDS_DIR}/ported-protected-change-set.tsv" ]]
 }
 
+case_ignores_m2_repo_changes() {
+  local tmp repo before after
+  tmp="$(tpt_mktemp_dir)"
+  repo="${tmp}/repo"
+  before="${tmp}/before.tsv"
+  after="${tmp}/after.tsv"
+
+  create_base_repo "$repo"
+  setup_guard_env "$tmp"
+
+  tp_write_repo_manifest "$repo" "$before"
+
+  mkdir -p "${repo}/.m2/repository"
+  echo "dependency" > "${repo}/.m2/repository/item.txt"
+
+  tp_check_write_scope "$repo" "$before" "$after"
+  tpt_assert_eq "0" "$TP_WRITE_SCOPE_VIOLATION_COUNT" "ignored .m2 writes should not be counted"
+  [[ ! -s "${TP_GUARDS_DIR}/ported-protected-change-set.tsv" ]]
+}
+
 case_custom_ignore_does_not_mask_other_paths() {
   local tmp repo before after rc
   tmp="$(tpt_mktemp_dir)"
@@ -148,6 +169,7 @@ tpt_run_case "allows test-path edits" case_allows_test_path_modifications
 tpt_run_case "rejects non-test edits" case_rejects_non_test_modifications
 tpt_run_case "ignores completion/proof/logs churn" case_ignores_completion_proof_logs
 tpt_run_case "ignores .mvn_repo churn" case_ignores_mvn_repo_changes
+tpt_run_case "ignores .m2 churn" case_ignores_m2_repo_changes
 tpt_run_case "custom ignore does not mask other writes" case_custom_ignore_does_not_mask_other_paths
 
 tpt_finish_suite

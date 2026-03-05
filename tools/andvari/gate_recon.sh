@@ -42,14 +42,65 @@ has_maven_modules() {
 
 cleanup_test_reports() {
   find . -type d \
-    \( -path "*/target/surefire-reports" -o -path "*/target/failsafe-reports" -o -path "*/build/test-results/test" \) \
+    \( -path "*/target/surefire-reports" -o -path "*/target/failsafe-reports" -o -path "*/build/test-results" \) \
     -prune -exec rm -rf {} + 2>/dev/null || true
 }
 
 count_test_report_files() {
+  # Counts JUnit XML reports from Maven surefire/failsafe and any Gradle
+  # test-results subdir (covers standard 'test' as well as custom source sets
+  # like 'jarFileTest', 'integrationTest', etc.).
   find . -type f \
-    \( -path "*/target/surefire-reports/TEST-*.xml" -o -path "*/target/failsafe-reports/TEST-*.xml" -o -path "*/build/test-results/test/*.xml" \) \
+    \( -path "*/target/surefire-reports/TEST-*.xml" \
+       -o -path "*/target/failsafe-reports/TEST-*.xml" \
+       -o -path "*/build/test-results/*/*.xml" \) \
     -print 2>/dev/null | wc -l | tr -d ' '
+}
+
+# Infer the Gradle test task to run. Returns 'test' for the standard layout;
+# returns the custom source set name (e.g. 'jarFileTest') when the project
+# uses a non-standard test source set instead of / in addition to src/test.
+detect_gradle_test_task() {
+  # Standard: src/test/java has Java files → default 'test' task
+  if find src/test -name '*.java' -print -quit 2>/dev/null | grep -q .; then
+    echo test
+    return 0
+  fi
+
+  # Parse build.gradle / build.gradle.kts for source set declarations
+  local custom=""
+  for f in build.gradle build.gradle.kts; do
+    [[ -f "$f" ]] || continue
+    while IFS= read -r line; do
+      local name
+      name="$(printf '%s' "$line" | grep -oE '^[[:space:]]+[A-Za-z][A-Za-z0-9_]+[[:space:]]*\{' \
+             | grep -oE '[A-Za-z][A-Za-z0-9_]+' | head -1 || true)"
+      if [[ -n "$name" && "$name" != main && "$name" != test && "$name" != java && "$name" != kotlin ]]; then
+        if printf '%s' "$name" | grep -qiE '(test|spec|it$|integration|functional|e2e|acceptance|verification)'; then
+          custom="$name"
+          break
+        fi
+      fi
+    done < "$f"
+    [[ -n "$custom" ]] && break
+  done
+
+  [[ -n "$custom" ]] && { echo "$custom"; return 0; }
+
+  # Fallback: first non-main/non-test src/ subdir containing Java files
+  if [[ -d src ]]; then
+    for d in src/*/; do
+      [[ -d "$d" ]] || continue
+      local name="${d%/}"; name="${name##*/}"
+      [[ "$name" == main || "$name" == test ]] && continue
+      if find "$d" -name '*.java' -print -quit 2>/dev/null | grep -q .; then
+        echo "$name"
+        return 0
+      fi
+    done
+  fi
+
+  echo test
 }
 
 # --- Required files ---
@@ -143,30 +194,29 @@ fi
 # --- Minimal test presence sanity check ---
 info "Checking tests exist..."
 TEST_FILES_COUNT=0
-if [[ -d src/test ]]; then
-  TEST_FILES_COUNT="$(find src/test -type f \( -name "*Test.java" -o -name "*Tests.java" \) 2>/dev/null | wc -l | tr -d ' ')"
-fi
+# Search src/test and any non-main source set under src/ (e.g. src/jarFileTest)
+for _test_dir in src/test src/*/; do
+  [[ -d "$_test_dir" ]] || continue
+  _name="${_test_dir%/}"; _name="${_name##*/}"
+  [[ "$_name" == main ]] && continue
+  _n="$(find "$_test_dir" -type f \( -name "*Test.java" -o -name "*Tests.java" \) 2>/dev/null | wc -l | tr -d ' ')"
+  TEST_FILES_COUNT=$(( TEST_FILES_COUNT + _n ))
+done
+[[ -d test ]] && TEST_FILES_COUNT=$(( TEST_FILES_COUNT + $(find test -type f \( -name "*Test.java" -o -name "*Tests.java" \) 2>/dev/null | wc -l | tr -d ' ') ))
+[[ -d tests ]] && TEST_FILES_COUNT=$(( TEST_FILES_COUNT + $(find tests -type f \( -name "*Test.java" -o -name "*Tests.java" \) 2>/dev/null | wc -l | tr -d ' ') ))
 
-# If project uses nonstandard test layout, at least require *some* test directory.
-if [[ "$TEST_FILES_COUNT" -lt 1 ]]; then
-  # Try Maven default layout as well
-  if [[ -d src/test/java ]]; then
-    TEST_FILES_COUNT="$(find src/test/java -type f -name "*Test.java" 2>/dev/null | wc -l | tr -d ' ')"
-  fi
-fi
-
-[[ "$TEST_FILES_COUNT" -ge 1 ]] || fail "No test files found (expected at least one *Test.java under src/test)."
-
+[[ "$TEST_FILES_COUNT" -ge 1 ]] || fail "No Java test files found (searched src/test, src/*/, test/, tests/)"
 info "Found $TEST_FILES_COUNT test file(s)."
 
 cleanup_test_reports
 
 # --- Run tests ---
 if [[ "$USE_GRADLE" == "true" ]]; then
-  info "Running: ./gradlew test"
-  ./gradlew test
+  GRADLE_TEST_TASK="$(detect_gradle_test_task)"
+  info "Running: ./gradlew $GRADLE_TEST_TASK"
+  ./gradlew "$GRADLE_TEST_TASK"
   GRADLE_REPORT_COUNT="$(count_test_report_files)"
-  [[ "$GRADLE_REPORT_COUNT" -ge 1 ]] || fail "Gradle test command succeeded but produced no JUnit XML reports. Ensure tests are actually executed."
+  [[ "$GRADLE_REPORT_COUNT" -ge 1 ]] || fail "Gradle '$GRADLE_TEST_TASK' task succeeded but produced no JUnit XML reports. Ensure the test source set is configured and tests are executed."
 fi
 
 if [[ "$USE_MAVEN" == "true" ]]; then

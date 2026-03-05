@@ -10,14 +10,15 @@ Usage: test-port-run.sh --generated-repo PATH --original-repo PATH [options]
 Required:
   --generated-repo PATH       Generated repository root (read-only source; copied internally)
   --original-repo PATH        Original repository root (read-only source; copied internally)
+  --adapter NAME              Adapter name (required)
 
 Optional:
   --diagram PATH              Diagram file path (passed as read-only adapter context)
   --original-subdir PATH      Subdirectory under original repo to use for tests
   --run-id ID                 Explicit run id
   --run-dir PATH              Explicit run directory (default: .data/test-port/runs/<run-id>)
-  --adapter NAME              Adapter name (required)
   --max-iter N                Adaptation iterations after initial pass (default: 5)
+  --adapter-model NAME        Adapter model name (default: auto-selected by adapter)
   --strict                    Non-zero exit if status is not passed
   --write-scope-policy NAME   Only "tests-only" is supported (default: tests-only)
   --write-scope-ignore-prefix PATH

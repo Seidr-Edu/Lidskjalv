@@ -70,7 +70,7 @@ assignments = {
     "TEST_PORT_FAILURE_FIRST_LINE": s(g("failure_diagnostics", "first_failure_line")),
     "TEST_PORT_FAILURE_LOG_EXCERPT_PATH": s(g("failure_diagnostics", "log_excerpt_path")),
     "EVENTS_LOG": s(g("adapter", "events_log")),
-    "CODEX_STDERR_LOG": s(g("adapter", "stderr_log")),
+    "ADAPTER_STDERR_LOG": s(g("adapter", "stderr_log")),
     "OUTPUT_LAST_MESSAGE": s(g("adapter", "last_message_path")),
     "TEST_PORT_BEHAVIORAL_VERDICT": s(g("behavioral_verdict")),
     "TEST_PORT_BEHAVIORAL_VERDICT_REASON": s(g("behavioral_verdict_reason")),

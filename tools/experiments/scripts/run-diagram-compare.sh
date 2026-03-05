@@ -39,7 +39,7 @@ main() {
   mkdir -p "$EXP_LOG_DIR" "$EXP_WORKSPACE_SCAN_DIR" "$EXP_OUTPUT_DIR"
 
   EVENTS_LOG=""
-  CODEX_STDERR_LOG=""
+  ADAPTER_STDERR_LOG=""
   OUTPUT_LAST_MESSAGE=""
 
   state_init

@@ -158,6 +158,6 @@ andvari_print_final_status_and_exit() {
 
   echo "[andvari] status: FAIL"
   echo "[andvari] run folder: ${RUN_DIR}"
-  echo "[andvari] see logs: ${GATE_LOG}, ${CODEX_STDERR_LOG}, ${EVENTS_LOG}"
+  echo "[andvari] see logs: ${GATE_LOG}, ${ADAPTER_STDERR_LOG}, ${EVENTS_LOG}"
   exit 1
 }

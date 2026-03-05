@@ -51,7 +51,7 @@ assignments = {
     "PORTED_ORIGINAL_TESTS_EXIT_CODE": s(g("ported_original_tests", "exit_code", default=-1)),
     "PORTED_ORIGINAL_TESTS_LOG_PATH": s(g("ported_original_tests", "log_path")),
     "EVENTS_LOG": s(g("adapter", "events_log")),
-    "CODEX_STDERR_LOG": s(g("adapter", "stderr_log")),
+    "ADAPTER_STDERR_LOG": s(g("adapter", "stderr_log")),
     "OUTPUT_LAST_MESSAGE": s(g("adapter", "last_message_path")),
     "TEST_PORT_BEHAVIORAL_VERDICT": s(g("behavioral_verdict")),
     "TEST_PORT_BEHAVIORAL_VERDICT_REASON": s(g("behavioral_verdict_reason")),

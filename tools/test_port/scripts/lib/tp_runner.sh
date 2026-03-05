@@ -39,19 +39,96 @@ tp_maven_local_repo_path() {
   echo "${TP_MAVEN_LOCAL_REPO:-${repo}/.m2/repository}"
 }
 
+tp_detect_test_source_dirs() {
+  local repo="$1"
+  local -a dirs=()
+
+  # Standard locations
+  for d in "$repo/src/test" "$repo/test" "$repo/tests"; do
+    [[ -d "$d" ]] && dirs+=("$d")
+  done
+  # Non-standard Gradle source sets under src/ (e.g. src/jarFileTest, src/intTest)
+  if [[ -d "$repo/src" ]]; then
+    while IFS= read -r d; do
+      [[ "$d" == "$repo/src/main" ]] && continue
+      [[ "$d" == "$repo/src/test" ]] && continue
+      dirs+=("$d")
+    done < <(find "$repo/src" -mindepth 1 -maxdepth 1 -type d 2>/dev/null)
+  fi
+
+  printf '%s\n' "${dirs[@]+${dirs[@]}}"
+}
+
+tp_detect_gradle_test_task() {
+  local repo="$1"
+
+  # Standard layout: src/test/java has Java files → use default 'test' task
+  if find "$repo/src/test" -name '*.java' -print -quit 2>/dev/null | grep -q .; then
+    echo "test"
+    return 0
+  fi
+
+  # Parse build.gradle / build.gradle.kts for declared source set or task names
+  local custom_task=""
+  for build_file in "$repo/build.gradle" "$repo/build.gradle.kts"; do
+    [[ -f "$build_file" ]] || continue
+    while IFS= read -r line; do
+      # Match indented identifier followed by '{' — these are sourceSet declarations
+      local name
+      name="$(printf '%s' "$line" | grep -oE '^[[:space:]]+[A-Za-z][A-Za-z0-9_]+[[:space:]]*\{' | grep -oE '[A-Za-z][A-Za-z0-9_]+' | head -1 || true)"
+      if [[ -n "$name" && "$name" != "main" && "$name" != "test" && "$name" != "java" && "$name" != "kotlin" ]]; then
+        if printf '%s' "$name" | grep -qiE '(test|spec|it$|^it[A-Z]|integration|functional|e2e|acceptance|verification)'; then
+          custom_task="$name"
+          break
+        fi
+      fi
+    done < "$build_file"
+    [[ -n "$custom_task" ]] && break
+  done
+
+  if [[ -n "$custom_task" ]]; then
+    echo "$custom_task"
+    return 0
+  fi
+
+  # Fallback: first non-main/non-test src/ subdir that actually contains Java files
+  if [[ -d "$repo/src" ]]; then
+    while IFS= read -r src_dir; do
+      local name="${src_dir##*/}"
+      [[ "$name" == "main" || "$name" == "test" ]] && continue
+      if find "$src_dir" -name '*.java' -print -quit 2>/dev/null | grep -q .; then
+        echo "$name"
+        return 0
+      fi
+    done < <(find "$repo/src" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | LC_ALL=C sort)
+  fi
+
+  echo "test"
+}
+
 tp_detect_test_frameworks() {
   local repo="$1"
   local found_junit5=false
   local found_junit4=false
   local found_testng=false
+  local -a test_src_dirs=()
 
-  if LC_ALL=C grep -R -E -q --include='*.java' 'org\.junit\.jupiter|org\.opentest4j' "$repo"/src/test "$repo"/test "$repo"/tests 2>/dev/null; then
+  while IFS= read -r d; do
+    [[ -n "$d" ]] && test_src_dirs+=("$d")
+  done < <(tp_detect_test_source_dirs "$repo")
+
+  if [[ "${#test_src_dirs[@]}" -eq 0 ]]; then
+    printf '%s' "unknown"
+    return 0
+  fi
+
+  if LC_ALL=C grep -R -E -q --include='*.java' 'org\.junit\.jupiter|org\.opentest4j' "${test_src_dirs[@]}" 2>/dev/null; then
     found_junit5=true
   fi
-  if LC_ALL=C grep -R -E -q --include='*.java' 'org\.junit\.Test|junit\.framework' "$repo"/src/test "$repo"/test "$repo"/tests 2>/dev/null; then
+  if LC_ALL=C grep -R -E -q --include='*.java' 'org\.junit\.Test|junit\.framework' "${test_src_dirs[@]}" 2>/dev/null; then
     found_junit4=true
   fi
-  if LC_ALL=C grep -R -E -q --include='*.java' 'org\.testng\.' "$repo"/src/test "$repo"/test "$repo"/tests 2>/dev/null; then
+  if LC_ALL=C grep -R -E -q --include='*.java' 'org\.testng\.' "${test_src_dirs[@]}" 2>/dev/null; then
     found_testng=true
   fi
 
@@ -151,16 +228,17 @@ tp_run_gradle_test() {
   local repo="$1"
   local log_file="$2"
   local runner="$3"
-  local gradle_user_home tmp_dir
+  local gradle_user_home tmp_dir test_task
 
   gradle_user_home="${TP_GRADLE_USER_HOME:-${repo}/.gradle}"
   tmp_dir="${TP_TMP_DIR:-${repo}/tmp}"
+  test_task="$(tp_detect_gradle_test_task "$repo")"
   mkdir -p "$gradle_user_home" "$tmp_dir"
 
   if [[ "$runner" == "gradle-wrapper" ]]; then
-    (cd "$repo" && env "GRADLE_USER_HOME=$gradle_user_home" "TMPDIR=$tmp_dir" ./gradlew test --no-daemon) >"$log_file" 2>&1
+    (cd "$repo" && env "GRADLE_USER_HOME=$gradle_user_home" "TMPDIR=$tmp_dir" ./gradlew "$test_task" --no-daemon) >"$log_file" 2>&1
   else
-    (cd "$repo" && env "GRADLE_USER_HOME=$gradle_user_home" "TMPDIR=$tmp_dir" gradle test --no-daemon) >"$log_file" 2>&1
+    (cd "$repo" && env "GRADLE_USER_HOME=$gradle_user_home" "TMPDIR=$tmp_dir" gradle "$test_task" --no-daemon) >"$log_file" 2>&1
   fi
 }
 

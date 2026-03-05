@@ -5,7 +5,7 @@ Standalone model-driven test adaptation/evaluation tool used by experiments.
 ## Purpose
 
 - Run baseline tests on original and generated repos in isolated copies
-- Port original tests into a generated repo copy using the Andvari adapter/Codex prompts
+- Port original tests into a generated repo copy using the Andvari adapter prompts
 - Enforce tests-only write scope
 - Preserve behavioral mismatch evidence
 - Emit `test_port.json` and `summary.md`

@@ -29,8 +29,8 @@ andvari_write_run_report() {
 
 ## Artifacts
 
-- Codex events log: \`runs/${RUN_ID}/logs/codex_events.jsonl\`
-- Codex stderr log: \`runs/${RUN_ID}/logs/codex_stderr.log\`
+- Adapter events log: \`runs/${RUN_ID}/logs/adapter_events.jsonl\`
+- Adapter stderr log: \`runs/${RUN_ID}/logs/adapter_stderr.log\`
 - Gate log: \`runs/${RUN_ID}/logs/gate.log\`
 - Report: \`runs/${RUN_ID}/outputs/run_report.md\`
 REPORT_EOF

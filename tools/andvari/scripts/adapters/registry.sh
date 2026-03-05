@@ -13,6 +13,9 @@ adapter_registry_get_script() {
     codex)
       echo "${_REGISTRY_DIR}/codex.sh"
       ;;
+    claude)
+      echo "${_REGISTRY_DIR}/claude.sh"
+      ;;
     *)
       echo "Unknown adapter: ${adapter}" >&2
       return 1

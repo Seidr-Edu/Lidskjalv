@@ -110,7 +110,7 @@ run_claude_prompt() {
   local status=$?
   set -e
 
-  cat "$response_file" >> "$events_log"
+  # Keep events log as strict JSONL; raw model text is written separately.
   cp "$response_file" "$output_last_message"
   rm -f "$response_file"
 

@@ -3,6 +3,13 @@
 
 set -euo pipefail
 
+tp_adapter_validate_supported() {
+  local adapter="$1"
+  if ! adapter_is_supported "$adapter"; then
+    tp_fail "Unsupported adapter: ${adapter}. Supported adapters: $(adapter_list)"
+  fi
+}
+
 tp_adapter_check_prereqs() {
   local adapter="$1"
   adapter_check_prereqs "$adapter"

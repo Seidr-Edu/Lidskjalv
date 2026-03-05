@@ -110,9 +110,6 @@ tp_validate_and_finalize_args() {
   [[ -n "$TP_GENERATED_REPO" ]] || tp_fail "--generated-repo is required"
   [[ -n "$TP_ORIGINAL_REPO" ]] || tp_fail "--original-repo is required"
   [[ -n "$TP_ADAPTER" ]] || tp_fail "--adapter is required"
-  if ! adapter_is_supported "$TP_ADAPTER"; then
-    tp_fail "Unsupported adapter: ${TP_ADAPTER}. Supported adapters: $(adapter_list)"
-  fi
   [[ "$TP_MAX_ITER" =~ ^[0-9]+$ ]] || tp_fail "--max-iter must be non-negative integer"
   [[ "$TP_WRITE_SCOPE_POLICY" == "tests-only" ]] || tp_fail "--write-scope-policy must be tests-only"
   tp_resolve_write_scope_ignored_prefixes

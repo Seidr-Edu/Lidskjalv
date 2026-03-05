@@ -8,6 +8,16 @@ source "${ADAPTER_DIR}/registry.sh"
 
 _ANDVARI_LOADED_ADAPTER=""
 
+adapter_list() {
+  adapter_registry_list
+}
+
+adapter_is_supported() {
+  local adapter="$1"
+  [[ -n "$adapter" ]] || return 1
+  adapter_registry_get_script "$adapter" >/dev/null 2>&1
+}
+
 # _adapter_load ADAPTER_NAME
 # Sources the adapter implementation script on first use.
 _adapter_load() {

@@ -17,7 +17,7 @@ Optional:
   --generated-subdir PATH     Subdirectory under generated repo to run baseline/ported tests
   --run-id ID                 Explicit run id
   --run-dir PATH              Explicit run directory (default: .data/test-port/runs/<run-id>)
-  --adapter NAME              Adapter name (default: codex)
+  --adapter NAME              Adapter name (required)
   --max-iter N                Adaptation iterations after initial pass (default: 5)
   --strict                    Non-zero exit if status is not passed
   --write-scope-policy NAME   Only "tests-only" is supported (default: tests-only)
@@ -74,7 +74,7 @@ tp_parse_args() {
   TP_GENERATED_SUBDIR=""
   TP_RUN_ID=""
   TP_RUN_DIR=""
-  TP_ADAPTER="${ANDVARI_ADAPTER:-codex}"
+  TP_ADAPTER=""
   TP_MAX_ITER="5"
   TP_STRICT=false
   TP_WRITE_SCOPE_POLICY="tests-only"
@@ -108,6 +108,11 @@ tp_parse_args() {
 tp_validate_and_finalize_args() {
   [[ -n "$TP_GENERATED_REPO" ]] || tp_fail "--generated-repo is required"
   [[ -n "$TP_ORIGINAL_REPO" ]] || tp_fail "--original-repo is required"
+  [[ -n "$TP_ADAPTER" ]] || tp_fail "--adapter is required"
+  case "$TP_ADAPTER" in
+    codex|claude) ;;
+    *) tp_fail "unsupported adapter: ${TP_ADAPTER}. Supported adapters: codex, claude" ;;
+  esac
   [[ "$TP_MAX_ITER" =~ ^[0-9]+$ ]] || tp_fail "--max-iter must be non-negative integer"
   [[ "$TP_WRITE_SCOPE_POLICY" == "tests-only" ]] || tp_fail "--write-scope-policy must be tests-only"
   tp_resolve_write_scope_ignored_prefixes

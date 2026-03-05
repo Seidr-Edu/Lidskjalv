@@ -21,8 +21,11 @@ Standalone model-driven test adaptation/evaluation tool used by experiments.
 ./test-port-run.sh \
   --generated-repo /abs/path/to/generated-repo \
   --original-repo /abs/path/to/original-repo \
+  --adapter claude \
   --diagram /abs/path/to/diagram.puml
 ```
+
+`--adapter` is required.
 
 Artifacts are written to `.data/test-port/runs/<run-id>/` by default, or to `--run-dir`.
 

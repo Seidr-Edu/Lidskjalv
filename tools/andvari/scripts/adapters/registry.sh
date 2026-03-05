@@ -4,6 +4,12 @@
 
 _REGISTRY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# adapter_registry_list
+# Prints registered adapter names, space-separated.
+adapter_registry_list() {
+  echo "codex claude"
+}
+
 # adapter_registry_get_script ADAPTER_NAME
 # Prints the absolute path to the adapter implementation script.
 # Returns 1 if the adapter name is not registered.

@@ -11,7 +11,7 @@ Output: isolated reconstructed repository, gate logs, and run report
 ## Single command
 
 ```bash
-./andvari-run.sh --diagram /path/to/diagram.puml --run-id optional-id --max-iter 8
+./andvari-run.sh --diagram /path/to/diagram.puml --adapter claude --run-id optional-id --max-iter 8
 ```
 
 ## Key options
@@ -19,7 +19,7 @@ Output: isolated reconstructed repository, gate logs, and run report
 - `--diagram` (required): path to input diagram.
 - `--run-id` (optional): explicit run id (defaults to UTC timestamp).
 - `--max-iter` (optional): max repair loops after first implementation attempt.
-- `--adapter` (optional): adapter backend (default `ANDVARI_ADAPTER` or `codex`).
+- `--adapter` (required): adapter backend.
 - `--gating-mode model|fixed` (optional):
   - `model` (default): adaptive self-gating with model-defined outcomes/gates.
   - `fixed`: legacy `gate_recon.sh` flow.
@@ -128,16 +128,8 @@ The runner uses an adapter entrypoint:
 
 Supported adapters are:
 
-- `codex` (default)
+- `codex`
 - `claude`
-
-You can select an adapter with either:
-
-```bash
-ANDVARI_ADAPTER=claude ./andvari-run.sh --diagram /path/to/diagram.puml
-```
-
-or:
 
 ```bash
 ./andvari-run.sh --diagram /path/to/diagram.puml --adapter claude

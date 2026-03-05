@@ -153,13 +153,17 @@ def to_int(value, default=0):
     except Exception:
         return default
 
-def collect_junit_failing_cases(repo_dir, max_cases=200):
+def collect_junit_failing_cases(repo_dir, max_cases=200, max_groups=500, max_sample_reports=3):
     out = {
         "junit_report_count": 0,
         "junit_report_files": [],
         "failing_case_count": 0,
+        "failing_case_unique_count": 0,
+        "failing_case_occurrence_count": 0,
         "failing_cases": [],
+        "grouped_failing_cases": [],
         "truncated": False,
+        "grouped_truncated": False,
     }
     if not repo_dir or not os.path.isdir(repo_dir):
         return out
@@ -189,7 +193,8 @@ def collect_junit_failing_cases(repo_dir, max_cases=200):
         os.path.relpath(p, repo_dir).replace(os.sep, "/") for p in report_files
     ]
 
-    seen_cases = set()
+    grouped_index = {}
+    unique_case_count = 0
     for report_path in report_files:
         rel_report = os.path.relpath(report_path, repo_dir).replace(os.sep, "/")
         try:
@@ -203,6 +208,7 @@ def collect_junit_failing_cases(repo_dir, max_cases=200):
             for child in list(tc):
                 if child.tag not in {"failure", "error"}:
                     continue
+                out["failing_case_occurrence_count"] += 1
                 kind = child.tag
                 msg = (child.attrib.get("message") or "").strip()
                 if not msg:
@@ -212,22 +218,42 @@ def collect_junit_failing_cases(repo_dir, max_cases=200):
                     msg = msg[:237] + "..."
 
                 key = (classname, name, kind, msg)
-                if key in seen_cases:
-                    continue
-                seen_cases.add(key)
-                out["failing_case_count"] += 1
+                group_idx = grouped_index.get(key)
+                if group_idx is None:
+                    unique_case_count += 1
+                    if len(out["grouped_failing_cases"]) < max_groups:
+                        out["grouped_failing_cases"].append({
+                            "class": classname,
+                            "name": name,
+                            "kind": kind,
+                            "message": msg,
+                            "occurrence_count": 1,
+                            "sample_report_files": [rel_report],
+                        })
+                        group_idx = len(out["grouped_failing_cases"]) - 1
+                        grouped_index[key] = group_idx
+                    else:
+                        out["grouped_truncated"] = True
 
-                if len(out["failing_cases"]) < max_cases:
-                    out["failing_cases"].append({
-                        "class": classname,
-                        "name": name,
-                        "kind": kind,
-                        "message": msg,
-                        "report_file": rel_report,
-                    })
+                    if len(out["failing_cases"]) < max_cases:
+                        out["failing_cases"].append({
+                            "class": classname,
+                            "name": name,
+                            "kind": kind,
+                            "message": msg,
+                            "report_file": rel_report,
+                        })
+                    else:
+                        out["truncated"] = True
                 else:
-                    out["truncated"] = True
+                    group = out["grouped_failing_cases"][group_idx]
+                    group["occurrence_count"] += 1
+                    samples = group["sample_report_files"]
+                    if rel_report not in samples and len(samples) < max_sample_reports:
+                        samples.append(rel_report)
 
+    out["failing_case_unique_count"] = unique_case_count
+    out["failing_case_count"] = unique_case_count
     return out
 
 andvari_exit_i = to_int(andvari_exit, -1)

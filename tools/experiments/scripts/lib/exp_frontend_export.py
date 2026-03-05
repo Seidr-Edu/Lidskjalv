@@ -45,15 +45,127 @@ def sonar_delta(orig: Dict[str, Any], gen: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
-def normalize_run(exp: Dict[str, Any], run_id: str, source_root: Path) -> Dict[str, Any]:
-    scans = exp.get("scans") if isinstance(exp.get("scans"), dict) else {}
-    orig = scans.get("original") if isinstance(scans.get("original"), dict) else {}
-    gen = scans.get("generated") if isinstance(scans.get("generated"), dict) else {}
-    test_port = exp.get("test_port") if isinstance(exp.get("test_port"), dict) else {}
-    andvari = exp.get("andvari") if isinstance(exp.get("andvari"), dict) else {}
+def as_dict(value: Any) -> Dict[str, Any]:
+    return value if isinstance(value, dict) else {}
 
-    suite_shape = test_port.get("suite_shape") if isinstance(test_port.get("suite_shape"), dict) else {}
-    suite_changes = test_port.get("suite_changes") if isinstance(test_port.get("suite_changes"), dict) else {}
+
+def as_list(value: Any) -> List[Any]:
+    return value if isinstance(value, list) else []
+
+
+def normalize_rel_ref(value: Any) -> Optional[str]:
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    text = text.replace("\\", "/")
+    while text.startswith("./"):
+        text = text[2:]
+    while "//" in text:
+        text = text.replace("//", "/")
+    while text.endswith("/"):
+        text = text[:-1]
+    if text in {"", "."}:
+        return None
+    parts = text.split("/")
+    if any(part in {"", ".", ".."} for part in parts):
+        return None
+    return text
+
+
+def to_run_relative_ref(value: Any, run_root: Path) -> Optional[str]:
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    if text.startswith("/"):
+        try:
+            rel = Path(text).resolve().relative_to(run_root.resolve())
+        except Exception:
+            return None
+        return normalize_rel_ref(rel.as_posix())
+    return normalize_rel_ref(text)
+
+
+def normalize_fail_grouped_cases(groups: Any) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    for item in as_list(groups):
+        group = as_dict(item)
+        sample_files: List[str] = []
+        for ref in as_list(group.get("sample_report_files")):
+            normalized = normalize_rel_ref(ref)
+            if normalized and normalized not in sample_files:
+                sample_files.append(normalized)
+            if len(sample_files) >= 3:
+                break
+
+        out.append({
+            "class": group.get("class"),
+            "name": group.get("name"),
+            "kind": group.get("kind"),
+            "message": group.get("message"),
+            "occurrence_count": group.get("occurrence_count"),
+            "sample_report_files": sample_files,
+        })
+    return out
+
+
+def normalize_fail_cases(cases: Any) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    for item in as_list(cases):
+        case = as_dict(item)
+        out.append({
+            "class": case.get("class"),
+            "name": case.get("name"),
+            "kind": case.get("kind"),
+            "message": case.get("message"),
+            "report_file": normalize_rel_ref(case.get("report_file")),
+        })
+    return out
+
+
+def normalize_write_scope_violations(violations: Any) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    for item in as_list(violations):
+        row = as_dict(item)
+        out.append({
+            "kind": row.get("kind"),
+            "path": row.get("path"),
+        })
+    return out
+
+
+def normalize_run(exp: Dict[str, Any], run_id: str, source_root: Path) -> Dict[str, Any]:
+    run_root = (source_root / run_id).resolve()
+
+    scans = as_dict(exp.get("scans"))
+    orig = as_dict(scans.get("original"))
+    gen = as_dict(scans.get("generated"))
+    test_port = as_dict(exp.get("test_port"))
+    andvari = as_dict(exp.get("andvari"))
+
+    suite_shape = as_dict(test_port.get("suite_shape"))
+    suite_changes = as_dict(test_port.get("suite_changes"))
+    write_scope = as_dict(test_port.get("write_scope"))
+    baseline_original_tests = as_dict(test_port.get("baseline_original_tests"))
+    baseline_generated_tests = as_dict(test_port.get("baseline_generated_tests"))
+    ported_original_tests = as_dict(test_port.get("ported_original_tests"))
+    retention_policy = as_dict(test_port.get("retention_policy"))
+    adapter = as_dict(test_port.get("adapter"))
+    artifacts = as_dict(test_port.get("artifacts"))
+    behavioral_evidence = as_dict(test_port.get("behavioral_evidence"))
+
+    tool_run_dir = to_run_relative_ref(test_port.get("tool_run_dir"), run_root)
+    tool_json_path = to_run_relative_ref(test_port.get("tool_json_path"), run_root)
+    tool_summary_path = to_run_relative_ref(test_port.get("tool_summary_path"), run_root)
+    tool_log_path = to_run_relative_ref(test_port.get("tool_log_path"), run_root)
+    run_dir = to_run_relative_ref(artifacts.get("run_dir"), run_root)
+    logs_dir = to_run_relative_ref(artifacts.get("logs_dir"), run_root)
+    workspace_dir = to_run_relative_ref(artifacts.get("workspace_dir"), run_root)
+    outputs_dir = to_run_relative_ref(artifacts.get("outputs_dir"), run_root)
+    summary_md = to_run_relative_ref(artifacts.get("summary_md"), run_root)
 
     record = {
         "schema_version": "run.v1",
@@ -73,13 +185,20 @@ def normalize_run(exp: Dict[str, Any], run_id: str, source_root: Path) -> Dict[s
                 "metrics": andvari.get("metrics") if isinstance(andvari.get("metrics"), dict) else {},
             },
             "test_port": {
+                "enabled": test_port.get("enabled"),
+                "informational": test_port.get("informational"),
                 "status": test_port.get("status"),
                 "reason": test_port.get("reason"),
                 "failure_class": test_port.get("failure_class"),
                 "behavioral_verdict": test_port.get("behavioral_verdict"),
+                "behavioral_verdict_reason": test_port.get("behavioral_verdict_reason"),
+                "adapter_prereqs_ok": test_port.get("adapter_prereqs_ok"),
+                "new_repo_unchanged": test_port.get("new_repo_unchanged"),
                 "suite_shape": {
                     "original_snapshot_file_count": suite_shape.get("original_snapshot_file_count", 0),
                     "final_ported_test_file_count": suite_shape.get("final_ported_test_file_count", 0),
+                    "retained_original_test_file_count": suite_shape.get("retained_original_test_file_count"),
+                    "removed_original_test_file_count": suite_shape.get("removed_original_test_file_count"),
                     "retention_ratio": suite_shape.get("retention_ratio"),
                 },
                 "suite_changes": {
@@ -87,6 +206,79 @@ def normalize_run(exp: Dict[str, Any], run_id: str, source_root: Path) -> Dict[s
                     "modified": suite_changes.get("modified", 0),
                     "deleted": suite_changes.get("deleted", 0),
                     "total": suite_changes.get("total", 0),
+                },
+                "write_scope": {
+                    "policy": write_scope.get("policy"),
+                    "violation_count": write_scope.get("violation_count"),
+                    "violations": normalize_write_scope_violations(write_scope.get("violations")),
+                    "ignored_prefixes": as_list(write_scope.get("ignored_prefixes")),
+                    "violations_log_path": to_run_relative_ref(write_scope.get("violations_log_path"), run_root),
+                    "diff_path": to_run_relative_ref(write_scope.get("diff_path"), run_root),
+                    "change_set_path": to_run_relative_ref(write_scope.get("change_set_path"), run_root),
+                },
+                "baseline_original_tests": {
+                    "status": baseline_original_tests.get("status"),
+                    "exit_code": baseline_original_tests.get("exit_code"),
+                    "strategy": baseline_original_tests.get("strategy"),
+                    "failure_class": baseline_original_tests.get("failure_class"),
+                    "failure_type": baseline_original_tests.get("failure_type"),
+                    "log_path": to_run_relative_ref(baseline_original_tests.get("log_path"), run_root),
+                },
+                "baseline_generated_tests": {
+                    "status": baseline_generated_tests.get("status"),
+                    "exit_code": baseline_generated_tests.get("exit_code"),
+                    "strategy": baseline_generated_tests.get("strategy"),
+                    "failure_class": baseline_generated_tests.get("failure_class"),
+                    "failure_type": baseline_generated_tests.get("failure_type"),
+                    "log_path": to_run_relative_ref(baseline_generated_tests.get("log_path"), run_root),
+                },
+                "ported_original_tests": {
+                    "status": ported_original_tests.get("status"),
+                    "exit_code": ported_original_tests.get("exit_code"),
+                    "iterations_used": ported_original_tests.get("iterations_used"),
+                    "adapter_nonzero_runs": ported_original_tests.get("adapter_nonzero_runs"),
+                    "log_path": to_run_relative_ref(ported_original_tests.get("log_path"), run_root),
+                },
+                "retention_policy": {
+                    "mode": retention_policy.get("mode"),
+                    "documented_removals_required": retention_policy.get("documented_removals_required"),
+                    "manifest_rel_path": normalize_rel_ref(retention_policy.get("manifest_rel_path")),
+                    "undocumented_removed_test_count": retention_policy.get("undocumented_removed_test_count"),
+                },
+                "removed_original_tests": as_list(test_port.get("removed_original_tests")),
+                "behavioral_evidence": {
+                    "junit_report_count": behavioral_evidence.get("junit_report_count"),
+                    "junit_report_files": [
+                        normalized
+                        for normalized in (normalize_rel_ref(item) for item in as_list(behavioral_evidence.get("junit_report_files")))
+                        if normalized
+                    ],
+                    "failing_case_count": behavioral_evidence.get("failing_case_count"),
+                    "failing_case_unique_count": behavioral_evidence.get("failing_case_unique_count", behavioral_evidence.get("failing_case_count")),
+                    "failing_case_occurrence_count": behavioral_evidence.get("failing_case_occurrence_count", behavioral_evidence.get("failing_case_count")),
+                    "truncated": behavioral_evidence.get("truncated"),
+                    "grouped_truncated": behavioral_evidence.get("grouped_truncated"),
+                    "failing_cases": normalize_fail_cases(behavioral_evidence.get("failing_cases")),
+                    "grouped_failing_cases": normalize_fail_grouped_cases(behavioral_evidence.get("grouped_failing_cases")),
+                },
+                "adapter": {
+                    "events_log": to_run_relative_ref(adapter.get("events_log"), run_root),
+                    "stderr_log": to_run_relative_ref(adapter.get("stderr_log"), run_root),
+                    "last_message_path": to_run_relative_ref(adapter.get("last_message_path"), run_root),
+                },
+                "artifacts": {
+                    "tool_run_dir": tool_run_dir or run_dir,
+                    "tool_json_path": tool_json_path,
+                    "tool_summary_path": tool_summary_path or summary_md,
+                    "tool_log_path": tool_log_path,
+                    "run_dir": run_dir,
+                    "logs_dir": logs_dir,
+                    "workspace_dir": workspace_dir,
+                    "outputs_dir": outputs_dir,
+                    "summary_md": summary_md,
+                    "adapter_events_log": to_run_relative_ref(adapter.get("events_log"), run_root),
+                    "adapter_stderr_log": to_run_relative_ref(adapter.get("stderr_log"), run_root),
+                    "adapter_last_message_path": to_run_relative_ref(adapter.get("last_message_path"), run_root),
                 },
             },
             "sonar": {

@@ -1,8 +1,0 @@
-{
-  "dataset_id": "local",
-  "run_count": 9,
-  "schema_versions": {
-    "index": "index.v1",
-    "run": "run.v1"
-  }
-}

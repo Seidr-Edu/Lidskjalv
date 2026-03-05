@@ -91,9 +91,74 @@
       }
     },
     "test_port": {
+      "adapter": {
+        "events_log": "test-port/logs/adapter-events.jsonl",
+        "last_message_path": "test-port/logs/adapter-last-message.md",
+        "stderr_log": "test-port/logs/adapter-stderr.log"
+      },
+      "adapter_prereqs_ok": true,
+      "artifacts": {
+        "adapter_events_log": "test-port/logs/adapter-events.jsonl",
+        "adapter_last_message_path": "test-port/logs/adapter-last-message.md",
+        "adapter_stderr_log": "test-port/logs/adapter-stderr.log",
+        "logs_dir": "test-port/logs",
+        "outputs_dir": "test-port/outputs",
+        "run_dir": "test-port",
+        "summary_md": "test-port/outputs/summary.md",
+        "tool_json_path": "test-port/outputs/test_port.json",
+        "tool_log_path": "logs/test-port-tool.log",
+        "tool_run_dir": "test-port",
+        "tool_summary_path": "test-port/outputs/summary.md",
+        "workspace_dir": "test-port/workspace"
+      },
+      "baseline_generated_tests": {
+        "exit_code": 0,
+        "failure_class": null,
+        "failure_type": null,
+        "log_path": "test-port/logs/baseline-generated-tests.log",
+        "status": "pass",
+        "strategy": null
+      },
+      "baseline_original_tests": {
+        "exit_code": 1,
+        "failure_class": null,
+        "failure_type": null,
+        "log_path": "test-port/logs/baseline-original-tests.log",
+        "status": "fail",
+        "strategy": null
+      },
+      "behavioral_evidence": {
+        "failing_case_count": 0,
+        "failing_case_occurrence_count": 0,
+        "failing_case_unique_count": 0,
+        "failing_cases": [],
+        "grouped_failing_cases": [],
+        "grouped_truncated": null,
+        "junit_report_count": 0,
+        "junit_report_files": [],
+        "truncated": false
+      },
       "behavioral_verdict": "invalid",
+      "behavioral_verdict_reason": "write-scope-violation",
+      "enabled": true,
       "failure_class": "write-scope-violation",
+      "informational": true,
+      "new_repo_unchanged": true,
+      "ported_original_tests": {
+        "adapter_nonzero_runs": 0,
+        "exit_code": 1,
+        "iterations_used": 0,
+        "log_path": null,
+        "status": "fail"
+      },
       "reason": "write-scope-violation",
+      "removed_original_tests": [],
+      "retention_policy": {
+        "documented_removals_required": null,
+        "manifest_rel_path": null,
+        "mode": null,
+        "undocumented_removed_test_count": null
+      },
       "status": "failed",
       "suite_changes": {
         "added": 1,
@@ -104,7 +169,31 @@
       "suite_shape": {
         "final_ported_test_file_count": 51,
         "original_snapshot_file_count": 50,
+        "removed_original_test_file_count": null,
+        "retained_original_test_file_count": null,
         "retention_ratio": 1.02
+      },
+      "write_scope": {
+        "change_set_path": "test-port/workspace/write-guards/ported-protected-change-set.tsv",
+        "diff_path": "test-port/workspace/write-guards/disallowed-change.diff",
+        "ignored_prefixes": [],
+        "policy": "tests-only",
+        "violation_count": 3,
+        "violations": [
+          {
+            "kind": "M",
+            "path": "./completion/proof/logs/hard_reconstruction_gate.log"
+          },
+          {
+            "kind": "M",
+            "path": "./completion/proof/logs/runner_replay.log"
+          },
+          {
+            "kind": "M",
+            "path": "./completion/proof/logs/test_suite_shape.log"
+          }
+        ],
+        "violations_log_path": "test-port/workspace/summaries/last-write-scope-failure.txt"
       }
     }
   },

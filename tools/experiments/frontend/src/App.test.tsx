@@ -40,6 +40,12 @@ describe("App", () => {
     render(<App />);
 
     await screen.findByText("Runs (2)");
+    await screen.findByText("Behavioral Evidence");
+    expect(screen.getByText("Unique failing signatures: 2")).toBeInTheDocument();
+    expect(screen.getByText("Total failing occurrences: 7")).toBeInTheDocument();
+    expect(screen.getByText(/tool_json_path:/)).toBeInTheDocument();
+    expect(screen.getByText("Occurrences: 5")).toBeInTheDocument();
+
     const runList = screen.getByTestId("run-list");
     await within(runList).findByText("run-a");
 
@@ -62,6 +68,8 @@ describe("App", () => {
     await waitFor(() => {
       expect(window.location.search).toContain("run=run-b");
     });
+
+    await screen.findByText("No failing case details.");
   });
 
   it("shows empty state when no datasets exist", async () => {

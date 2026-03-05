@@ -80,9 +80,74 @@
       }
     },
     "test_port": {
+      "adapter": {
+        "events_log": "logs/test-port/adapter-events.jsonl",
+        "last_message_path": "logs/test-port/adapter-last-message.md",
+        "stderr_log": "logs/test-port/adapter-stderr.log"
+      },
+      "adapter_prereqs_ok": true,
+      "artifacts": {
+        "adapter_events_log": "logs/test-port/adapter-events.jsonl",
+        "adapter_last_message_path": "logs/test-port/adapter-last-message.md",
+        "adapter_stderr_log": "logs/test-port/adapter-stderr.log",
+        "logs_dir": null,
+        "outputs_dir": null,
+        "run_dir": null,
+        "summary_md": null,
+        "tool_json_path": null,
+        "tool_log_path": null,
+        "tool_run_dir": null,
+        "tool_summary_path": null,
+        "workspace_dir": null
+      },
+      "baseline_generated_tests": {
+        "exit_code": 2,
+        "failure_class": null,
+        "failure_type": null,
+        "log_path": "logs/test-port/baseline-generated-tests.log",
+        "status": "skipped",
+        "strategy": null
+      },
+      "baseline_original_tests": {
+        "exit_code": 0,
+        "failure_class": null,
+        "failure_type": null,
+        "log_path": "logs/test-port/baseline-original-tests.log",
+        "status": "pass",
+        "strategy": null
+      },
+      "behavioral_evidence": {
+        "failing_case_count": null,
+        "failing_case_occurrence_count": null,
+        "failing_case_unique_count": null,
+        "failing_cases": [],
+        "grouped_failing_cases": [],
+        "grouped_truncated": null,
+        "junit_report_count": null,
+        "junit_report_files": [],
+        "truncated": null
+      },
       "behavioral_verdict": null,
+      "behavioral_verdict_reason": null,
+      "enabled": true,
       "failure_class": null,
+      "informational": true,
+      "new_repo_unchanged": true,
+      "ported_original_tests": {
+        "adapter_nonzero_runs": 0,
+        "exit_code": 2,
+        "iterations_used": 0,
+        "log_path": null,
+        "status": "skipped"
+      },
       "reason": "unsupported-test-runner",
+      "removed_original_tests": [],
+      "retention_policy": {
+        "documented_removals_required": null,
+        "manifest_rel_path": null,
+        "mode": null,
+        "undocumented_removed_test_count": null
+      },
       "status": "skipped",
       "suite_changes": {
         "added": 0,
@@ -93,7 +158,18 @@
       "suite_shape": {
         "final_ported_test_file_count": 0,
         "original_snapshot_file_count": 0,
+        "removed_original_test_file_count": null,
+        "retained_original_test_file_count": null,
         "retention_ratio": null
+      },
+      "write_scope": {
+        "change_set_path": null,
+        "diff_path": "workspace/test-port/write-guards/disallowed-change.diff",
+        "ignored_prefixes": [],
+        "policy": "tests-only",
+        "violation_count": 0,
+        "violations": [],
+        "violations_log_path": "workspace/test-port/summaries/last-write-scope-failure.txt"
       }
     }
   },

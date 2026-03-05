@@ -113,13 +113,17 @@ def parse_prefixes(csv_value):
         return []
     return [part for part in csv_value.split(":") if part]
 
-def collect_junit_failing_cases(repo_dir, max_cases=200):
+def collect_junit_failing_cases(repo_dir, max_cases=200, max_groups=500, max_sample_reports=3):
     out = {
         "junit_report_count": 0,
         "junit_report_files": [],
         "failing_case_count": 0,
+        "failing_case_unique_count": 0,
+        "failing_case_occurrence_count": 0,
         "failing_cases": [],
+        "grouped_failing_cases": [],
         "truncated": False,
+        "grouped_truncated": False,
     }
     if not repo_dir or not os.path.isdir(repo_dir):
         return out
@@ -144,7 +148,8 @@ def collect_junit_failing_cases(repo_dir, max_cases=200):
     out["junit_report_count"] = len(report_files)
     out["junit_report_files"] = [os.path.relpath(p, repo_dir).replace(os.sep, "/") for p in report_files]
 
-    seen_cases = set()
+    grouped_index = {}
+    unique_case_count = 0
     for report_path in report_files:
         rel_report = os.path.relpath(report_path, repo_dir).replace(os.sep, "/")
         try:
@@ -157,6 +162,7 @@ def collect_junit_failing_cases(repo_dir, max_cases=200):
             for child in list(tc):
                 if child.tag not in {"failure", "error"}:
                     continue
+                out["failing_case_occurrence_count"] += 1
                 msg = (child.attrib.get("message") or "").strip()
                 if not msg:
                     msg = " ".join((child.text or "").split())[:240]
@@ -164,20 +170,43 @@ def collect_junit_failing_cases(repo_dir, max_cases=200):
                     msg = msg[:237] + "..."
                 kind = child.tag
                 key = (classname, name, kind, msg)
-                if key in seen_cases:
-                    continue
-                seen_cases.add(key)
-                out["failing_case_count"] += 1
-                if len(out["failing_cases"]) < max_cases:
-                    out["failing_cases"].append({
-                        "class": classname,
-                        "name": name,
-                        "kind": kind,
-                        "message": msg,
-                        "report_file": rel_report,
-                    })
+
+                group_idx = grouped_index.get(key)
+                if group_idx is None:
+                    unique_case_count += 1
+                    if len(out["grouped_failing_cases"]) < max_groups:
+                        out["grouped_failing_cases"].append({
+                            "class": classname,
+                            "name": name,
+                            "kind": kind,
+                            "message": msg,
+                            "occurrence_count": 1,
+                            "sample_report_files": [rel_report],
+                        })
+                        group_idx = len(out["grouped_failing_cases"]) - 1
+                        grouped_index[key] = group_idx
+                    else:
+                        out["grouped_truncated"] = True
+
+                    if len(out["failing_cases"]) < max_cases:
+                        out["failing_cases"].append({
+                            "class": classname,
+                            "name": name,
+                            "kind": kind,
+                            "message": msg,
+                            "report_file": rel_report,
+                        })
+                    else:
+                        out["truncated"] = True
                 else:
-                    out["truncated"] = True
+                    group = out["grouped_failing_cases"][group_idx]
+                    group["occurrence_count"] += 1
+                    samples = group["sample_report_files"]
+                    if rel_report not in samples and len(samples) < max_sample_reports:
+                        samples.append(rel_report)
+
+    out["failing_case_unique_count"] = unique_case_count
+    out["failing_case_count"] = unique_case_count
     return out
 
 suite_changes = read_change_set_stats(write_scope_change_set_path)
@@ -196,6 +225,13 @@ if "junit_report_count" in evidence_data:
     behavioral_evidence["junit_report_count"] = to_int(evidence_data.get("junit_report_count"), behavioral_evidence.get("junit_report_count", 0))
 if "junit_report_files" in evidence_data and isinstance(evidence_data.get("junit_report_files"), list):
     behavioral_evidence["junit_report_files"] = evidence_data.get("junit_report_files")
+if "junit_failing_case_count" in evidence_data:
+    unique_count = to_int(
+        evidence_data.get("junit_failing_case_count"),
+        behavioral_evidence.get("failing_case_unique_count", 0),
+    )
+    behavioral_evidence["failing_case_count"] = unique_count
+    behavioral_evidence["failing_case_unique_count"] = unique_count
 
 obj = {
     "version": 1,
@@ -328,13 +364,13 @@ summary_lines = [
     f"- Retained original tests: **{obj['suite_shape']['retained_original_test_file_count']}**",
     f"- Removed original tests: **{obj['suite_shape']['removed_original_test_file_count']}**",
     f"- Retention ratio: **{obj['suite_shape']['retention_ratio'] if obj['suite_shape']['retention_ratio'] is not None else '<none>'}**",
-    f"- Observed failing test cases (from JUnit reports): **{obj['behavioral_evidence']['failing_case_count']}**",
+    f"- Observed failing test cases (from JUnit reports): **{obj['behavioral_evidence']['failing_case_count']} unique / {obj['behavioral_evidence'].get('failing_case_occurrence_count', obj['behavioral_evidence']['failing_case_count'])} occurrences**",
     f"- Iterations used: **{obj['ported_original_tests']['iterations_used']}**",
     f"- Adapter non-zero runs: **{obj['ported_original_tests']['adapter_nonzero_runs']}**",
     f"- Baseline original tests: **{obj['baseline_original_tests']['status']}** (exit {obj['baseline_original_tests']['exit_code']}, strategy {obj['baseline_original_tests'].get('strategy') or '<none>'}, failure type {obj['baseline_original_tests'].get('failure_type') or '<none>'}) log: {obj['baseline_original_tests']['log_path'] or '<none>'}",
     f"- Baseline generated tests: **{obj['baseline_generated_tests']['status']}** (exit {obj['baseline_generated_tests']['exit_code']}, strategy {obj['baseline_generated_tests'].get('strategy') or '<none>'}, failure type {obj['baseline_generated_tests'].get('failure_type') or '<none>'}) log: {obj['baseline_generated_tests']['log_path'] or '<none>'}",
     f"- Ported original tests: **{obj['ported_original_tests']['status']}** (exit {obj['ported_original_tests']['exit_code']}) log: {obj['ported_original_tests']['log_path'] or '<none>'}",
-    "- Detailed failing cases are in `test_port.json` under `behavioral_evidence.failing_cases`.",
+    "- Detailed failing cases are in `test_port.json` under `behavioral_evidence.grouped_failing_cases`.",
 ]
 
 os.makedirs(os.path.dirname(summary_path), exist_ok=True)

@@ -5,7 +5,7 @@
 andvari_usage() {
   cat <<'USAGE'
 Usage:
-  ./andvari-run.sh --diagram /path/to/diagram.puml [--run-id RUN_ID] [--max-iter N] [--adapter NAME] [--gating-mode model|fixed] [--max-gate-revisions N] [--model-gate-timeout-sec N]
+  ./andvari-run.sh --diagram /path/to/diagram.puml --adapter NAME [--run-id RUN_ID] [--max-iter N] [--gating-mode model|fixed] [--max-gate-revisions N] [--model-gate-timeout-sec N]
 
 Options:
   --diagram                 Path to the PlantUML diagram (.puml). Required.

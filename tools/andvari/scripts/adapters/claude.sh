@@ -105,7 +105,7 @@ run_claude_prompt() {
   set +e
   (
     cd "$new_repo_dir"
-    claude --print < "$prompt_file"
+    claude --dangerously-skip-permissions --print < "$prompt_file"
   ) > "$response_file" 2>> "$stderr_log"
   local status=$?
   set -e

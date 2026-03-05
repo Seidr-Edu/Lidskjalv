@@ -14,6 +14,7 @@ Required:
 Optional:
   --diagram PATH              Diagram file path (passed as read-only adapter context)
   --original-subdir PATH      Subdirectory under original repo to use for tests
+  --generated-subdir PATH     Subdirectory under generated repo to run baseline/ported tests
   --run-id ID                 Explicit run id
   --run-dir PATH              Explicit run directory (default: .data/test-port/runs/<run-id>)
   --adapter NAME              Adapter name (default: codex)
@@ -31,6 +32,10 @@ tp_resolve_write_scope_ignored_prefixes() {
   local -a builtins=(
     "./completion/proof/logs/"
     "./.mvn_repo/"
+    "./.m2/"
+    "./.gradle/"
+    "./target/"
+    "./build/"
   )
   local -a all_raw=("${builtins[@]}")
   local -a env_raw=()
@@ -66,6 +71,7 @@ tp_parse_args() {
   TP_ORIGINAL_REPO=""
   TP_DIAGRAM_PATH=""
   TP_ORIGINAL_SUBDIR=""
+  TP_GENERATED_SUBDIR=""
   TP_RUN_ID=""
   TP_RUN_DIR=""
   TP_ADAPTER="${ANDVARI_ADAPTER:-codex}"
@@ -80,6 +86,7 @@ tp_parse_args() {
       --original-repo) TP_ORIGINAL_REPO="${2:-}"; shift 2 ;;
       --diagram) TP_DIAGRAM_PATH="${2:-}"; shift 2 ;;
       --original-subdir) TP_ORIGINAL_SUBDIR="${2:-}"; shift 2 ;;
+      --generated-subdir) TP_GENERATED_SUBDIR="${2:-}"; shift 2 ;;
       --run-id) TP_RUN_ID="${2:-}"; shift 2 ;;
       --run-dir) TP_RUN_DIR="${2:-}"; shift 2 ;;
       --adapter) TP_ADAPTER="${2:-}"; shift 2 ;;
@@ -121,6 +128,13 @@ tp_validate_and_finalize_args() {
     [[ -d "$TP_ORIGINAL_EFFECTIVE_PATH" ]] || tp_fail "--original-subdir not found: $TP_ORIGINAL_SUBDIR"
   fi
 
+  TP_GENERATED_EFFECTIVE_SUBDIR="${TP_GENERATED_SUBDIR}"
+  TP_GENERATED_EFFECTIVE_PATH="$TP_GENERATED_REPO"
+  if [[ -n "$TP_GENERATED_SUBDIR" ]]; then
+    TP_GENERATED_EFFECTIVE_PATH="${TP_GENERATED_REPO}/${TP_GENERATED_SUBDIR}"
+    [[ -d "$TP_GENERATED_EFFECTIVE_PATH" ]] || tp_fail "--generated-subdir not found: $TP_GENERATED_SUBDIR"
+  fi
+
   if [[ -z "$TP_RUN_ID" ]]; then
     local gen_component
     gen_component="$(tp_sanitize_id_component "$TP_GENERATED_REPO")"
@@ -140,10 +154,14 @@ tp_validate_and_finalize_args() {
   TP_SUMMARY_DIR="${TP_WORKSPACE_DIR}/summaries"
   TP_GUARDS_DIR="${TP_WORKSPACE_DIR}/write-guards"
   TP_MAVEN_LOCAL_REPO="${TP_WORKSPACE_DIR}/.m2/repository"
+  TP_GRADLE_USER_HOME="${TP_WORKSPACE_DIR}/.gradle"
+  TP_TMP_DIR="${TP_WORKSPACE_DIR}/tmp"
 
   TP_ORIGINAL_BASELINE_REPO="${TP_WORKSPACE_DIR}/original-baseline-repo"
   TP_GENERATED_BASELINE_REPO="${TP_WORKSPACE_DIR}/generated-baseline-repo"
   TP_PORTED_REPO="${TP_WORKSPACE_DIR}/ported-tests-repo"
+  TP_PORTED_EFFECTIVE_REPO="${TP_PORTED_REPO}"
+  TP_GENERATED_BASELINE_EFFECTIVE_REPO="${TP_GENERATED_BASELINE_REPO}"
   TP_ORIGINAL_TESTS_SNAPSHOT="${TP_WORKSPACE_DIR}/original-tests-snapshot"
 
   TP_BASELINE_ORIGINAL_LOG="${TP_LOG_DIR}/baseline-original-tests.log"

@@ -33,9 +33,12 @@ tp_snapshot_original_tests() {
 }
 
 tp_seed_ported_repo_with_original_tests() {
-  find "$TP_PORTED_REPO" -type d \
+  local target_root="${TP_PORTED_EFFECTIVE_REPO:-$TP_PORTED_REPO}"
+  mkdir -p "$target_root"
+
+  find "$target_root" -type d \
     \( -path '*/src/test' -o -path '*/test' -o -path '*/tests' -o -path '*/src/*Test*' \) \
     -prune -exec rm -rf {} + 2>/dev/null || true
 
-  rsync -a "$TP_ORIGINAL_TESTS_SNAPSHOT/" "$TP_PORTED_REPO/" >/dev/null 2>&1
+  rsync -a "$TP_ORIGINAL_TESTS_SNAPSHOT/" "$target_root/" >/dev/null 2>&1
 }

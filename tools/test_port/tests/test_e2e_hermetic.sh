@@ -223,7 +223,7 @@ if obj.get("status") != "passed":
 if obj.get("write_scope", {}).get("violation_count") != 0:
     raise SystemExit(f"expected zero violations, got {obj.get('write_scope', {}).get('violation_count')}")
 ignored = obj.get("write_scope", {}).get("ignored_prefixes", [])
-for expected in ("./completion/proof/logs/", "./.mvn_repo/"):
+for expected in ("./completion/proof/logs/", "./.mvn_repo/", "./.m2/"):
     if expected not in ignored:
         raise SystemExit(f"missing ignored prefix: {expected}")
 PY
@@ -253,7 +253,7 @@ if "./src/main/java/Prod.java" not in paths:
 PY
 }
 
-case_zero_junit_reports_fail_evidence_guard() {
+case_zero_junit_reports_emits_no_signal() {
   local tmp json_path
   tmp="$(tpt_mktemp_dir)"
 
@@ -264,14 +264,14 @@ case_zero_junit_reports_fail_evidence_guard() {
 import json, sys
 with open(sys.argv[1], "r", encoding="utf-8") as f:
     obj = json.load(f)
-if obj.get("status") != "failed":
-    raise SystemExit(f"expected failed status, got {obj.get('status')}")
-if obj.get("reason") != "insufficient-test-evidence":
-    raise SystemExit(f"expected insufficient-test-evidence reason, got {obj.get('reason')}")
-if obj.get("failure_class") != "missing-junit-reports":
-    raise SystemExit(f"expected missing-junit-reports, got {obj.get('failure_class')}")
-if obj.get("behavioral_verdict") != "invalid":
-    raise SystemExit(f"expected invalid verdict, got {obj.get('behavioral_verdict')}")
+if obj.get("status") != "skipped":
+    raise SystemExit(f"expected skipped status, got {obj.get('status')}")
+if obj.get("reason") != "no-test-signal":
+    raise SystemExit(f"expected no-test-signal reason, got {obj.get('reason')}")
+if obj.get("status_detail") != "no_test_signal":
+    raise SystemExit(f"expected no_test_signal status_detail, got {obj.get('status_detail')}")
+if obj.get("behavioral_verdict") != "no_test_signal":
+    raise SystemExit(f"expected no_test_signal verdict, got {obj.get('behavioral_verdict')}")
 PY
 }
 
@@ -339,8 +339,8 @@ if obj.get("status") != "failed":
     raise SystemExit(f"expected failed status, got {obj.get('status')}")
 if obj.get("reason") != "tests-failed":
     raise SystemExit(f"expected tests-failed reason, got {obj.get('reason')}")
-if obj.get("failure_class") != "compatibility-build":
-    raise SystemExit(f"expected compatibility-build classifier, got {obj.get('failure_class')}")
+if obj.get("failure_class") != "compilation-failure":
+    raise SystemExit(f"expected compilation-failure classifier, got {obj.get('failure_class')}")
 if obj.get("behavioral_verdict") != "difference_detected":
     raise SystemExit(f"expected difference_detected verdict, got {obj.get('behavioral_verdict')}")
 if obj.get("behavioral_evidence", {}).get("failing_case_count", 0) < 1:
@@ -348,6 +348,8 @@ if obj.get("behavioral_evidence", {}).get("failing_case_count", 0) < 1:
 baseline = obj.get("baseline_original_tests", {})
 if baseline.get("status") != "fail-with-integration-skip":
     raise SystemExit(f"expected baseline fail-with-integration-skip, got {baseline}")
+if baseline.get("failure_class") != "dependency-resolution-failure":
+    raise SystemExit(f"expected dependency-resolution-failure baseline class, got {baseline}")
 if baseline.get("failure_type") != "environmental-noise":
     raise SystemExit(f"expected baseline environmental-noise failure type, got {baseline}")
 PY
@@ -355,7 +357,7 @@ PY
 
 tpt_run_case "ignored runtime writes do not fail write-scope" case_ignored_runtime_writes_do_not_fail
 tpt_run_case "disallowed source writes fail write-scope" case_disallowed_source_write_fails
-tpt_run_case "zero junit reports fail evidence guard" case_zero_junit_reports_fail_evidence_guard
+tpt_run_case "zero junit reports emit no-test-signal" case_zero_junit_reports_emits_no_signal
 tpt_run_case "undocumented removed test fails evidence guard" case_undocumented_removed_test_fails_evidence_guard
 tpt_run_case "retention maximization selects best iteration" case_retention_maximization_selects_best_iteration
 tpt_run_case "verdict prefers junit evidence over compatibility classifier" case_verdict_prefers_junit_evidence_over_compatibility_class

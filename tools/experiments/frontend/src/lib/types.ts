@@ -100,12 +100,42 @@ export interface TestPortWriteScope {
   [key: string]: unknown;
 }
 
+export interface TestPortExecutionSummary {
+  tests_discovered?: number | null;
+  tests_executed?: number | null;
+  tests_failed?: number | null;
+  tests_errors?: number | null;
+  tests_skipped?: number | null;
+  junit_reports_found?: number | null;
+  [key: string]: unknown;
+}
+
+export interface TestPortFailureDiagnostics {
+  phase?: string | null;
+  subclass?: string | null;
+  first_failure_line?: string | null;
+  log_excerpt_path?: string | null;
+  [key: string]: unknown;
+}
+
+export interface TestPortRunnerPreflight {
+  detected_runner?: string | null;
+  supported?: boolean | null;
+  missing_capabilities?: string[];
+  module_root?: string | null;
+  frameworks_detected?: string[];
+  [key: string]: unknown;
+}
+
 export interface TestPortTestOutcome {
   status?: string | null;
   exit_code?: number | null;
   strategy?: string | null;
   failure_class?: string | null;
+  failure_class_legacy?: string | null;
   failure_type?: string | null;
+  failure_diagnostics?: TestPortFailureDiagnostics;
+  execution_summary?: TestPortExecutionSummary;
   iterations_used?: number;
   adapter_nonzero_runs?: number;
   log_path?: string | null;
@@ -161,11 +191,15 @@ export interface TestPortStage {
   informational?: boolean;
   status?: string | null;
   reason?: string | null;
+  status_detail?: string | null;
   failure_class?: string | null;
+  failure_class_legacy?: string | null;
   adapter_prereqs_ok?: boolean;
   new_repo_unchanged?: boolean;
   behavioral_verdict?: string | null;
   behavioral_verdict_reason?: string | null;
+  runner_preflight?: TestPortRunnerPreflight;
+  failure_diagnostics?: TestPortFailureDiagnostics;
   write_scope?: TestPortWriteScope;
   suite_shape?: {
     original_snapshot_file_count?: number;
@@ -173,6 +207,9 @@ export interface TestPortStage {
     retained_original_test_file_count?: number;
     removed_original_test_file_count?: number;
     retention_ratio?: number | null;
+    retained_modified_count?: number;
+    retained_unchanged_count?: number;
+    assertion_line_change_count?: number;
     [key: string]: unknown;
   };
   suite_changes?: {

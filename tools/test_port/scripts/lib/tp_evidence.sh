@@ -12,6 +12,7 @@ tp_compute_evidence_json() {
   mkdir -p "$(dirname "$out_json")"
 
   python3 - <<'PY' "$repo_dir" "$snapshot_dir" "$manifest_path" "$out_json"
+import difflib
 import glob
 import json
 import os
@@ -174,6 +175,25 @@ def collect_junit_stats(repo):
     return out
 
 
+def count_assertion_line_changes(original_path, adapted_path):
+    try:
+        with open(original_path, "r", encoding="utf-8", errors="replace") as f:
+            original_lines = f.read().splitlines()
+        with open(adapted_path, "r", encoding="utf-8", errors="replace") as f:
+            adapted_lines = f.read().splitlines()
+    except Exception:
+        return 0
+
+    count = 0
+    for line in difflib.ndiff(original_lines, adapted_lines):
+        if not line or line[0] not in {"+", "-"}:
+            continue
+        body = line[2:]
+        if re.search(r"\bassert[A-Za-z0-9_]*\b|Assertions\.", body):
+            count += 1
+    return count
+
+
 snapshot_files = list_files(snapshot_dir)
 snapshot_set = set(snapshot_files)
 
@@ -185,6 +205,28 @@ for rel in snapshot_files:
         retained.append(rel)
     else:
         removed.append(rel)
+
+retained_modified_count = 0
+retained_unchanged_count = 0
+assertion_line_change_count = 0
+for rel in retained:
+    original_file = os.path.join(snapshot_dir, rel[2:])
+    adapted_file = os.path.join(repo_dir, rel[2:])
+    try:
+        with open(original_file, "rb") as f:
+            original_bytes = f.read()
+        with open(adapted_file, "rb") as f:
+            adapted_bytes = f.read()
+    except Exception:
+        retained_modified_count += 1
+        continue
+
+    if original_bytes == adapted_bytes:
+        retained_unchanged_count += 1
+        continue
+
+    retained_modified_count += 1
+    assertion_line_change_count += count_assertion_line_changes(original_file, adapted_file)
 
 manifest_rows, malformed_manifest_rows = parse_removal_manifest(manifest_path)
 
@@ -229,6 +271,9 @@ obj = {
     "retained_original_test_file_count": retained_count,
     "removed_original_test_file_count": removed_count,
     "retention_ratio": retention_ratio,
+    "retained_modified_count": retained_modified_count,
+    "retained_unchanged_count": retained_unchanged_count,
+    "assertion_line_change_count": assertion_line_change_count,
     "removed_original_tests": removed_entries,
     "undocumented_removed_original_tests": undocumented,
     "undocumented_removed_test_count": len(undocumented),
@@ -269,6 +314,9 @@ assignments = {
     "TP_EVIDENCE_RETAINED_ORIGINAL_TEST_FILE_COUNT": obj.get("retained_original_test_file_count", 0),
     "TP_EVIDENCE_REMOVED_ORIGINAL_TEST_FILE_COUNT": obj.get("removed_original_test_file_count", 0),
     "TP_EVIDENCE_RETENTION_RATIO": to_s(obj.get("retention_ratio")),
+    "TP_EVIDENCE_RETAINED_MODIFIED_COUNT": obj.get("retained_modified_count", 0),
+    "TP_EVIDENCE_RETAINED_UNCHANGED_COUNT": obj.get("retained_unchanged_count", 0),
+    "TP_EVIDENCE_ASSERTION_LINE_CHANGE_COUNT": obj.get("assertion_line_change_count", 0),
     "TP_EVIDENCE_UNDOCUMENTED_REMOVED_TEST_COUNT": obj.get("undocumented_removed_test_count", 0),
     "TP_EVIDENCE_JUNIT_REPORT_COUNT": obj.get("junit_report_count", 0),
     "TP_EVIDENCE_JUNIT_FAILING_CASE_COUNT": obj.get("junit_failing_case_count", 0),

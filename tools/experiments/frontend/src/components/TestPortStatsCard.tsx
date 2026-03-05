@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { TestPortGroupedFailureCase, TestPortStage, TestPortTestOutcome } from "@/lib/types";
+import type { TestPortExecutionSummary, TestPortGroupedFailureCase, TestPortStage, TestPortTestOutcome } from "@/lib/types";
 
 import { StatusBadge } from "./StatusBadge";
 
@@ -50,6 +50,8 @@ function normalizeGroupedFailures(testPort?: TestPortStage): TestPortGroupedFail
 }
 
 function testOutcomeRow(title: string, value?: TestPortTestOutcome) {
+  const execution = value?.execution_summary;
+  const failureDiagnostics = value?.failure_diagnostics;
   return (
     <div className="space-y-1 rounded-md border p-2">
       <div className="text-xs uppercase text-muted-foreground">{title}</div>
@@ -60,11 +62,26 @@ function testOutcomeRow(title: string, value?: TestPortTestOutcome) {
       <div className="space-y-1 text-xs text-muted-foreground">
         <div>Strategy: {valueOrDash(value?.strategy)}</div>
         <div>Failure class: {valueOrDash(value?.failure_class)}</div>
+        <div>Failure class (legacy): {valueOrDash(value?.failure_class_legacy)}</div>
         <div>Failure type: {valueOrDash(value?.failure_type)}</div>
+        <div>
+          Failure diagnostics: {valueOrDash(failureDiagnostics?.phase)}/{valueOrDash(failureDiagnostics?.subclass)}
+        </div>
+        <div>Failure first line: {valueOrDash(failureDiagnostics?.first_failure_line)}</div>
+        <div>
+          Execution summary: {executionSummaryInline(execution)}
+        </div>
         <div>Log: {valueOrDash(value?.log_path)}</div>
       </div>
     </div>
   );
+}
+
+function executionSummaryInline(value?: TestPortExecutionSummary) {
+  if (!value) {
+    return "—";
+  }
+  return `discovered=${valueOrDash(value.tests_discovered)}, executed=${valueOrDash(value.tests_executed)}, failed=${valueOrDash(value.tests_failed)}, errors=${valueOrDash(value.tests_errors)}, skipped=${valueOrDash(value.tests_skipped)}, reports=${valueOrDash(value.junit_reports_found)}`;
 }
 
 export function TestPortStatsCard({ testPort }: TestPortStatsCardProps) {
@@ -108,8 +125,16 @@ export function TestPortStatsCard({ testPort }: TestPortStatsCardProps) {
             <div>{valueOrDash(testPort?.failure_class)}</div>
           </div>
           <div>
+            <div className="text-xs uppercase text-muted-foreground">Failure class (legacy)</div>
+            <div>{valueOrDash(testPort?.failure_class_legacy)}</div>
+          </div>
+          <div>
             <div className="text-xs uppercase text-muted-foreground">Reason</div>
             <div>{valueOrDash(testPort?.reason)}</div>
+          </div>
+          <div>
+            <div className="text-xs uppercase text-muted-foreground">Status detail</div>
+            <div>{valueOrDash(testPort?.status_detail)}</div>
           </div>
           <div>
             <div className="text-xs uppercase text-muted-foreground">Adapter prereqs ok</div>
@@ -136,6 +161,9 @@ export function TestPortStatsCard({ testPort }: TestPortStatsCardProps) {
               <div>Retained original test files: {valueOrDash(testPort?.suite_shape?.retained_original_test_file_count)}</div>
               <div>Removed original test files: {valueOrDash(testPort?.suite_shape?.removed_original_test_file_count)}</div>
               <div>Retention ratio: {ratioOrDash(testPort?.suite_shape?.retention_ratio)}</div>
+              <div>Retained modified test files: {valueOrDash(testPort?.suite_shape?.retained_modified_count)}</div>
+              <div>Retained unchanged test files: {valueOrDash(testPort?.suite_shape?.retained_unchanged_count)}</div>
+              <div>Assertion line changes: {valueOrDash(testPort?.suite_shape?.assertion_line_change_count)}</div>
             </div>
           </div>
 
@@ -188,6 +216,38 @@ export function TestPortStatsCard({ testPort }: TestPortStatsCardProps) {
               <div>Documented removals required: {boolOrDash(testPort?.retention_policy?.documented_removals_required)}</div>
               <div>Undocumented removed tests: {valueOrDash(testPort?.retention_policy?.undocumented_removed_test_count)}</div>
               <div>Manifest path: {valueOrDash(testPort?.retention_policy?.manifest_rel_path)}</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="space-y-2 rounded-md border p-3">
+            <h4 className="text-sm font-medium">Runner Preflight</h4>
+            <div className="space-y-1 text-sm">
+              <div>Detected runner: {valueOrDash(testPort?.runner_preflight?.detected_runner)}</div>
+              <div>Supported: {boolOrDash(testPort?.runner_preflight?.supported)}</div>
+              <div>Module root: {valueOrDash(testPort?.runner_preflight?.module_root)}</div>
+              <div>
+                Missing capabilities:{" "}
+                {Array.isArray(testPort?.runner_preflight?.missing_capabilities) && testPort?.runner_preflight?.missing_capabilities.length > 0
+                  ? testPort?.runner_preflight?.missing_capabilities.join(", ")
+                  : "—"}
+              </div>
+              <div>
+                Frameworks detected:{" "}
+                {Array.isArray(testPort?.runner_preflight?.frameworks_detected) && testPort?.runner_preflight?.frameworks_detected.length > 0
+                  ? testPort?.runner_preflight?.frameworks_detected.join(", ")
+                  : "—"}
+              </div>
+            </div>
+          </div>
+          <div className="space-y-2 rounded-md border p-3">
+            <h4 className="text-sm font-medium">Failure Diagnostics</h4>
+            <div className="space-y-1 text-sm">
+              <div>Phase: {valueOrDash(testPort?.failure_diagnostics?.phase)}</div>
+              <div>Subclass: {valueOrDash(testPort?.failure_diagnostics?.subclass)}</div>
+              <div>First failure line: {valueOrDash(testPort?.failure_diagnostics?.first_failure_line)}</div>
+              <div>Log excerpt: {valueOrDash(testPort?.failure_diagnostics?.log_excerpt_path)}</div>
             </div>
           </div>
         </div>

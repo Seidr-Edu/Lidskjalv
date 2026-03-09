@@ -10,8 +10,8 @@ andvari_execute_fixed_flow() {
     "$NEW_REPO_DIR" \
     "${INPUT_DIR}/diagram.puml" \
     "$EVENTS_LOG" \
-    "$CODEX_STDERR_LOG" \
-    "${OUTPUTS_DIR}/codex_last_message_initial.txt"; then
+    "$ADAPTER_STDERR_LOG" \
+    "${OUTPUTS_DIR}/adapter_last_message_initial.txt"; then
     ADAPTER_FAILURES=$((ADAPTER_FAILURES + 1))
     echo "[andvari] warning: initial adapter run returned non-zero status"
   fi
@@ -33,8 +33,8 @@ andvari_execute_fixed_flow() {
       "${INPUT_DIR}/diagram.puml" \
       "$GATE_SUMMARY_FILE" \
       "$EVENTS_LOG" \
-      "$CODEX_STDERR_LOG" \
-      "${OUTPUTS_DIR}/codex_last_message_iter_${iter}.txt" \
+      "$ADAPTER_STDERR_LOG" \
+      "${OUTPUTS_DIR}/adapter_last_message_iter_${iter}.txt" \
       "$iter"; then
       ADAPTER_FAILURES=$((ADAPTER_FAILURES + 1))
       echo "[andvari] warning: adapter repair iteration ${iter} returned non-zero status"
@@ -54,8 +54,8 @@ andvari_execute_model_flow() {
     "$NEW_REPO_DIR" \
     "${INPUT_DIR}/diagram.puml" \
     "$EVENTS_LOG" \
-    "$CODEX_STDERR_LOG" \
-    "${OUTPUTS_DIR}/codex_last_message_declaration.txt" \
+    "$ADAPTER_STDERR_LOG" \
+    "${OUTPUTS_DIR}/adapter_last_message_declaration.txt" \
     "$MAX_GATE_REVISIONS"; then
     ADAPTER_FAILURES=$((ADAPTER_FAILURES + 1))
     echo "[andvari] warning: declaration phase returned non-zero status"
@@ -71,8 +71,8 @@ andvari_execute_model_flow() {
     "${INPUT_DIR}/diagram.puml" \
     "$GATE_SUMMARY_FILE" \
     "$EVENTS_LOG" \
-    "$CODEX_STDERR_LOG" \
-    "${OUTPUTS_DIR}/codex_last_message_initial_implementation.txt" \
+    "$ADAPTER_STDERR_LOG" \
+    "${OUTPUTS_DIR}/adapter_last_message_initial_implementation.txt" \
     "0" \
     "$MAX_GATE_REVISIONS" \
     "$MODEL_GATE_TIMEOUT_SEC"; then
@@ -97,8 +97,8 @@ andvari_execute_model_flow() {
       "${INPUT_DIR}/diagram.puml" \
       "$GATE_SUMMARY_FILE" \
       "$EVENTS_LOG" \
-      "$CODEX_STDERR_LOG" \
-      "${OUTPUTS_DIR}/codex_last_message_iter_${iter}.txt" \
+      "$ADAPTER_STDERR_LOG" \
+      "${OUTPUTS_DIR}/adapter_last_message_iter_${iter}.txt" \
       "$iter" \
       "$MAX_GATE_REVISIONS" \
       "$MODEL_GATE_TIMEOUT_SEC"; then

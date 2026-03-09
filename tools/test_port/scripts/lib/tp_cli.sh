@@ -10,6 +10,7 @@ Usage: test-port-run.sh --generated-repo PATH --original-repo PATH [options]
 Required:
   --generated-repo PATH       Generated repository root (read-only source; copied internally)
   --original-repo PATH        Original repository root (read-only source; copied internally)
+  --adapter NAME              Adapter name (required)
 
 Optional:
   --diagram PATH              Diagram file path (passed as read-only adapter context)
@@ -17,8 +18,8 @@ Optional:
   --generated-subdir PATH     Subdirectory under generated repo to run baseline/ported tests
   --run-id ID                 Explicit run id
   --run-dir PATH              Explicit run directory (default: .data/test-port/runs/<run-id>)
-  --adapter NAME              Adapter name (default: codex)
   --max-iter N                Adaptation iterations after initial pass (default: 5)
+  --adapter-model NAME        Adapter model name (default: auto-selected by adapter)
   --strict                    Non-zero exit if status is not passed
   --write-scope-policy NAME   Only "tests-only" is supported (default: tests-only)
   --write-scope-ignore-prefix PATH
@@ -74,7 +75,7 @@ tp_parse_args() {
   TP_GENERATED_SUBDIR=""
   TP_RUN_ID=""
   TP_RUN_DIR=""
-  TP_ADAPTER="${ANDVARI_ADAPTER:-codex}"
+  TP_ADAPTER=""
   TP_MAX_ITER="5"
   TP_STRICT=false
   TP_WRITE_SCOPE_POLICY="tests-only"
@@ -108,6 +109,7 @@ tp_parse_args() {
 tp_validate_and_finalize_args() {
   [[ -n "$TP_GENERATED_REPO" ]] || tp_fail "--generated-repo is required"
   [[ -n "$TP_ORIGINAL_REPO" ]] || tp_fail "--original-repo is required"
+  [[ -n "$TP_ADAPTER" ]] || tp_fail "--adapter is required"
   [[ "$TP_MAX_ITER" =~ ^[0-9]+$ ]] || tp_fail "--max-iter must be non-negative integer"
   [[ "$TP_WRITE_SCOPE_POLICY" == "tests-only" ]] || tp_fail "--write-scope-policy must be tests-only"
   tp_resolve_write_scope_ignored_prefixes

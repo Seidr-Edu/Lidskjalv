@@ -5,12 +5,13 @@
 andvari_usage() {
   cat <<'USAGE'
 Usage:
-  ./andvari-run.sh --diagram /path/to/diagram.puml [--run-id RUN_ID] [--max-iter N] [--gating-mode model|fixed] [--max-gate-revisions N] [--model-gate-timeout-sec N]
+  ./andvari-run.sh --diagram /path/to/diagram.puml --adapter NAME [--run-id RUN_ID] [--max-iter N] [--gating-mode model|fixed] [--max-gate-revisions N] [--model-gate-timeout-sec N]
 
 Options:
   --diagram                 Path to the PlantUML diagram (.puml). Required.
   --run-id                  Optional run id. Auto-generated (UTC timestamp) if omitted.
   --max-iter                Maximum repair iterations after first implementation attempt. Default: 8.
+  --adapter                 Adapter backend. Required.
   --gating-mode             Gating strategy: model (default) or fixed.
   --max-gate-revisions      In model mode, maximum revisions after gates.v1 (default: 3).
   --model-gate-timeout-sec  In model mode, timeout for completion/run_all_gates.sh replay (default: 120).

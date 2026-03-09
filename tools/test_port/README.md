@@ -5,7 +5,7 @@ Standalone model-driven test adaptation/evaluation tool used by experiments.
 ## Purpose
 
 - Run baseline tests on original and generated repos in isolated copies
-- Port original tests into a generated repo copy using the Andvari adapter/Codex prompts
+- Port original tests into a generated repo copy using the Andvari adapter prompts
 - Enforce tests-only write scope
 - Preserve behavioral mismatch evidence
 - Emit `test_port.json` and `summary.md`
@@ -21,8 +21,11 @@ Standalone model-driven test adaptation/evaluation tool used by experiments.
 ./test-port-run.sh \
   --generated-repo /abs/path/to/generated-repo \
   --original-repo /abs/path/to/original-repo \
+  --adapter claude \
   --diagram /abs/path/to/diagram.puml
 ```
+
+`--adapter` is required.
 
 Artifacts are written to `.data/test-port/runs/<run-id>/` by default, or to `--run-dir`.
 

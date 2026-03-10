@@ -1,4 +1,4 @@
-.PHONY: scan-batch scan-one create-projects service-help test docker-build
+.PHONY: scan-batch scan-one create-projects service-help test test-container docker-build
 
 scan-batch:
 	./scripts/batch-scan.sh
@@ -14,6 +14,9 @@ service-help:
 
 test:
 	bash tests/run.sh
+
+test-container:
+	bash tests/test_container_integration.sh
 
 docker-build:
 	docker build -t lidskjalv:local .

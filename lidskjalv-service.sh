@@ -56,16 +56,15 @@ Container contract:
     /run
 
 Environment:
-  LIDSKJALV_MANIFEST                 Optional manifest path (default: /run/config/manifest.json)
+  LIDSKJALV_MANIFEST                 Optional manifest path override (default: /run/config/manifest.json)
   LIDSKJALV_INPUT_REPO               Optional input repo override (default: /input/repo)
   LIDSKJALV_RUN_DIR                  Optional run dir override (default: /run)
-  LIDSKJALV_SCAN_LABEL               Optional manifest override
-  LIDSKJALV_PROJECT_KEY              Optional manifest override
-  LIDSKJALV_PROJECT_NAME             Optional manifest override
-  LIDSKJALV_REPO_SUBDIR              Optional manifest override
-  LIDSKJALV_SKIP_SONAR               Optional manifest override (true/false)
-  LIDSKJALV_SONAR_WAIT_TIMEOUT_SEC   Optional manifest override
-  LIDSKJALV_SONAR_WAIT_POLL_SEC      Optional manifest override
+  SONAR_HOST_URL                     Required when skip_sonar=false
+  SONAR_TOKEN                        Required when skip_sonar=false
+  SONAR_ORGANIZATION                 Required when skip_sonar=false
+
+Service scan config is manifest-owned in container mode. Manifest fields are
+not overridden from environment variables.
 
 Manifest v1 JSON fields:
   version
@@ -637,25 +636,30 @@ lidskjalv_service_main() {
     return 1
   fi
 
-  if [[ -n "$manifest_path" && -f "$manifest_path" ]]; then
-    local manifest_assignments
-    manifest_path="$(lidskjalv_service_abs_path "$manifest_path")"
-    if ! manifest_assignments="$(lidskjalv_service_load_manifest "$manifest_path")"; then
-      lidskjalv_service_apply_service_error "invalid-service-manifest" "invalid_manifest"
-      LIDSKJALV_SERVICE_FINISHED_AT="$(timestamp)"
-      lidskjalv_service_write_report || return 1
-      return 0
-    fi
-    eval "$manifest_assignments"
-    manifest_run_id="${LIDSKJALV_SERVICE_MANIFEST_RUN_ID:-}"
-    manifest_scan_label="${LIDSKJALV_SERVICE_MANIFEST_SCAN_LABEL:-}"
-    manifest_project_key="${LIDSKJALV_SERVICE_MANIFEST_PROJECT_KEY:-}"
-    manifest_project_name="${LIDSKJALV_SERVICE_MANIFEST_PROJECT_NAME:-}"
-    manifest_repo_subdir="${LIDSKJALV_SERVICE_MANIFEST_REPO_SUBDIR:-}"
-    manifest_skip_sonar="${LIDSKJALV_SERVICE_MANIFEST_SKIP_SONAR:-}"
-    manifest_timeout="${LIDSKJALV_SERVICE_MANIFEST_SONAR_WAIT_TIMEOUT_SEC:-}"
-    manifest_poll="${LIDSKJALV_SERVICE_MANIFEST_SONAR_WAIT_POLL_SEC:-}"
+  manifest_path="$(lidskjalv_service_abs_path "$manifest_path")"
+  if [[ ! -f "$manifest_path" ]]; then
+    lidskjalv_service_apply_service_error "missing-service-manifest" "manifest_not_found"
+    LIDSKJALV_SERVICE_FINISHED_AT="$(timestamp)"
+    lidskjalv_service_write_report || return 1
+    return 0
   fi
+
+  local manifest_assignments
+  if ! manifest_assignments="$(lidskjalv_service_load_manifest "$manifest_path")"; then
+    lidskjalv_service_apply_service_error "invalid-service-manifest" "invalid_manifest"
+    LIDSKJALV_SERVICE_FINISHED_AT="$(timestamp)"
+    lidskjalv_service_write_report || return 1
+    return 0
+  fi
+  eval "$manifest_assignments"
+  manifest_run_id="${LIDSKJALV_SERVICE_MANIFEST_RUN_ID:-}"
+  manifest_scan_label="${LIDSKJALV_SERVICE_MANIFEST_SCAN_LABEL:-}"
+  manifest_project_key="${LIDSKJALV_SERVICE_MANIFEST_PROJECT_KEY:-}"
+  manifest_project_name="${LIDSKJALV_SERVICE_MANIFEST_PROJECT_NAME:-}"
+  manifest_repo_subdir="${LIDSKJALV_SERVICE_MANIFEST_REPO_SUBDIR:-}"
+  manifest_skip_sonar="${LIDSKJALV_SERVICE_MANIFEST_SKIP_SONAR:-}"
+  manifest_timeout="${LIDSKJALV_SERVICE_MANIFEST_SONAR_WAIT_TIMEOUT_SEC:-}"
+  manifest_poll="${LIDSKJALV_SERVICE_MANIFEST_SONAR_WAIT_POLL_SEC:-}"
 
   LIDSKJALV_SERVICE_RUN_ID="${manifest_run_id:-$(lidskjalv_service_timestamp_compact_utc)__service__lidskjalv}"
 
@@ -666,14 +670,6 @@ lidskjalv_service_main() {
   [[ -n "$manifest_skip_sonar" ]] && resolved_skip_sonar="$manifest_skip_sonar"
   [[ -n "$manifest_timeout" ]] && resolved_timeout="$manifest_timeout"
   [[ -n "$manifest_poll" ]] && resolved_poll="$manifest_poll"
-
-  [[ -n "${LIDSKJALV_SCAN_LABEL:-}" ]] && resolved_scan_label="$LIDSKJALV_SCAN_LABEL"
-  [[ -n "${LIDSKJALV_PROJECT_KEY:-}" ]] && resolved_project_key="$LIDSKJALV_PROJECT_KEY"
-  [[ -n "${LIDSKJALV_PROJECT_NAME:-}" ]] && resolved_project_name="$LIDSKJALV_PROJECT_NAME"
-  [[ -n "${LIDSKJALV_REPO_SUBDIR:-}" ]] && resolved_repo_subdir="$LIDSKJALV_REPO_SUBDIR"
-  [[ -n "${LIDSKJALV_SKIP_SONAR:-}" ]] && resolved_skip_sonar="$(lidskjalv_service_parse_bool "$LIDSKJALV_SKIP_SONAR" || true)"
-  [[ -n "${LIDSKJALV_SONAR_WAIT_TIMEOUT_SEC:-}" ]] && resolved_timeout="$LIDSKJALV_SONAR_WAIT_TIMEOUT_SEC"
-  [[ -n "${LIDSKJALV_SONAR_WAIT_POLL_SEC:-}" ]] && resolved_poll="$LIDSKJALV_SONAR_WAIT_POLL_SEC"
 
   if [[ "$resolved_scan_label" != "original" && "$resolved_scan_label" != "generated" ]]; then
     lidskjalv_service_apply_service_error "invalid-service-config" "scan_label must be original or generated"

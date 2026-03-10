@@ -37,6 +37,20 @@ _has_jdk_home() {
   [[ -n "$home" ]]
 }
 
+# Normalize java -version output majors.
+# Examples: 1.8 -> 8, 11.0.22 -> 11, 25 -> 25
+_normalize_discovered_jdk_version() {
+  local version="$1"
+
+  if [[ "$version" =~ ^1\.([0-9]+) ]]; then
+    version="${BASH_REMATCH[1]}"
+  else
+    version="$(printf '%s' "$version" | sed -E 's/^([0-9]+).*$/\1/')"
+  fi
+
+  printf '%s\n' "$version"
+}
+
 # Discover available JDK versions on the system
 # Populates AVAILABLE_JDKS array and _JDK_HOME_<version> variables
 discover_jdks() {
@@ -124,7 +138,8 @@ _discover_jdks_linux() {
       
       # Try to extract version
       local version
-      version="$("${jdk_dir}/bin/java" -version 2>&1 | head -1 | sed -n 's/.*version "\([0-9]*\).*/\1/p')"
+      version="$("${jdk_dir}/bin/java" -version 2>&1 | head -1 | sed -n 's/.*version "\([^"]*\)".*/\1/p')"
+      version="$(_normalize_discovered_jdk_version "$version")"
       
       if [[ -n "$version" ]] && ! _has_jdk_home "$version"; then
         AVAILABLE_JDKS+=("$version")
@@ -145,7 +160,7 @@ _discover_jdks_github_actions() {
   log_info "Detected GitHub Actions environment"
   
   # Check for JAVA_HOME_*_X64 environment variables
-  for version in 8 11 17 21; do
+  for version in 8 11 17 21 25; do
     local var_name="JAVA_HOME_${version}_X64"
     local jdk_path="${!var_name:-}"
     
@@ -164,7 +179,8 @@ _discover_jdks_generic() {
   # Just check if java is available
   if command -v java &>/dev/null; then
     local version
-    version="$(java -version 2>&1 | head -1 | sed -n 's/.*version "\([0-9]*\).*/\1/p')"
+    version="$(java -version 2>&1 | head -1 | sed -n 's/.*version "\([^"]*\)".*/\1/p')"
+    version="$(_normalize_discovered_jdk_version "$version")"
     if [[ -n "$version" ]]; then
       AVAILABLE_JDKS+=("$version")
       _set_jdk_home "$version" "${JAVA_HOME:-$(dirname "$(dirname "$(command -v java)")")}"
@@ -273,7 +289,7 @@ print_java_info() {
 # Returns: Space-separated list of JDK versions to try
 get_jdk_fallback_order() {
   # Modern first, then older LTS versions
-  echo "21 17 11 8"
+  echo "25 21 17 11 8"
 }
 
 # Select JDK based on project hints and availability

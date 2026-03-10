@@ -69,6 +69,10 @@ Required mount contract:
 
 Manifest path: `/run/config/manifest.json`
 
+The manifest is required in service mode. `scan_label`, `project_key`,
+`project_name`, `repo_subdir`, `skip_sonar`, and the Sonar wait settings are
+owned by that manifest and are not overridden from environment variables.
+
 ```json
 {
   "version": 1,
@@ -103,7 +107,47 @@ docker run --rm lidskjalv:local --help
 ```
 
 The image runs as a non-root `lidskjalv` user and includes Bash, Python, `jq`,
-`curl`, `git`, Maven, Gradle, and JDK 17/21.
+`curl`, `git`, Maven, Gradle, `sonar-scanner`, and JDK 8/11/17/21/25.
+
+## Orchestrator Example
+
+The orchestrator should inject Sonar credentials as runtime env vars and invoke
+`Lidskjalv` once per scan target. The service should not read a repo-local
+`.env`.
+
+Example manifest for the original repo scan:
+
+```json
+{
+  "version": 1,
+  "run_id": "20260310T120000Z__example",
+  "scan_label": "original",
+  "project_key": "pipeline_example_original",
+  "project_name": "Example (original)",
+  "skip_sonar": false,
+  "sonar_wait_timeout_sec": 300,
+  "sonar_wait_poll_sec": 5
+}
+```
+
+Example invocation:
+
+```bash
+docker run --rm \
+  -e SONAR_HOST_URL="https://sonarcloud.io" \
+  -e SONAR_TOKEN="${SONAR_TOKEN}" \
+  -e SONAR_ORGANIZATION="${SONAR_ORGANIZATION}" \
+  -v /abs/pipeline/original-repo:/input/repo:ro \
+  -v /abs/pipeline/lidskjalv-original-run:/run \
+  ghcr.io/seidr-edu/lidskjalv:latest
+```
+
+The orchestrator is expected to stage the service manifest at
+`/abs/pipeline/lidskjalv-original-run/config/manifest.json` before launching
+the container.
+
+Run the same image a second time with a manifest whose `scan_label` is
+`generated` and with `/input/repo` pointed at `artifacts/generated-repo/`.
 
 ## Tests
 
@@ -111,6 +155,12 @@ Run the shell regression suite:
 
 ```bash
 bash tests/run.sh
+```
+
+Run the container integration smoke test:
+
+```bash
+bash tests/test_container_integration.sh
 ```
 
 The tests cover:
@@ -121,6 +171,12 @@ The tests cover:
 - service output layout
 - skip-Sonar end-to-end service scans
 - Sonar verdict/report mapping with mocked responses
+- real container build and `/input/repo` + `/run` contract validation
+
+## Image Publishing
+
+GitHub Actions publishes the service image to `ghcr.io/seidr-edu/lidskjalv` on
+pushes to `master` and on version tags matching `v*`.
 
 ## Local SonarQube
 

@@ -45,7 +45,9 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd --gid 10001 lidskjalv \
-  && useradd --uid 10001 --gid 10001 --create-home --shell /bin/bash lidskjalv
+  && useradd --uid 10001 --gid 10001 --create-home --shell /usr/sbin/nologin lidskjalv \
+  && mkdir -p /run \
+  && chown -R lidskjalv:lidskjalv /run
 
 WORKDIR /app
 
@@ -53,8 +55,11 @@ COPY lidskjalv-service.sh /app/
 COPY scripts/ /app/scripts/
 COPY docs/ /app/docs/
 
-RUN chmod +x /app/lidskjalv-service.sh /app/scripts/*.sh
+RUN chmod +x /app/lidskjalv-service.sh /app/scripts/*.sh \
+  && chown -R lidskjalv:lidskjalv /app
 
 USER lidskjalv
+
+ENV HOME=/home/lidskjalv
 
 ENTRYPOINT ["/app/lidskjalv-service.sh"]

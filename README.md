@@ -108,6 +108,8 @@ docker run --rm lidskjalv:local --help
 
 The image runs as a non-root `lidskjalv` user and includes Bash, Python, `jq`,
 `curl`, `git`, Maven, Gradle, `sonar-scanner`, and JDK 8/11/17/21/25.
+The `/run` mount must therefore be writable by `uid=10001`, `gid=10001` or
+otherwise allow writes for that user.
 
 ## Orchestrator Example
 
@@ -149,6 +151,14 @@ the container.
 Run the same image a second time with a manifest whose `scan_label` is
 `generated` and with `/input/repo` pointed at `artifacts/generated-repo/`.
 
+## Release
+
+This repo includes:
+
+- `.github/workflows/release.yml` for semantic-release
+- `.github/workflows/publish-ghcr.yml` for publishing `ghcr.io/<owner>/lidskjalv`
+- `.releaserc.json` for semantic-release branch/plugin configuration
+
 ## Tests
 
 Run the shell regression suite:
@@ -175,8 +185,9 @@ The tests cover:
 
 ## Image Publishing
 
-GitHub Actions publishes the service image to `ghcr.io/seidr-edu/lidskjalv` on
-pushes to `master` and on version tags matching `v*`.
+GitHub Actions publishes the service image to `ghcr.io/seidr-edu/lidskjalv`
+when a GitHub release is published. Manual publish runs are also supported via
+the workflow dispatch entrypoint.
 
 ## Local SonarQube
 

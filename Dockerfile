@@ -22,9 +22,11 @@ RUN groupadd --gid 10001 lidskjalv \
 
 WORKDIR /app
 
-COPY . /app
+COPY lidskjalv-service.sh /app/
+COPY scripts/ /app/scripts/
+COPY docs/ /app/docs/
 
-RUN chmod +x /app/lidskjalv-service.sh /app/scripts/*.sh /app/tests/run.sh
+RUN chmod +x /app/lidskjalv-service.sh /app/scripts/*.sh
 
 USER lidskjalv
 

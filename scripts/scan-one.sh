@@ -40,25 +40,45 @@ SKIP_SONAR=false
 FORCE_RERUN=false
 REPOS_ROOT="${REPOS_ROOT:-$PROJECT_ROOT}"
 
+require_option_value() {
+  local option_name="$1"
+  local option_value="${2:-}"
+  local example="${3:-}"
+
+  if [[ -z "$option_value" ]]; then
+    if [[ -n "$example" ]]; then
+      log_error "${option_name} requires a value (e.g. ${option_name} ${example})"
+    else
+      log_error "${option_name} requires a value"
+    fi
+    exit 1
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -j|--jdk)
+      require_option_value "$1" "${2:-}" "17"
       FORCED_JDK="$2"
       shift 2
       ;;
     --path)
+      require_option_value "$1" "${2:-}" "/path/to/repo"
       PATH_ARG="$2"
       shift 2
       ;;
     --project-key)
+      require_option_value "$1" "${2:-}"
       PROJECT_KEY_OVERRIDE="$2"
       shift 2
       ;;
     --project-name)
+      require_option_value "$1" "${2:-}"
       PROJECT_NAME_OVERRIDE="$2"
       shift 2
       ;;
     --subdir)
+      require_option_value "$1" "${2:-}" "app"
       SUBDIR_OVERRIDE="$2"
       shift 2
       ;;

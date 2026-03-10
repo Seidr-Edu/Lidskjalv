@@ -9,6 +9,8 @@ trap 'rm -rf "$tmp"' EXIT
 
 fake_bin="${tmp}/fake-bin"
 make_fake_build_bin "$fake_bin"
+maven_app_copy="${tmp}/maven-app"
+cp -a "${ROOT_DIR}/tests/fixtures/maven_app/." "$maven_app_copy/"
 
 pushd "$ROOT_DIR" >/dev/null
 
@@ -21,7 +23,7 @@ path_data_dir="${tmp}/path-data"
 PATH="${fake_bin}:$PATH" \
 LIDSKJALV_DATA_DIR="$path_data_dir" \
 ./scripts/scan-one.sh \
-  --path "${ROOT_DIR}/tests/fixtures/maven_app" \
+  --path "$maven_app_copy" \
   --project-key cli_path_repo \
   --project-name cli-path-repo \
   --skip-sonar >/dev/null
@@ -61,7 +63,7 @@ assert_json_value "${url_data_dir}/state/scan-state.json" '.repositories["cli_ur
 assert_dir_exists "${url_data_dir}/work/cli_url_repo/.git" "url scan should clone into work dir"
 
 batch_input="${tmp}/repos.txt"
-printf 'path:%s\n' "${ROOT_DIR}/tests/fixtures/maven_app" > "$batch_input"
+printf 'path:%s\n' "$maven_app_copy" > "$batch_input"
 batch_data_dir="${tmp}/batch-data"
 
 LIDSKJALV_DATA_DIR="$batch_data_dir" \
@@ -81,5 +83,12 @@ PATH="${fake_bin}:$PATH" \
 
 second_attempts="$(jq -r '.repositories | to_entries[0].value.attempts' "${batch_data_dir}/state/scan-state.json")"
 assert_eq "1" "$second_attempts" "successful batch rerun should reuse state"
+
+set +e
+missing_jdk_output="$(PATH="${fake_bin}:$PATH" ./scripts/scan-one.sh --jdk 2>&1)"
+missing_jdk_rc=$?
+set -e
+assert_eq "1" "$missing_jdk_rc" "missing jdk value should exit 1"
+assert_contains "--jdk requires a value" "$missing_jdk_output" "missing jdk value should explain the error"
 
 popd >/dev/null

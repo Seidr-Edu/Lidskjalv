@@ -78,7 +78,7 @@ assert_json_value "${missing_sonar_run}/outputs/run_report.json" '.reason' "miss
 
 manifest_owned_run="${tmp}/manifest-owned-run"
 mkdir -p "${manifest_owned_run}/config"
-write_manifest "${manifest_owned_run}/config/manifest.yaml" $'version: 1\nscan_label: original\nproject_key: manifest-owned\nproject_name: "manifest owned"\nrepo_subdir: app\nskip_sonar: true'
+write_manifest "${manifest_owned_run}/config/manifest.yaml" $'version: 1\nscan_label: original\nproject_key: manifest-owned\nproject_name: "manifest-owned"\nrepo_subdir: app\nskip_sonar: true'
 PATH="${fake_bin}:$PATH" \
 LIDSKJALV_RUN_DIR="$manifest_owned_run" \
 LIDSKJALV_MANIFEST="${manifest_owned_run}/config/manifest.yaml" \
@@ -94,7 +94,7 @@ LIDSKJALV_SONAR_WAIT_POLL_SEC="0" \
 assert_json_value "${manifest_owned_run}/outputs/run_report.json" '.status' "passed" "manifest-owned run should pass"
 assert_json_value "${manifest_owned_run}/outputs/run_report.json" '.scan_label' "original" "service should ignore env scan_label overrides"
 assert_json_value "${manifest_owned_run}/outputs/run_report.json" '.project_key' "manifest-owned" "service should ignore env project_key overrides"
-assert_json_value "${manifest_owned_run}/outputs/run_report.json" '.project_name' "manifest owned" "service should parse quoted YAML strings"
+assert_json_value "${manifest_owned_run}/outputs/run_report.json" '.project_name' "manifest-owned" "service should parse quoted YAML strings"
 assert_json_value "${manifest_owned_run}/outputs/run_report.json" '.inputs.repo_subdir' "app" "service should ignore env repo_subdir overrides"
 assert_dir_exists "${manifest_owned_run}/artifacts/scans/original/workspace/repo" "manifest-owned scan should use manifest label"
 assert_not_exists "${manifest_owned_run}/artifacts/scans/generated" "env scan_label override should not create generated scan dir"

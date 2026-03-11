@@ -136,25 +136,60 @@ except Exception as exc:
     raise SystemExit(1)
 
 try:
-    if raw.lstrip().startswith("{"):
+    try:
         obj = json.loads(raw)
-    else:
+    except json.JSONDecodeError:
         def parse_scalar(raw_value):
             value = raw_value.strip()
             if not value or value in {"null", "~"}:
                 return None
-            if value.startswith('"') and value.endswith('"'):
-                return json.loads(value)
-            if value.startswith("'") and value.endswith("'"):
-                return value[1:-1].replace("''", "'")
+            if value.startswith('"'):
+                closing = 1
+                escaped = False
+                while closing < len(value):
+                    char = value[closing]
+                    if escaped:
+                        escaped = False
+                    elif char == "\\":
+                        escaped = True
+                    elif char == '"':
+                        break
+                    closing += 1
+                if closing >= len(value) or value[closing] != '"':
+                    print("invalid manifest YAML quoted string", file=sys.stderr)
+                    raise SystemExit(1)
+                remainder = value[closing + 1 :].strip()
+                if remainder and not remainder.startswith("#"):
+                    print("invalid manifest YAML quoted string suffix", file=sys.stderr)
+                    raise SystemExit(1)
+                return json.loads(value[: closing + 1])
+            if value.startswith("'"):
+                closing = 1
+                while closing < len(value):
+                    if value[closing] == "'":
+                        if closing + 1 < len(value) and value[closing + 1] == "'":
+                            closing += 2
+                            continue
+                        break
+                    closing += 1
+                if closing >= len(value) or value[closing] != "'":
+                    print("invalid manifest YAML quoted string", file=sys.stderr)
+                    raise SystemExit(1)
+                remainder = value[closing + 1 :].strip()
+                if remainder and not remainder.startswith("#"):
+                    print("invalid manifest YAML quoted string suffix", file=sys.stderr)
+                    raise SystemExit(1)
+                return value[1:closing].replace("''", "'")
             if value == "true":
                 return True
             if value == "false":
                 return False
             if re.fullmatch(r"[0-9]+", value):
                 return int(value)
-            if " #" in value:
-                value = value.split(" #", 1)[0].rstrip()
+            for index, char in enumerate(value):
+                if char == "#" and (index == 0 or value[index - 1].isspace()):
+                    value = value[:index].rstrip()
+                    break
             return value
 
         obj = {}
@@ -162,7 +197,7 @@ try:
             stripped = line.strip()
             if not stripped or stripped.startswith("#"):
                 continue
-            if line[: len(line) - len(line.lstrip(" \t"))]:
+            if line != line.lstrip(" \t"):
                 print(f"manifest YAML only supports top-level keys (line {line_no})", file=sys.stderr)
                 raise SystemExit(1)
             if ":" not in line:

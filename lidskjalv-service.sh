@@ -270,6 +270,26 @@ lidskjalv_service_prepare_scan_dirs() {
   done
 }
 
+lidskjalv_service_relax_tree_permissions() {
+  local path="$1"
+  [[ -n "$path" && -d "$path" ]] || return 0
+
+  chmod a+rwx "$path" >/dev/null 2>&1 || true
+  find "$path" \( -type d -o -type f \) -exec chmod a+rwX {} + >/dev/null 2>&1 || true
+}
+
+lidskjalv_service_finalize_run_artifacts() {
+  lidskjalv_service_relax_tree_permissions "${LIDSKJALV_SERVICE_OUTPUT_DIR:-}"
+  lidskjalv_service_relax_tree_permissions "${LIDSKJALV_SERVICE_SCAN_DIR:-}"
+}
+
+lidskjalv_service_exit_trap() {
+  local exit_code="$1"
+  trap - EXIT
+  lidskjalv_service_finalize_run_artifacts
+  exit "$exit_code"
+}
+
 lidskjalv_service_write_report() {
   local report_path="$LIDSKJALV_SERVICE_REPORT_PATH"
   local summary_path="$LIDSKJALV_SERVICE_SUMMARY_PATH"
@@ -786,5 +806,6 @@ lidskjalv_service_main() {
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  trap 'lidskjalv_service_exit_trap $?' EXIT
   lidskjalv_service_main "$@"
 fi

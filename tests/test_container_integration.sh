@@ -35,6 +35,14 @@ run_container_scan() {
   printf '%s\n' "$run_dir"
 }
 
+assert_run_dir_removable() {
+  local run_dir="$1"
+  if ! rm -rf "$run_dir"; then
+    test_fail "container run dir should be removable by host cleanup: ${run_dir}"
+  fi
+  assert_not_exists "$run_dir" "container run dir should be deleted cleanly"
+}
+
 pushd "$ROOT_DIR" >/dev/null
 
 docker build -t "$image_tag" .
@@ -56,6 +64,7 @@ original_run_dir="$(
 assert_json_value "${original_run_dir}/outputs/run_report.json" '.status' "passed" "original container scan should pass"
 assert_json_value "${original_run_dir}/outputs/run_report.json" '.scan_label' "original" "original container scan should preserve scan label"
 assert_dir_exists "${original_run_dir}/artifacts/scans/original/workspace/repo" "original container workspace should exist"
+assert_run_dir_removable "$original_run_dir"
 
 generated_run_dir="$(
   run_container_scan \
@@ -67,5 +76,6 @@ assert_json_value "${generated_run_dir}/outputs/run_report.json" '.status' "pass
 assert_json_value "${generated_run_dir}/outputs/run_report.json" '.scan_label' "generated" "generated container scan should preserve scan label"
 assert_json_value "${generated_run_dir}/outputs/run_report.json" '.inputs.repo_subdir' "app" "container scan should preserve repo_subdir"
 assert_dir_exists "${generated_run_dir}/artifacts/scans/generated/workspace/repo/app" "generated container workspace should include subdir repo copy"
+assert_run_dir_removable "$generated_run_dir"
 
 popd >/dev/null

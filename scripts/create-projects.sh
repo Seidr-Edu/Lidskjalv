@@ -33,9 +33,21 @@ Examples:
 EOF
 }
 
+require_option_value() {
+  local option_name="$1"
+  local option_value="${2:-}"
+
+  if [[ -z "$option_value" ]]; then
+    echo "Error: ${option_name} requires a directory argument." >&2
+    print_usage
+    exit 1
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --repos-root)
+      require_option_value "$1" "${2:-}"
       REPOS_ROOT="$2"
       shift 2
       ;;

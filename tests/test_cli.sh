@@ -11,6 +11,20 @@ fake_bin="${tmp}/fake-bin"
 make_fake_build_bin "$fake_bin"
 maven_app_copy="${tmp}/maven-app"
 cp -a "${ROOT_DIR}/tests/fixtures/maven_app/." "$maven_app_copy/"
+create_projects_env="${tmp}/create-projects.env"
+cat > "$create_projects_env" <<EOF
+SONAR_HOST_URL=https://sonar.example.test
+SONAR_TOKEN=test-token
+SONAR_ORGANIZATION=test-org
+EOF
+
+cat > "${fake_bin}/curl" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$@" >> "${FAKE_CURL_LOG:?}"
+printf '%s\n' '{"project":{"key":"fake"}}'
+EOF
+chmod +x "${fake_bin}/curl"
 
 pushd "$ROOT_DIR" >/dev/null
 
@@ -90,5 +104,39 @@ missing_jdk_rc=$?
 set -e
 assert_eq "1" "$missing_jdk_rc" "missing jdk value should exit 1"
 assert_contains "--jdk requires a value" "$missing_jdk_output" "missing jdk value should explain the error"
+
+set +e
+missing_repos_root_output="$(LIDSKJALV_SKIP_ENV_LOAD=true ./scripts/create-projects.sh --repos-root 2>&1)"
+missing_repos_root_rc=$?
+set -e
+assert_eq "1" "$missing_repos_root_rc" "missing repos-root value should exit 1"
+assert_contains "--repos-root requires a directory argument" "$missing_repos_root_output" "missing repos-root should explain the error"
+
+create_projects_root="${tmp}/create-projects-root"
+mkdir -p "$create_projects_root"
+cp -a "$maven_app_copy/." "${create_projects_root}/maven-app/"
+create_projects_curl_log="${tmp}/create-projects-curl.log"
+expected_create_projects_key="$(
+  ROOT_DIR="$ROOT_DIR" \
+  CREATE_PROJECTS_TARGET="${create_projects_root}/maven-app" \
+  bash -lc 'source "$ROOT_DIR/scripts/lib/common.sh"; derive_source_key path "$CREATE_PROJECTS_TARGET"'
+)"
+expected_create_projects_name="$(
+  ROOT_DIR="$ROOT_DIR" \
+  CREATE_PROJECTS_TARGET="${create_projects_root}/maven-app" \
+  bash -lc 'source "$ROOT_DIR/scripts/lib/common.sh"; derive_source_display_name path "$CREATE_PROJECTS_TARGET"'
+)"
+
+PATH="${fake_bin}:$PATH" \
+FAKE_CURL_LOG="$create_projects_curl_log" \
+LIDSKJALV_ENV_FILE="$create_projects_env" \
+./scripts/create-projects.sh \
+  --repos-root "$create_projects_root" \
+  path:maven-app >/dev/null
+
+create_projects_curl_args="$(cat "$create_projects_curl_log")"
+assert_contains "/api/projects/create" "$create_projects_curl_args" "create-projects single-source mode should call Sonar create API"
+assert_contains "project=${expected_create_projects_key}" "$create_projects_curl_args" "create-projects should derive the project key from a single path source"
+assert_contains "name=${expected_create_projects_name}" "$create_projects_curl_args" "create-projects should derive the project name from a single path source"
 
 popd >/dev/null

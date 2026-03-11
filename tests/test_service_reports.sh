@@ -65,18 +65,24 @@ EOF
   chmod +x "${fake_bin}/curl"
 }
 
+write_manifest() {
+  local path="$1"
+  local content="$2"
+  printf '%s\n' "$content" > "$path"
+}
+
 run_service_with_fake_sonar() {
   local run_dir="$1"
-  local manifest_json="$2"
+  local manifest_yaml="$2"
   local fake_bin="$3"
   mkdir -p "${run_dir}/config"
-  printf '%s\n' "$manifest_json" > "${run_dir}/config/manifest.json"
+  write_manifest "${run_dir}/config/manifest.yaml" "$manifest_yaml"
   PATH="${fake_bin}:$PATH" \
   SONAR_HOST_URL="https://sonar.example.test" \
   SONAR_TOKEN="token" \
   SONAR_ORGANIZATION="org" \
   LIDSKJALV_RUN_DIR="$run_dir" \
-  LIDSKJALV_MANIFEST="${run_dir}/config/manifest.json" \
+  LIDSKJALV_MANIFEST="${run_dir}/config/manifest.yaml" \
   LIDSKJALV_INPUT_REPO="${ROOT_DIR}/tests/fixtures/maven_app" \
   ./lidskjalv-service.sh >/dev/null
 }
@@ -92,7 +98,7 @@ FAKE_SONAR_QG_STATUS="ERROR" \
 FAKE_SONAR_MEASURES_MODE="present" \
 run_service_with_fake_sonar \
   "$quality_gate_run" \
-  '{"version":1,"scan_label":"original","project_key":"quality-gate","project_name":"quality-gate","skip_sonar":false,"sonar_wait_timeout_sec":1,"sonar_wait_poll_sec":0}' \
+  $'version: 1\nscan_label: original\nproject_key: quality-gate\nproject_name: quality-gate\nskip_sonar: false\nsonar_wait_timeout_sec: 1\nsonar_wait_poll_sec: 0' \
   "$fake_bin"
 
 assert_json_value "${quality_gate_run}/outputs/run_report.json" '.status' "failed" "quality gate error should fail scan"
@@ -107,7 +113,7 @@ FAKE_SONAR_QG_STATUS="OK" \
 FAKE_SONAR_MEASURES_MODE="empty" \
 run_service_with_fake_sonar \
   "$timeout_run" \
-  '{"version":1,"scan_label":"generated","project_key":"timeout-case","skip_sonar":false,"sonar_wait_timeout_sec":0,"sonar_wait_poll_sec":0}' \
+  $'version: 1\nscan_label: generated\nproject_key: timeout-case\nskip_sonar: false\nsonar_wait_timeout_sec: 0\nsonar_wait_poll_sec: 0' \
   "$fake_bin"
 
 assert_json_value "${timeout_run}/outputs/run_report.json" '.status' "failed" "timeout should fail scan"

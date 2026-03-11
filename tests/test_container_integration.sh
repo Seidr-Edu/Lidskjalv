@@ -20,16 +20,22 @@ cleanup() {
 }
 trap cleanup EXIT
 
+write_manifest() {
+  local path="$1"
+  local content="$2"
+  printf '%s\n' "$content" > "$path"
+}
+
 run_container_scan() {
   local run_name="$1"
   local repo_path="$2"
-  local manifest_json="$3"
+  local manifest_yaml="$3"
   local run_dir="${tmp}/${run_name}"
 
   mkdir -p "${run_dir}/config"
   chmod 0777 "$run_dir" "${run_dir}/config"
-  printf '%s\n' "$manifest_json" > "${run_dir}/config/manifest.json"
-  chmod 0644 "${run_dir}/config/manifest.json"
+  write_manifest "${run_dir}/config/manifest.yaml" "$manifest_yaml"
+  chmod 0644 "${run_dir}/config/manifest.yaml"
 
   docker run --rm \
     -v "${repo_path}:/input/repo:ro" \
@@ -54,7 +60,7 @@ original_run_dir="$(
   run_container_scan \
     "original-run" \
     "${ROOT_DIR}/tests/fixtures/maven_app" \
-    '{"version":1,"run_id":"container-test-original","scan_label":"original","project_key":"container-original","project_name":"container-original","skip_sonar":true}'
+    $'version: 1\nrun_id: container-test-original\nscan_label: original\nproject_key: container-original\nproject_name: container-original\nskip_sonar: true'
 )"
 assert_json_value "${original_run_dir}/outputs/run_report.json" '.status' "passed" "original container scan should pass"
 assert_json_value "${original_run_dir}/outputs/run_report.json" '.scan_label' "original" "original container scan should preserve scan label"
@@ -64,7 +70,7 @@ generated_run_dir="$(
   run_container_scan \
     "generated-run" \
     "${ROOT_DIR}/tests/fixtures/maven_monorepo" \
-    '{"version":1,"run_id":"container-test-generated","scan_label":"generated","project_key":"container-generated","project_name":"container-generated","repo_subdir":"app","skip_sonar":true}'
+    $'version: 1\nrun_id: container-test-generated\nscan_label: generated\nproject_key: container-generated\nproject_name: container-generated\nrepo_subdir: app\nskip_sonar: true'
 )"
 assert_json_value "${generated_run_dir}/outputs/run_report.json" '.status' "passed" "generated container scan should pass"
 assert_json_value "${generated_run_dir}/outputs/run_report.json" '.scan_label' "generated" "generated container scan should preserve scan label"

@@ -67,24 +67,22 @@ Required mount contract:
 - Read-only: `/run/config`
 - Writable: `/run`
 
-Manifest path: `/run/config/manifest.json`
+Manifest path: `/run/config/manifest.yaml`
 
 The manifest is required in service mode. `scan_label`, `project_key`,
 `project_name`, `repo_subdir`, `skip_sonar`, and the Sonar wait settings are
 owned by that manifest and are not overridden from environment variables.
 
-```json
-{
-  "version": 1,
-  "run_id": "20260310T120000Z__example",
-  "scan_label": "original",
-  "project_key": "pipeline_example_original",
-  "project_name": "Example (original)",
-  "repo_subdir": "app",
-  "skip_sonar": false,
-  "sonar_wait_timeout_sec": 300,
-  "sonar_wait_poll_sec": 5
-}
+```yaml
+version: 1
+run_id: 20260310T120000Z__example
+scan_label: original
+project_key: pipeline_example_original
+project_name: "Example (original)"
+repo_subdir: app
+skip_sonar: false
+sonar_wait_timeout_sec: 300
+sonar_wait_poll_sec: 5
 ```
 
 Runtime Sonar credentials remain env-driven:
@@ -119,17 +117,15 @@ The orchestrator should inject Sonar credentials as runtime env vars and invoke
 
 Example manifest for the original repo scan:
 
-```json
-{
-  "version": 1,
-  "run_id": "20260310T120000Z__example",
-  "scan_label": "original",
-  "project_key": "pipeline_example_original",
-  "project_name": "Example (original)",
-  "skip_sonar": false,
-  "sonar_wait_timeout_sec": 300,
-  "sonar_wait_poll_sec": 5
-}
+```yaml
+version: 1
+run_id: 20260310T120000Z__example
+scan_label: original
+project_key: pipeline_example_original
+project_name: "Example (original)"
+skip_sonar: false
+sonar_wait_timeout_sec: 300
+sonar_wait_poll_sec: 5
 ```
 
 Example invocation:
@@ -145,7 +141,7 @@ docker run --rm \
 ```
 
 The orchestrator is expected to stage the service manifest at
-`/abs/pipeline/lidskjalv-original-run/config/manifest.json` before launching
+`/abs/pipeline/lidskjalv-original-run/config/manifest.yaml` before launching
 the container.
 
 Run the same image a second time with a manifest whose `scan_label` is

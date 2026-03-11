@@ -56,7 +56,7 @@ Container contract:
     /run
 
 Environment:
-  LIDSKJALV_MANIFEST                 Optional manifest path override (default: /run/config/manifest.json)
+  LIDSKJALV_MANIFEST                 Optional manifest path override (default: /run/config/manifest.yaml)
   LIDSKJALV_INPUT_REPO               Optional input repo override (default: /input/repo)
   LIDSKJALV_RUN_DIR                  Optional run dir override (default: /run)
   SONAR_HOST_URL                     Required when skip_sonar=false
@@ -66,7 +66,7 @@ Environment:
 Service scan config is manifest-owned in container mode. Manifest fields are
 not overridden from environment variables.
 
-Manifest v1 JSON fields:
+Manifest v1 YAML fields:
   version
   run_id
   scan_label
@@ -122,6 +122,7 @@ lidskjalv_service_load_manifest() {
   local manifest_path="$1"
   python3 - <<'PY' "$manifest_path"
 import json
+import re
 import shlex
 import sys
 
@@ -129,13 +130,59 @@ path = sys.argv[1]
 
 try:
     with open(path, "r", encoding="utf-8") as f:
-        obj = json.load(f)
+        raw = f.read()
 except Exception as exc:
-    print(f"invalid manifest JSON: {exc}", file=sys.stderr)
+    print(f"invalid manifest YAML: {exc}", file=sys.stderr)
+    raise SystemExit(1)
+
+try:
+    if raw.lstrip().startswith("{"):
+        obj = json.loads(raw)
+    else:
+        def parse_scalar(raw_value):
+            value = raw_value.strip()
+            if not value or value in {"null", "~"}:
+                return None
+            if value.startswith('"') and value.endswith('"'):
+                return json.loads(value)
+            if value.startswith("'") and value.endswith("'"):
+                return value[1:-1].replace("''", "'")
+            if value == "true":
+                return True
+            if value == "false":
+                return False
+            if re.fullmatch(r"[0-9]+", value):
+                return int(value)
+            if " #" in value:
+                value = value.split(" #", 1)[0].rstrip()
+            return value
+
+        obj = {}
+        for line_no, line in enumerate(raw.splitlines(), start=1):
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            if line[: len(line) - len(line.lstrip(" \t"))]:
+                print(f"manifest YAML only supports top-level keys (line {line_no})", file=sys.stderr)
+                raise SystemExit(1)
+            if ":" not in line:
+                print(f"invalid manifest YAML line {line_no}: expected key: value", file=sys.stderr)
+                raise SystemExit(1)
+            key, value = line.split(":", 1)
+            key = key.strip()
+            if not key:
+                print(f"invalid manifest YAML line {line_no}: missing key", file=sys.stderr)
+                raise SystemExit(1)
+            if key in obj:
+                print(f"duplicate manifest field: {key}", file=sys.stderr)
+                raise SystemExit(1)
+            obj[key] = parse_scalar(value)
+except Exception as exc:
+    print(f"invalid manifest YAML: {exc}", file=sys.stderr)
     raise SystemExit(1)
 
 if not isinstance(obj, dict):
-    print("manifest must be a JSON object", file=sys.stderr)
+    print("manifest must be a YAML mapping", file=sys.stderr)
     raise SystemExit(1)
 
 allowed = {
@@ -602,7 +649,7 @@ lidskjalv_service_main() {
     esac
   fi
 
-  local manifest_path="${LIDSKJALV_MANIFEST:-/run/config/manifest.json}"
+  local manifest_path="${LIDSKJALV_MANIFEST:-/run/config/manifest.yaml}"
   local resolved_input_repo="${LIDSKJALV_INPUT_REPO:-/input/repo}"
   local resolved_run_dir="${LIDSKJALV_RUN_DIR:-/run}"
   local manifest_scan_label=""

@@ -1,4 +1,4 @@
-name: Shell Quality and Entrypoint Smoke
+name: Shell Quality, Tests, and Container Integration
 
 on:
   pull_request:
@@ -8,7 +8,6 @@ on:
 
 jobs:
   shell-quality:
-    name: Shell syntax and lint (entrypoints + executables)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -19,68 +18,76 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y shellcheck
 
-      - name: Validate Bash syntax for all tracked shell scripts
+      - name: Validate Bash syntax for tracked shell scripts
         run: |
           git ls-files -z '*.sh' | xargs -0 -n1 bash -n
 
-      - name: Run shellcheck on monorepo entrypoints and executable scripts
+      - name: Run shellcheck on entrypoints and executable scripts
         run: |
-          shopt -s globstar nullglob
+          shellcheck -x -e SC1090,SC1091 \
+            lidskjalv-service.sh \
+            scripts/*.sh \
+            scripts/strategies/*.sh \
+            tests/*.sh \
+            tests/lib/*.sh
 
-          # Lint scripts that are intended to be executed directly.
-          # Sourced helper modules are covered by bash syntax checks above and
-          # can be added to shellcheck later with targeted annotations.
-          files=(
-            andvari-run.sh
-            scripts/*.sh
-            tools/lidskjalv/scripts/*.sh
-            tools/lidskjalv/scripts/strategies/*.sh
-            tools/andvari/andvari-run.sh
-            tools/andvari/gate_*.sh
-            tools/andvari/scripts/verify_outcome_coverage.sh
-          )
-
-          shellcheck -x -e SC1090,SC1091 "${files[@]}"
-
-  test-port-tests:
-    name: Test-port hermetic tests
+  scanner-tests:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Validate test-port test script syntax
-        run: |
-          git ls-files -z 'tools/test_port/tests/*.sh' 'tools/test_port/tests/lib/*.sh' | xargs -0 -n1 bash -n
+      - name: Setup JDK 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
 
-      - name: Run test-port hermetic suite
-        run: |
-          bash tools/test_port/tests/run.sh
+      - name: Setup JDK 11
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '11'
 
-  entrypoint-smoke:
-    name: Entrypoint smoke (--help and wrapper routing)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq maven gradle git python3
 
       - name: Ensure entrypoints are executable
         run: |
-          chmod +x andvari-run.sh
+          chmod +x lidskjalv-service.sh
           chmod +x scripts/*.sh
-          chmod +x tools/lidskjalv/scripts/*.sh
-          chmod +x tools/andvari/andvari-run.sh
+          chmod +x tests/run.sh
 
-      - name: Smoke test root wrappers with --help
+      - name: Run scanner regression suite
         run: |
-          ./scripts/batch-scan.sh --help >/dev/null
-          ./scripts/scan-one.sh --help >/dev/null
-          ./scripts/create-projects.sh --help >/dev/null
-          ./andvari-run.sh --help >/dev/null
+          bash tests/run.sh
 
-      - name: Smoke test tool-local entrypoints with --help
+  container-integration:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run container integration test
         run: |
-          ./tools/lidskjalv/scripts/batch-scan.sh --help >/dev/null
-          ./tools/lidskjalv/scripts/scan-one.sh --help >/dev/null
-          ./tools/lidskjalv/scripts/create-projects.sh --help >/dev/null
-          ./tools/andvari/andvari-run.sh --help >/dev/null
+          bash tests/test_container_integration.sh

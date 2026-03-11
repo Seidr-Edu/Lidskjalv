@@ -1,0 +1,14 @@
+.git
+.github
+.data
+.env
+.DS_Store
+.vscode
+_work
+logs
+state
+repos
+tests
+claude.md
+**/.m2
+**/target

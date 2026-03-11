@@ -72,7 +72,7 @@ jobs:
 
       - name: Validate local path entries
         run: |
-          REPOS_FILE="tools/lidskjalv/repos.txt"
+          REPOS_FILE="repos.txt"
           REPOS_ROOT="${{ inputs.repos_root || '.' }}"
 
           if [ ! -f "$REPOS_FILE" ]; then

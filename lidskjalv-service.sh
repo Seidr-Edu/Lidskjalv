@@ -648,21 +648,17 @@ lidskjalv_service_apply_scan_result() {
       ;;
   esac
 
-  if [[ -z "$LIDSKJALV_SERVICE_QUALITY_GATE_STATUS" ]]; then
-    LIDSKJALV_SERVICE_STATUS="failed"
-    LIDSKJALV_SERVICE_FAILURE_SCOPE="scan"
-    LIDSKJALV_SERVICE_REASON="sonar-results-unavailable"
-    LIDSKJALV_SERVICE_STATUS_DETAIL="Sonar quality gate status was unavailable"
-    return 0
-  fi
-
-  if [[ "$LIDSKJALV_SERVICE_QUALITY_GATE_STATUS" != "OK" ]]; then
-    LIDSKJALV_SERVICE_STATUS="failed"
-    LIDSKJALV_SERVICE_FAILURE_SCOPE="scan"
-    LIDSKJALV_SERVICE_REASON="quality-gate-failed"
-    LIDSKJALV_SERVICE_STATUS_DETAIL="Sonar quality gate status: ${LIDSKJALV_SERVICE_QUALITY_GATE_STATUS}"
-    return 0
-  fi
+  case "$LIDSKJALV_SERVICE_QUALITY_GATE_STATUS" in
+    ""|NONE|OK)
+      ;;
+    *)
+      LIDSKJALV_SERVICE_STATUS="failed"
+      LIDSKJALV_SERVICE_FAILURE_SCOPE="scan"
+      LIDSKJALV_SERVICE_REASON="quality-gate-failed"
+      LIDSKJALV_SERVICE_STATUS_DETAIL="Sonar quality gate status: ${LIDSKJALV_SERVICE_QUALITY_GATE_STATUS}"
+      return 0
+      ;;
+  esac
 
   LIDSKJALV_SERVICE_STATUS="passed"
   LIDSKJALV_SERVICE_FAILURE_SCOPE=""

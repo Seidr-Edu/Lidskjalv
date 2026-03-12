@@ -33,7 +33,7 @@ EOF
 set -euo pipefail
 url="${*: -1}"
 ce_status="${FAKE_SONAR_CE_STATUS:-SUCCESS}"
-qg_status="${FAKE_SONAR_QG_STATUS:-OK}"
+qg_status="${FAKE_SONAR_QG_STATUS-OK}"
 measures_mode="${FAKE_SONAR_MEASURES_MODE:-present}"
 task_id="${FAKE_SONAR_TASK_ID:-fake-task}"
 
@@ -106,6 +106,35 @@ assert_json_value "${quality_gate_run}/outputs/run_report.json" '.reason' "quali
 assert_json_value "${quality_gate_run}/outputs/run_report.json" '.scan.ce_task_status' "SUCCESS" "ce task status should be captured"
 assert_json_value "${quality_gate_run}/outputs/run_report.json" '.scan.quality_gate_status' "ERROR" "quality gate status should be captured"
 assert_json_value "${quality_gate_run}/outputs/run_report.json" '.scan.data_status' "complete" "measures should be marked complete"
+
+missing_gate_run="${tmp}/missing-gate-run"
+FAKE_SONAR_CE_STATUS="SUCCESS" \
+FAKE_SONAR_QG_STATUS="" \
+FAKE_SONAR_MEASURES_MODE="present" \
+run_service_with_fake_sonar \
+  "$missing_gate_run" \
+  $'version: 1\nscan_label: original\nproject_key: missing-gate\nproject_name: missing-gate\nskip_sonar: false\nsonar_wait_timeout_sec: 1\nsonar_wait_poll_sec: 0' \
+  "$fake_bin"
+
+assert_json_value "${missing_gate_run}/outputs/run_report.json" '.status' "passed" "missing quality gate should not fail scan"
+assert_json_value "${missing_gate_run}/outputs/run_report.json" '.reason' "null" "missing quality gate should not set a failure reason"
+assert_json_value "${missing_gate_run}/outputs/run_report.json" '.scan.ce_task_status' "SUCCESS" "missing quality gate should preserve ce task status"
+assert_json_value "${missing_gate_run}/outputs/run_report.json" '.scan.quality_gate_status' "null" "missing quality gate should remain unset"
+assert_json_value "${missing_gate_run}/outputs/run_report.json" '.scan.data_status' "complete" "missing quality gate should still record measures"
+
+none_gate_run="${tmp}/none-gate-run"
+FAKE_SONAR_CE_STATUS="SUCCESS" \
+FAKE_SONAR_QG_STATUS="NONE" \
+FAKE_SONAR_MEASURES_MODE="present" \
+run_service_with_fake_sonar \
+  "$none_gate_run" \
+  $'version: 1\nscan_label: original\nproject_key: none-gate\nproject_name: none-gate\nskip_sonar: false\nsonar_wait_timeout_sec: 1\nsonar_wait_poll_sec: 0' \
+  "$fake_bin"
+
+assert_json_value "${none_gate_run}/outputs/run_report.json" '.status' "passed" "NONE quality gate should not fail scan"
+assert_json_value "${none_gate_run}/outputs/run_report.json" '.reason' "null" "NONE quality gate should not set a failure reason"
+assert_json_value "${none_gate_run}/outputs/run_report.json" '.scan.quality_gate_status' "NONE" "NONE quality gate status should be preserved"
+assert_json_value "${none_gate_run}/outputs/run_report.json" '.scan.data_status' "complete" "NONE quality gate should still record measures"
 
 timeout_run="${tmp}/timeout-run"
 FAKE_SONAR_CE_STATUS="IN_PROGRESS" \

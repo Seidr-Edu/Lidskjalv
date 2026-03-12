@@ -1,6 +1,6 @@
 # Lidskjalv
 
-Lidskjalv is the scanner service for the pipeline. It analyzes one staged Java
+Lidskjalv is the builder and scanner service for the pipeline. It analyzes one staged Java
 repository per invocation, writes scan artifacts under `artifacts/scans/`, and
 emits a machine-readable run report under `outputs/`.
 

@@ -649,14 +649,7 @@ lidskjalv_service_apply_scan_result() {
   esac
 
   case "$LIDSKJALV_SERVICE_QUALITY_GATE_STATUS" in
-    ""|NONE)
-      LIDSKJALV_SERVICE_STATUS="passed"
-      LIDSKJALV_SERVICE_FAILURE_SCOPE=""
-      LIDSKJALV_SERVICE_REASON=""
-      LIDSKJALV_SERVICE_STATUS_DETAIL=""
-      return 0
-      ;;
-    OK)
+    ""|NONE|OK)
       ;;
     *)
       LIDSKJALV_SERVICE_STATUS="failed"

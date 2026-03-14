@@ -9,6 +9,22 @@ trap 'rm -rf "$tmp"' EXIT
 
 fake_bin="${tmp}/fake-bin"
 make_fake_build_bin "$fake_bin"
+failing_system_build_bin="${tmp}/failing-system-build-bin"
+mkdir -p "$failing_system_build_bin"
+cat > "${failing_system_build_bin}/mvn" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+echo "system mvn should not run during wrapper tests" >&2
+exit 42
+EOF
+chmod +x "${failing_system_build_bin}/mvn"
+cat > "${failing_system_build_bin}/gradle" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+echo "system gradle should not run during wrapper tests" >&2
+exit 42
+EOF
+chmod +x "${failing_system_build_bin}/gradle"
 maven_app_copy="${tmp}/maven-app"
 cp -a "${ROOT_DIR}/tests/fixtures/maven_app/." "$maven_app_copy/"
 create_projects_env="${tmp}/create-projects.env"
@@ -75,6 +91,81 @@ LIDSKJALV_DATA_DIR="$url_data_dir" \
 
 assert_json_value "${url_data_dir}/state/scan-state.json" '.repositories["cli_url_repo"].status' "success" "url scan should succeed"
 assert_dir_exists "${url_data_dir}/work/cli_url_repo/.git" "url scan should clone into work dir"
+
+custom_maven_repo="${tmp}/custom-maven-wrapper"
+mkdir -p "${custom_maven_repo}/src/main/java/example"
+cat > "${custom_maven_repo}/pom.xml" <<'EOF'
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>example</groupId>
+  <artifactId>custom-maven-wrapper</artifactId>
+  <version>1.0.0</version>
+</project>
+EOF
+cat > "${custom_maven_repo}/mvnw" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+mkdir -p target/classes
+: > target/classes/App.class
+EOF
+chmod +x "${custom_maven_repo}/mvnw"
+cat > "${custom_maven_repo}/src/main/java/example/App.java" <<'EOF'
+package example;
+
+class App {}
+EOF
+
+custom_maven_data_dir="${tmp}/custom-maven-data"
+PATH="${failing_system_build_bin}:$PATH" \
+LIDSKJALV_DATA_DIR="$custom_maven_data_dir" \
+./scripts/scan-one.sh \
+  --path "$custom_maven_repo" \
+  --project-key custom_maven_wrapper \
+  --project-name custom-maven-wrapper \
+  --skip-sonar >/dev/null
+
+assert_json_value "${custom_maven_data_dir}/state/scan-state.json" '.repositories["custom_maven_wrapper"].status' "success" "custom mvnw repo should build successfully"
+custom_maven_logs="$(find "${custom_maven_data_dir}/logs/custom_maven_wrapper" -name 'build-attempt-*.log' -print0 | xargs -0 cat)"
+assert_contains "${custom_maven_repo}/mvnw" "$custom_maven_logs" "custom mvnw should be used instead of system mvn"
+
+custom_gradle_repo="${tmp}/custom-gradle-wrapper"
+mkdir -p "${custom_gradle_repo}/src/main/java/example"
+cat > "${custom_gradle_repo}/gradlew" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+task="${1:-}"
+case "$task" in
+  compileJava)
+    mkdir -p build/classes/java/main
+    : > build/classes/java/main/App.class
+    ;;
+  *)
+    echo "Unsupported task: ${task}" >&2
+    exit 1
+    ;;
+esac
+EOF
+chmod +x "${custom_gradle_repo}/gradlew"
+cat > "${custom_gradle_repo}/src/main/java/example/App.java" <<'EOF'
+package example;
+
+class App {}
+EOF
+
+custom_gradle_data_dir="${tmp}/custom-gradle-data"
+PATH="${failing_system_build_bin}:$PATH" \
+LIDSKJALV_DATA_DIR="$custom_gradle_data_dir" \
+./scripts/scan-one.sh \
+  --path "$custom_gradle_repo" \
+  --project-key custom_gradle_wrapper \
+  --project-name custom-gradle-wrapper \
+  --skip-sonar >/dev/null
+
+assert_json_value "${custom_gradle_data_dir}/state/scan-state.json" '.repositories["custom_gradle_wrapper"].status' "success" "custom gradlew repo should build successfully"
+custom_gradle_logs="$(find "${custom_gradle_data_dir}/logs/custom_gradle_wrapper" -name 'build-attempt-*.log' -print0 | xargs -0 cat)"
+assert_contains "${custom_gradle_repo}/gradlew compileJava" "$custom_gradle_logs" "custom gradlew should reach the compileJava fallback"
 
 batch_input="${tmp}/repos.txt"
 printf 'path:%s\n' "$maven_app_copy" > "$batch_input"

@@ -23,19 +23,34 @@ GRADLE_STRATEGIES=(
   # Older JDKs with more flags
   "11|build -x test -x check --no-daemon"
   "8|build -x test -x check --no-daemon"
-  
+
   # Fallback: classes only
   "17|classes testClasses"
   "11|classes testClasses"
+
+  # Wrapper-only projects may expose a smaller task surface but still support Java compilation.
+  "21|compileJava"
+  "17|compileJava"
 )
 
 # Get Gradle command for a build
 # Usage: get_gradle_command <build_dir>
 # Returns: gradle command (./gradlew or gradle)
-gradle_is_wrapper_script() {
+gradle_wrapper_kind() {
   local wrapper_path="$1"
   [[ -f "$wrapper_path" ]] || return 1
-  grep -q "org.gradle.wrapper.GradleWrapperMain" "$wrapper_path" 2>/dev/null
+
+  if grep -q "org.gradle.wrapper.GradleWrapperMain" "$wrapper_path" 2>/dev/null; then
+    echo "standard"
+    return 0
+  fi
+
+  if [[ -x "$wrapper_path" ]] || head -n 1 "$wrapper_path" 2>/dev/null | grep -q '^#!'; then
+    echo "custom"
+    return 0
+  fi
+
+  return 1
 }
 
 find_gradle_wrapper_upward() {
@@ -44,12 +59,16 @@ find_gradle_wrapper_upward() {
   while [[ -n "$dir" ]]; do
     local candidate="${dir}/gradlew"
     if [[ -f "$candidate" ]]; then
-      if gradle_is_wrapper_script "$candidate"; then
+      local wrapper_kind=""
+      if wrapper_kind="$(gradle_wrapper_kind "$candidate")"; then
         [[ -x "$candidate" ]] || chmod +x "$candidate" 2>/dev/null || true
+        if [[ "$wrapper_kind" == "custom" ]]; then
+          log_info "Using custom gradlew script at $candidate"
+        fi
         echo "$candidate"
         return 0
       fi
-      log_warn "Ignoring non-standard gradlew script at $candidate; using system gradle"
+      log_warn "Ignoring unusable gradlew script at $candidate; using system gradle"
     fi
 
     local parent

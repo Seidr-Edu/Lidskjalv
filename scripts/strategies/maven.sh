@@ -28,10 +28,21 @@ MAVEN_STRATEGIES=(
 # Get Maven command for a build
 # Usage: get_maven_command <build_dir>
 # Returns: maven command (mvn or ./mvnw)
-maven_is_wrapper_script() {
+maven_wrapper_kind() {
   local wrapper_path="$1"
   [[ -f "$wrapper_path" ]] || return 1
-  grep -q "org.apache.maven.wrapper.MavenWrapperMain" "$wrapper_path" 2>/dev/null
+
+  if grep -q "org.apache.maven.wrapper.MavenWrapperMain" "$wrapper_path" 2>/dev/null; then
+    echo "standard"
+    return 0
+  fi
+
+  if [[ -x "$wrapper_path" ]] || head -n 1 "$wrapper_path" 2>/dev/null | grep -q '^#!'; then
+    echo "custom"
+    return 0
+  fi
+
+  return 1
 }
 
 find_maven_wrapper_upward() {
@@ -40,12 +51,16 @@ find_maven_wrapper_upward() {
   while [[ -n "$dir" ]]; do
     local candidate="${dir}/mvnw"
     if [[ -f "$candidate" ]]; then
-      if maven_is_wrapper_script "$candidate"; then
+      local wrapper_kind=""
+      if wrapper_kind="$(maven_wrapper_kind "$candidate")"; then
         [[ -x "$candidate" ]] || chmod +x "$candidate" 2>/dev/null || true
+        if [[ "$wrapper_kind" == "custom" ]]; then
+          log_info "Using custom mvnw script at $candidate"
+        fi
         echo "$candidate"
         return 0
       fi
-      log_warn "Ignoring non-standard mvnw script at $candidate; using system mvn"
+      log_warn "Ignoring unusable mvnw script at $candidate; using system mvn"
     fi
 
     local parent
@@ -175,6 +190,9 @@ maven_sonar() {
   )
   if [[ "${SONAR_SCM_EXCLUSIONS_DISABLED:-}" == "true" ]]; then
     sonar_cmd+=(-Dsonar.scm.exclusions.disabled=true)
+  fi
+  if [[ "${SONAR_SCM_DISABLED:-}" == "true" ]]; then
+    sonar_cmd+=(-Dsonar.scm.disabled=true)
   fi
   run_logged "$log_file" env "MAVEN_USER_HOME=$maven_user_home" "${sonar_cmd[@]}" || exit_code=$?
   

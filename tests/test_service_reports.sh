@@ -20,6 +20,10 @@ if [[ "$*" == *"clean compile"* ]]; then
   exit 0
 fi
 if [[ "$*" == *"org.sonarsource.scanner.maven:sonar-maven-plugin:sonar"* ]]; then
+  if [[ "${FAKE_REQUIRE_SONAR_SCM_DISABLED:-}" == "true" && "$*" != *"-Dsonar.scm.disabled=true"* ]]; then
+    printf '%s\n' "missing -Dsonar.scm.disabled=true" >&2
+    exit 91
+  fi
   mkdir -p .scannerwork
   printf 'ceTaskId=%s\n' "${FAKE_SONAR_TASK_ID:-fake-task}" > .scannerwork/report-task.txt
   exit 0
@@ -91,6 +95,18 @@ pushd "$ROOT_DIR" >/dev/null
 
 fake_bin="${tmp}/fake-bin"
 make_fake_bin "$fake_bin"
+
+scm_disabled_run="${tmp}/scm-disabled-run"
+FAKE_REQUIRE_SONAR_SCM_DISABLED="true" \
+FAKE_SONAR_CE_STATUS="SUCCESS" \
+FAKE_SONAR_QG_STATUS="OK" \
+FAKE_SONAR_MEASURES_MODE="present" \
+run_service_with_fake_sonar \
+  "$scm_disabled_run" \
+  $'version: 1\nscan_label: original\nproject_key: scm-disabled\nproject_name: scm-disabled\nskip_sonar: false\nsonar_wait_timeout_sec: 1\nsonar_wait_poll_sec: 0' \
+  "$fake_bin"
+
+assert_json_value "${scm_disabled_run}/outputs/run_report.json" '.status' "passed" "service should disable Sonar SCM when workspace is not a git work tree"
 
 quality_gate_run="${tmp}/quality-gate-run"
 FAKE_SONAR_CE_STATUS="SUCCESS" \

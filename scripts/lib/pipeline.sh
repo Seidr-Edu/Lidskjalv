@@ -41,6 +41,13 @@ pipeline_detect_build_tool_for_dir() {
   echo ""
 }
 
+pipeline_repo_has_git_work_tree() {
+  local repo_dir="$1"
+
+  command -v git >/dev/null 2>&1 || return 1
+  git -C "$repo_dir" rev-parse --is-inside-work-tree >/dev/null 2>&1
+}
+
 # Run full scan pipeline for an already prepared repository.
 # Usage:
 #   run_scan_for_prepared_repo <key> <display_name> <source_type> <source_ref> <repo_dir>
@@ -151,12 +158,18 @@ run_scan_for_prepared_repo() {
   sonar_create_project "$key" "$display_name"
 
   local sonar_scm_exclusions_disabled=""
+  local sonar_scm_disabled=""
   if [[ "$source_type" == "path" ]]; then
     sonar_scm_exclusions_disabled="true"
     log_info "Path source detected: disabling Sonar SCM exclusions"
   fi
 
-  if ! SONAR_SCM_EXCLUSIONS_DISABLED="$sonar_scm_exclusions_disabled" submit_to_sonar "$key" "$build_dir" "$build_tool"; then
+  if ! pipeline_repo_has_git_work_tree "$repo_dir"; then
+    sonar_scm_disabled="true"
+    log_info "Prepared repo is not a Git work tree: disabling Sonar SCM integration"
+  fi
+
+  if ! SONAR_SCM_EXCLUSIONS_DISABLED="$sonar_scm_exclusions_disabled" SONAR_SCM_DISABLED="$sonar_scm_disabled" submit_to_sonar "$key" "$build_dir" "$build_tool"; then
     state_set_status "$key" "$sonar_failure_status" "sonar_submission_failed" "SonarQube analysis failed"
     return 1
   fi

@@ -191,6 +191,9 @@ maven_sonar() {
   if [[ "${SONAR_SCM_EXCLUSIONS_DISABLED:-}" == "true" ]]; then
     sonar_cmd+=(-Dsonar.scm.exclusions.disabled=true)
   fi
+  if [[ "${SONAR_SCM_DISABLED:-}" == "true" ]]; then
+    sonar_cmd+=(-Dsonar.scm.disabled=true)
+  fi
   run_logged "$log_file" env "MAVEN_USER_HOME=$maven_user_home" "${sonar_cmd[@]}" || exit_code=$?
   
   popd >/dev/null || return 1

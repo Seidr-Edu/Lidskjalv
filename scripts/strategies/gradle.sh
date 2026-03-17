@@ -185,6 +185,9 @@ gradle_sonar() {
   if [[ "${SONAR_SCM_EXCLUSIONS_DISABLED:-}" == "true" ]]; then
     sonar_args="${sonar_args} -Dsonar.scm.exclusions.disabled=true"
   fi
+  if [[ "${SONAR_SCM_DISABLED:-}" == "true" ]]; then
+    sonar_args="${sonar_args} -Dsonar.scm.disabled=true"
+  fi
   
   # Detect Gradle version for SonarQube plugin compatibility
   local gradle_major_version=8
@@ -315,6 +318,9 @@ GRADLE_INIT
       fi
       if [[ "${SONAR_SCM_EXCLUSIONS_DISABLED:-}" == "true" ]]; then
         sonar_cmd+=(-Dsonar.scm.exclusions.disabled=true)
+      fi
+      if [[ "${SONAR_SCM_DISABLED:-}" == "true" ]]; then
+        sonar_cmd+=(-Dsonar.scm.disabled=true)
       fi
       
       run_logged "$log_file" "${sonar_cmd[@]}" || exit_code=$?

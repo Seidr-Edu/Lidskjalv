@@ -127,7 +127,7 @@ LIDSKJALV_DATA_DIR="$custom_maven_data_dir" \
   --skip-sonar >/dev/null
 
 assert_json_value "${custom_maven_data_dir}/state/scan-state.json" '.repositories["custom_maven_wrapper"].status' "success" "custom mvnw repo should build successfully"
-custom_maven_logs="$(find "${custom_maven_data_dir}/logs/custom_maven_wrapper" -name 'build-attempt-*.log' -print0 | xargs -0 cat)"
+custom_maven_logs="$(find "${custom_maven_data_dir}/logs/custom_maven_wrapper" -name 'build-attempt-*.log' -exec cat {} +)"
 assert_contains "${custom_maven_repo}/mvnw" "$custom_maven_logs" "custom mvnw should be used instead of system mvn"
 
 custom_gradle_repo="${tmp}/custom-gradle-wrapper"
@@ -164,7 +164,7 @@ LIDSKJALV_DATA_DIR="$custom_gradle_data_dir" \
   --skip-sonar >/dev/null
 
 assert_json_value "${custom_gradle_data_dir}/state/scan-state.json" '.repositories["custom_gradle_wrapper"].status' "success" "custom gradlew repo should build successfully"
-custom_gradle_logs="$(find "${custom_gradle_data_dir}/logs/custom_gradle_wrapper" -name 'build-attempt-*.log' -print0 | xargs -0 cat)"
+custom_gradle_logs="$(find "${custom_gradle_data_dir}/logs/custom_gradle_wrapper" -name 'build-attempt-*.log' -exec cat {} +)"
 assert_contains "${custom_gradle_repo}/gradlew compileJava" "$custom_gradle_logs" "custom gradlew should reach the compileJava fallback"
 
 batch_input="${tmp}/repos.txt"

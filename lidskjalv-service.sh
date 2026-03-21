@@ -74,8 +74,6 @@ Manifest v1 YAML fields:
   project_name
   repo_subdir
   skip_sonar
-  sonar_wait_timeout_sec
-  sonar_wait_poll_sec
 EOF
 }
 
@@ -470,48 +468,9 @@ with open(os.environ["LIDSKJALV_SUMMARY_PATH"], "w", encoding="utf-8") as f:
 PY
 }
 
-lidskjalv_service_fetch_ce_task_json() {
-  local task_id="$1"
-  curl -sf -u "${SONAR_TOKEN}:" \
-    "${SONAR_HOST_URL}/api/ce/task?id=${task_id}" 2>/dev/null || echo "{}"
-}
-
-lidskjalv_service_wait_for_task() {
-  local task_id="$1"
-  local timeout_sec="$2"
-  local poll_sec="$3"
-
-  local elapsed=0
-  local ce_json="{}"
-  local ce_status="UNKNOWN"
-
-  while true; do
-    ce_json="$(lidskjalv_service_fetch_ce_task_json "$task_id")"
-    ce_status="$(printf '%s' "$ce_json" | jq -r '.task.status // "UNKNOWN"' 2>/dev/null || echo "UNKNOWN")"
-
-    case "$ce_status" in
-      SUCCESS|FAILED|CANCELED)
-        printf '%s\n' "$ce_json"
-        return 0
-        ;;
-    esac
-
-    if [[ "$elapsed" -ge "$timeout_sec" ]]; then
-      printf '%s\n' "$ce_json"
-      return 1
-    fi
-
-    sleep "$poll_sec"
-    elapsed=$((elapsed + poll_sec))
-  done
-}
-
-lidskjalv_service_collect_scan_metadata() {
+lidskjalv_service_load_scan_metadata() {
   local project_key="$1"
   local skip_sonar="$2"
-  local timeout_sec="$3"
-  local poll_sec="$4"
-
   local task_id=""
   task_id="$(state_get "$project_key" "sonar_task_id" 2>/dev/null || true)"
   local build_tool=""
@@ -527,53 +486,19 @@ lidskjalv_service_collect_scan_metadata() {
   LIDSKJALV_SERVICE_MEASURES_JSON="{}"
 
   if [[ "$skip_sonar" == "true" ]]; then
+    LIDSKJALV_SERVICE_CE_TASK_STATUS=""
+    LIDSKJALV_SERVICE_QUALITY_GATE_STATUS="skipped"
     LIDSKJALV_SERVICE_DATA_STATUS="skipped"
     return 0
   fi
 
   if [[ -z "$task_id" ]]; then
-    LIDSKJALV_SERVICE_DATA_STATUS="unavailable"
-    return 0
-  fi
-
-  local ce_json="{}"
-  local wait_rc=0
-  ce_json="$(lidskjalv_service_wait_for_task "$task_id" "$timeout_sec" "$poll_sec")" || wait_rc=$?
-  printf '%s\n' "$ce_json" > "${LIDSKJALV_SERVICE_METADATA_DIR}/ce-task.json"
-
-  local ce_status="UNKNOWN"
-  ce_status="$(printf '%s' "$ce_json" | jq -r '.task.status // "UNKNOWN"' 2>/dev/null || echo "UNKNOWN")"
-  LIDSKJALV_SERVICE_CE_TASK_STATUS="$ce_status"
-
-  if [[ "$wait_rc" -ne 0 ]]; then
-    LIDSKJALV_SERVICE_DATA_STATUS="pending"
     return 1
   fi
 
-  local qg_json="{}"
-  qg_json="$(sonar_get_project_status "$project_key")"
-  printf '%s\n' "$qg_json" > "${LIDSKJALV_SERVICE_METADATA_DIR}/quality-gate.json"
-
-  local qg_status=""
-  qg_status="$(printf '%s' "$qg_json" | jq -r '.projectStatus.status // empty' 2>/dev/null || true)"
-  LIDSKJALV_SERVICE_QUALITY_GATE_STATUS="$qg_status"
-
-  local measures_raw="{}"
-  measures_raw="$(sonar_get_measures "$project_key" "bugs,vulnerabilities,code_smells,coverage,duplicated_lines_density,reliability_rating,security_rating,sqale_rating,ncloc,sqale_index")"
-  local measures_json="{}"
-  measures_json="$(printf '%s' "$measures_raw" | jq -c 'reduce (.component.measures // [])[] as $m ({}; .[$m.metric]=$m.value)' 2>/dev/null || echo '{}')"
-  printf '%s\n' "$measures_json" > "${LIDSKJALV_SERVICE_METADATA_DIR}/measures.json"
-  LIDSKJALV_SERVICE_MEASURES_JSON="$measures_json"
-
-  if [[ "$measures_json" != "{}" ]]; then
-    LIDSKJALV_SERVICE_DATA_STATUS="complete"
-  else
-    case "$ce_status" in
-      FAILED|CANCELED) LIDSKJALV_SERVICE_DATA_STATUS="failed" ;;
-      *) LIDSKJALV_SERVICE_DATA_STATUS="unavailable" ;;
-    esac
-  fi
-
+  LIDSKJALV_SERVICE_CE_TASK_STATUS=""
+  LIDSKJALV_SERVICE_QUALITY_GATE_STATUS=""
+  LIDSKJALV_SERVICE_DATA_STATUS="pending"
   return 0
 }
 
@@ -597,11 +522,10 @@ lidskjalv_service_apply_scan_result() {
   local success="$1"
   local skip_sonar="$2"
 
-  LIDSKJALV_SERVICE_SCAN_BUILD_TOOL="$(state_get "$LIDSKJALV_SERVICE_PROJECT_KEY" "build_tool" 2>/dev/null || true)"
-  LIDSKJALV_SERVICE_SCAN_BUILD_JDK="$(state_get "$LIDSKJALV_SERVICE_PROJECT_KEY" "jdk_version" 2>/dev/null || true)"
-  LIDSKJALV_SERVICE_SONAR_TASK_ID="$(state_get "$LIDSKJALV_SERVICE_PROJECT_KEY" "sonar_task_id" 2>/dev/null || true)"
-
   if [[ "$success" != "true" ]]; then
+    lidskjalv_service_load_scan_metadata \
+      "$LIDSKJALV_SERVICE_PROJECT_KEY" \
+      "$skip_sonar" || true
     local failure_reason=""
     failure_reason="$(state_get "$LIDSKJALV_SERVICE_PROJECT_KEY" "failure_reason" 2>/dev/null || true)"
     local failure_message=""
@@ -616,49 +540,15 @@ lidskjalv_service_apply_scan_result() {
     return 0
   fi
 
-  if [[ "$skip_sonar" == "true" ]]; then
-    LIDSKJALV_SERVICE_STATUS="passed"
-    LIDSKJALV_SERVICE_FAILURE_SCOPE=""
-    LIDSKJALV_SERVICE_REASON=""
-    LIDSKJALV_SERVICE_STATUS_DETAIL=""
-    LIDSKJALV_SERVICE_QUALITY_GATE_STATUS="skipped"
-    LIDSKJALV_SERVICE_DATA_STATUS="skipped"
-    return 0
-  fi
-
-  if ! lidskjalv_service_collect_scan_metadata \
+  if ! lidskjalv_service_load_scan_metadata \
     "$LIDSKJALV_SERVICE_PROJECT_KEY" \
-    "$skip_sonar" \
-    "$LIDSKJALV_SERVICE_SONAR_WAIT_TIMEOUT_SEC" \
-    "$LIDSKJALV_SERVICE_SONAR_WAIT_POLL_SEC"; then
+    "$skip_sonar"; then
     LIDSKJALV_SERVICE_STATUS="failed"
     LIDSKJALV_SERVICE_FAILURE_SCOPE="scan"
-    LIDSKJALV_SERVICE_REASON="sonar-timeout"
-    LIDSKJALV_SERVICE_STATUS_DETAIL="Timed out waiting for Sonar compute engine completion"
+    LIDSKJALV_SERVICE_REASON="missing-sonar-task-id"
+    LIDSKJALV_SERVICE_STATUS_DETAIL="SonarQube submission completed without a persisted task ID"
     return 0
   fi
-
-  case "$LIDSKJALV_SERVICE_CE_TASK_STATUS" in
-    FAILED|CANCELED)
-      LIDSKJALV_SERVICE_STATUS="failed"
-      LIDSKJALV_SERVICE_FAILURE_SCOPE="scan"
-      LIDSKJALV_SERVICE_REASON="sonar-task-failed"
-      LIDSKJALV_SERVICE_STATUS_DETAIL="Sonar compute engine reported ${LIDSKJALV_SERVICE_CE_TASK_STATUS}"
-      return 0
-      ;;
-  esac
-
-  case "$LIDSKJALV_SERVICE_QUALITY_GATE_STATUS" in
-    ""|NONE|OK)
-      ;;
-    *)
-      LIDSKJALV_SERVICE_STATUS="failed"
-      LIDSKJALV_SERVICE_FAILURE_SCOPE="scan"
-      LIDSKJALV_SERVICE_REASON="quality-gate-failed"
-      LIDSKJALV_SERVICE_STATUS_DETAIL="Sonar quality gate status: ${LIDSKJALV_SERVICE_QUALITY_GATE_STATUS}"
-      return 0
-      ;;
-  esac
 
   LIDSKJALV_SERVICE_STATUS="passed"
   LIDSKJALV_SERVICE_FAILURE_SCOPE=""

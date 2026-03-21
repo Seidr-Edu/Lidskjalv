@@ -20,12 +20,15 @@ if [[ "$*" == *"clean compile"* ]]; then
   exit 0
 fi
 if [[ "$*" == *"org.sonarsource.scanner.maven:sonar-maven-plugin:sonar"* ]]; then
+  if [[ -n "${FAKE_SONAR_SUBMIT_EXIT_CODE:-}" ]]; then
+    exit "${FAKE_SONAR_SUBMIT_EXIT_CODE}"
+  fi
   if [[ "${FAKE_REQUIRE_SONAR_SCM_DISABLED:-}" == "true" && "$*" != *"-Dsonar.scm.disabled=true"* ]]; then
     printf '%s\n' "missing -Dsonar.scm.disabled=true" >&2
     exit 91
   fi
   mkdir -p .scannerwork
-  printf 'ceTaskId=%s\n' "${FAKE_SONAR_TASK_ID:-fake-task}" > .scannerwork/report-task.txt
+  printf 'ceTaskId=%s\n' "${FAKE_SONAR_TASK_ID-fake-task}" > .scannerwork/report-task.txt
   exit 0
 fi
 exit 0
@@ -39,7 +42,7 @@ url="${*: -1}"
 ce_status="${FAKE_SONAR_CE_STATUS:-SUCCESS}"
 qg_status="${FAKE_SONAR_QG_STATUS-OK}"
 measures_mode="${FAKE_SONAR_MEASURES_MODE:-present}"
-task_id="${FAKE_SONAR_TASK_ID:-fake-task}"
+task_id="${FAKE_SONAR_TASK_ID-fake-task}"
 
 case "$url" in
   */api/system/status)
@@ -103,67 +106,32 @@ FAKE_SONAR_QG_STATUS="OK" \
 FAKE_SONAR_MEASURES_MODE="present" \
 run_service_with_fake_sonar \
   "$scm_disabled_run" \
-  $'version: 1\nscan_label: original\nproject_key: scm-disabled\nproject_name: scm-disabled\nskip_sonar: false\nsonar_wait_timeout_sec: 1\nsonar_wait_poll_sec: 0' \
+  $'version: 1\nscan_label: original\nproject_key: scm-disabled\nproject_name: scm-disabled\nskip_sonar: false' \
   "$fake_bin"
 
 assert_json_value "${scm_disabled_run}/outputs/run_report.json" '.status' "passed" "service should disable Sonar SCM when workspace is not a git work tree"
+assert_json_value "${scm_disabled_run}/outputs/run_report.json" '.scan.sonar_task_id' "fake-task" "successful async submission should persist task id"
+assert_json_value "${scm_disabled_run}/outputs/run_report.json" '.scan.data_status' "pending" "successful async submission should mark follow-up pending"
+assert_json_value "${scm_disabled_run}/outputs/run_report.json" '.scan.quality_gate_status' "null" "quality gate should not be resolved during async submission"
 
-quality_gate_run="${tmp}/quality-gate-run"
-FAKE_SONAR_CE_STATUS="SUCCESS" \
-FAKE_SONAR_QG_STATUS="ERROR" \
-FAKE_SONAR_MEASURES_MODE="present" \
+missing_task_run="${tmp}/missing-task-run"
+FAKE_SONAR_TASK_ID="" \
 run_service_with_fake_sonar \
-  "$quality_gate_run" \
-  $'version: 1\nscan_label: original\nproject_key: quality-gate\nproject_name: quality-gate\nskip_sonar: false\nsonar_wait_timeout_sec: 1\nsonar_wait_poll_sec: 0' \
+  "$missing_task_run" \
+  $'version: 1\nscan_label: original\nproject_key: missing-task\nproject_name: missing-task\nskip_sonar: false' \
   "$fake_bin"
 
-assert_json_value "${quality_gate_run}/outputs/run_report.json" '.status' "failed" "quality gate error should fail scan"
-assert_json_value "${quality_gate_run}/outputs/run_report.json" '.reason' "quality-gate-failed" "quality gate failure reason mismatch"
-assert_json_value "${quality_gate_run}/outputs/run_report.json" '.scan.ce_task_status' "SUCCESS" "ce task status should be captured"
-assert_json_value "${quality_gate_run}/outputs/run_report.json" '.scan.quality_gate_status' "ERROR" "quality gate status should be captured"
-assert_json_value "${quality_gate_run}/outputs/run_report.json" '.scan.data_status' "complete" "measures should be marked complete"
+assert_json_value "${missing_task_run}/outputs/run_report.json" '.status' "failed" "missing task id should fail immediately"
+assert_json_value "${missing_task_run}/outputs/run_report.json" '.reason' "sonar_submission_failed" "missing task id reason mismatch"
 
-missing_gate_run="${tmp}/missing-gate-run"
-FAKE_SONAR_CE_STATUS="SUCCESS" \
-FAKE_SONAR_QG_STATUS="" \
-FAKE_SONAR_MEASURES_MODE="present" \
+submit_failure_run="${tmp}/submit-failure-run"
+FAKE_SONAR_SUBMIT_EXIT_CODE="42" \
 run_service_with_fake_sonar \
-  "$missing_gate_run" \
-  $'version: 1\nscan_label: original\nproject_key: missing-gate\nproject_name: missing-gate\nskip_sonar: false\nsonar_wait_timeout_sec: 1\nsonar_wait_poll_sec: 0' \
+  "$submit_failure_run" \
+  $'version: 1\nscan_label: generated\nproject_key: submit-failure\nproject_name: submit-failure\nskip_sonar: false' \
   "$fake_bin"
 
-assert_json_value "${missing_gate_run}/outputs/run_report.json" '.status' "passed" "missing quality gate should not fail scan"
-assert_json_value "${missing_gate_run}/outputs/run_report.json" '.reason' "null" "missing quality gate should not set a failure reason"
-assert_json_value "${missing_gate_run}/outputs/run_report.json" '.scan.ce_task_status' "SUCCESS" "missing quality gate should preserve ce task status"
-assert_json_value "${missing_gate_run}/outputs/run_report.json" '.scan.quality_gate_status' "null" "missing quality gate should remain unset"
-assert_json_value "${missing_gate_run}/outputs/run_report.json" '.scan.data_status' "complete" "missing quality gate should still record measures"
-
-none_gate_run="${tmp}/none-gate-run"
-FAKE_SONAR_CE_STATUS="SUCCESS" \
-FAKE_SONAR_QG_STATUS="NONE" \
-FAKE_SONAR_MEASURES_MODE="present" \
-run_service_with_fake_sonar \
-  "$none_gate_run" \
-  $'version: 1\nscan_label: original\nproject_key: none-gate\nproject_name: none-gate\nskip_sonar: false\nsonar_wait_timeout_sec: 1\nsonar_wait_poll_sec: 0' \
-  "$fake_bin"
-
-assert_json_value "${none_gate_run}/outputs/run_report.json" '.status' "passed" "NONE quality gate should not fail scan"
-assert_json_value "${none_gate_run}/outputs/run_report.json" '.reason' "null" "NONE quality gate should not set a failure reason"
-assert_json_value "${none_gate_run}/outputs/run_report.json" '.scan.quality_gate_status' "NONE" "NONE quality gate status should be preserved"
-assert_json_value "${none_gate_run}/outputs/run_report.json" '.scan.data_status' "complete" "NONE quality gate should still record measures"
-
-timeout_run="${tmp}/timeout-run"
-FAKE_SONAR_CE_STATUS="IN_PROGRESS" \
-FAKE_SONAR_QG_STATUS="OK" \
-FAKE_SONAR_MEASURES_MODE="empty" \
-run_service_with_fake_sonar \
-  "$timeout_run" \
-  $'version: 1\nscan_label: generated\nproject_key: timeout-case\nskip_sonar: false\nsonar_wait_timeout_sec: 0\nsonar_wait_poll_sec: 0' \
-  "$fake_bin"
-
-assert_json_value "${timeout_run}/outputs/run_report.json" '.status' "failed" "timeout should fail scan"
-assert_json_value "${timeout_run}/outputs/run_report.json" '.reason' "sonar-timeout" "timeout reason mismatch"
-assert_json_value "${timeout_run}/outputs/run_report.json" '.scan.ce_task_status' "IN_PROGRESS" "timeout should preserve last ce status"
-assert_json_value "${timeout_run}/outputs/run_report.json" '.scan.data_status' "pending" "timeout should mark data pending"
+assert_json_value "${submit_failure_run}/outputs/run_report.json" '.status' "failed" "submission failure should fail immediately"
+assert_json_value "${submit_failure_run}/outputs/run_report.json" '.reason' "sonar_submission_failed" "submission failure reason mismatch"
 
 popd >/dev/null

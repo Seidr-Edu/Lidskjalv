@@ -621,3 +621,28 @@ check_dependencies() {
     exit 1
   fi
 }
+
+# Count source LOC for JVM projects using a fast local file scan.
+# Usage: count_source_loc <directory>
+count_source_loc() {
+  local source_root="$1"
+  local total=0
+
+  if [[ -z "$source_root" || ! -d "$source_root" ]]; then
+    echo "0"
+    return 0
+  fi
+
+  while IFS= read -r -d '' file; do
+    local line_count
+    line_count="$(wc -l < "$file" 2>/dev/null || echo "0")"
+    line_count="$(echo "$line_count" | tr -d '[:space:]')"
+    ((total += line_count))
+  done < <(
+    find "$source_root" \
+      -type d \( -name .git -o -name build -o -name target -o -name .gradle -o -name out -o -name .idea -o -name node_modules -o -name .scannerwork \) -prune -o \
+      -type f \( -name "*.java" -o -name "*.kt" -o -name "*.kts" -o -name "*.groovy" -o -name "*.scala" \) -print0
+  )
+
+  echo "$total"
+}

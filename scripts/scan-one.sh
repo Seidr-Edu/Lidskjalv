@@ -37,6 +37,7 @@ PROJECT_KEY_OVERRIDE=""
 PROJECT_NAME_OVERRIDE=""
 SUBDIR_OVERRIDE=""
 SKIP_SONAR=false
+LOCAL_ONLY=false
 FORCE_RERUN=false
 REPOS_ROOT="${REPOS_ROOT:-$PROJECT_ROOT}"
 
@@ -86,6 +87,11 @@ while [[ $# -gt 0 ]]; do
       SKIP_SONAR=true
       shift
       ;;
+    --local-only)
+      LOCAL_ONLY=true
+      SKIP_SONAR=true
+      shift
+      ;;
     -f|--force)
       FORCE_RERUN=true
       shift
@@ -106,6 +112,7 @@ Options:
   --project-name <name>    Override Sonar project display name
   --subdir <path>          Scan only this subdirectory within repository
   --skip-sonar             Build only, skip SonarQube submission
+  --local-only             Local-only mode (same as --skip-sonar, no SonarCloud project actions)
   -f, --force              Force rerun even if already successful
   -h, --help               Show this help
 
@@ -113,6 +120,7 @@ Examples:
   $(basename "$0")                                        # First entry from repos.txt
   $(basename "$0") https://github.com/org/repo.git       # Specific URL
   $(basename "$0") --path repos/PRDownloader             # Local path
+  $(basename "$0") --local-only https://github.com/org/repo.git
   $(basename "$0") --path repos/monorepo --subdir app    # Subdirectory scan
   $(basename "$0") --project-key custom --path repos/x   # Override project key
 EOF
@@ -211,6 +219,9 @@ log_info "=========================================="
 log_info "Scanning: $DISPLAY_NAME"
 log_info "Project key: $PROJECT_KEY"
 log_info "Source: $SOURCE_TYPE ($SOURCE_REF)"
+if $LOCAL_ONLY; then
+  log_info "Mode: local-only (SonarQube submission disabled)"
+fi
 log_info "=========================================="
 
 # Initialize state
@@ -256,6 +267,10 @@ if ! run_scan_pipeline \
 fi
 
 log_success "Build succeeded with JDK ${PIPELINE_BUILD_JDK:-unknown}"
+
+loc_target_dir="${PIPELINE_BUILD_DIR:-${PIPELINE_REPO_DIR:-}}"
+loc_total="$(count_source_loc "$loc_target_dir")"
+log_success "Local LOC (JVM sources): ${loc_total}"
 
 log_success "=========================================="
 log_success "Scan complete: $DISPLAY_NAME"

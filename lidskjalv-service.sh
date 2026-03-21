@@ -678,8 +678,6 @@ lidskjalv_service_main() {
   LIDSKJALV_SERVICE_PROJECT_NAME="$resolved_project_name"
   LIDSKJALV_SERVICE_INPUT_REPO="$(lidskjalv_service_abs_path "$resolved_input_repo")"
   LIDSKJALV_SERVICE_INPUT_SUBDIR="$resolved_repo_subdir"
-  LIDSKJALV_SERVICE_SONAR_WAIT_TIMEOUT_SEC="$resolved_timeout"
-  LIDSKJALV_SERVICE_SONAR_WAIT_POLL_SEC="$resolved_poll"
   LIDSKJALV_SERVICE_SCAN_DIR="${LIDSKJALV_SERVICE_RUN_DIR}/artifacts/scans/${resolved_scan_label}"
   LIDSKJALV_SERVICE_LOGS_DIR="${LIDSKJALV_SERVICE_SCAN_DIR}/logs"
   LIDSKJALV_SERVICE_WORKSPACE_DIR="${LIDSKJALV_SERVICE_SCAN_DIR}/workspace"

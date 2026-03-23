@@ -64,7 +64,10 @@ original_run_dir="$(
 )"
 assert_json_value "${original_run_dir}/outputs/run_report.json" '.status' "passed" "original container scan should pass"
 assert_json_value "${original_run_dir}/outputs/run_report.json" '.scan_label' "original" "original container scan should preserve scan label"
-assert_dir_exists "${original_run_dir}/artifacts/scans/original/workspace/repo" "original container workspace should exist"
+assert_json_value "${original_run_dir}/outputs/run_report.json" '.artifacts.workspace_dir' "null" "original container workspace should be reported as ephemeral"
+assert_not_exists "${original_run_dir}/artifacts/scans/original/workspace" "original container workspace should be cleaned"
+assert_dir_exists "${original_run_dir}/artifacts/scans/original/logs" "original container logs should exist"
+assert_dir_exists "${original_run_dir}/artifacts/scans/original/metadata" "original container metadata should exist"
 
 generated_run_dir="$(
   run_container_scan \
@@ -75,6 +78,9 @@ generated_run_dir="$(
 assert_json_value "${generated_run_dir}/outputs/run_report.json" '.status' "passed" "generated container scan should pass"
 assert_json_value "${generated_run_dir}/outputs/run_report.json" '.scan_label' "generated" "generated container scan should preserve scan label"
 assert_json_value "${generated_run_dir}/outputs/run_report.json" '.inputs.repo_subdir' "app" "container scan should preserve repo_subdir"
-assert_dir_exists "${generated_run_dir}/artifacts/scans/generated/workspace/repo/app" "generated container workspace should include subdir repo copy"
+assert_json_value "${generated_run_dir}/outputs/run_report.json" '.artifacts.workspace_dir' "null" "generated container workspace should be reported as ephemeral"
+assert_not_exists "${generated_run_dir}/artifacts/scans/generated/workspace" "generated container workspace should be cleaned"
+assert_dir_exists "${generated_run_dir}/artifacts/scans/generated/logs" "generated container logs should exist"
+assert_dir_exists "${generated_run_dir}/artifacts/scans/generated/metadata" "generated container metadata should exist"
 
 popd >/dev/null

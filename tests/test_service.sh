@@ -96,10 +96,11 @@ assert_json_value "${manifest_owned_run}/outputs/run_report.json" '.scan_label' 
 assert_json_value "${manifest_owned_run}/outputs/run_report.json" '.project_key' "manifest-owned" "service should ignore env project_key overrides"
 assert_json_value "${manifest_owned_run}/outputs/run_report.json" '.project_name' "manifest-owned" "service should parse quoted YAML strings"
 assert_json_value "${manifest_owned_run}/outputs/run_report.json" '.inputs.repo_subdir' "app" "service should ignore env repo_subdir overrides"
+assert_json_value "${manifest_owned_run}/outputs/run_report.json" '.artifacts.workspace_dir' "null" "workspace dir should be reported as ephemeral"
 assert_json_value "${manifest_owned_run}/outputs/run_report.json" '.scan.build_subdir' "app" "service should report detected build_subdir"
 assert_json_value "${manifest_owned_run}/outputs/run_report.json" '.scan.java_version_hint' "17" "service should report detected java version hint"
 assert_json_path_exists "${manifest_owned_run}/outputs/run_report.json" '.scan.attempted_jdks | length >= 1' "service should report attempted jdks"
-assert_dir_exists "${manifest_owned_run}/artifacts/scans/original/workspace/repo" "manifest-owned scan should use manifest label"
+assert_not_exists "${manifest_owned_run}/artifacts/scans/original/workspace" "workspace copy should be cleaned after reporting"
 assert_not_exists "${manifest_owned_run}/artifacts/scans/generated" "env scan_label override should not create generated scan dir"
 
 for scan_label in original generated; do
@@ -113,7 +114,8 @@ for scan_label in original generated; do
   ./lidskjalv-service.sh >/dev/null
 
   assert_json_value "${run_dir}/outputs/run_report.json" '.status' "passed" "service run should pass with skip-sonar"
-  assert_dir_exists "${run_dir}/artifacts/scans/${scan_label}/workspace/repo" "workspace repo should exist"
+  assert_json_value "${run_dir}/outputs/run_report.json" '.artifacts.workspace_dir' "null" "workspace dir should not be durable"
+  assert_not_exists "${run_dir}/artifacts/scans/${scan_label}/workspace" "workspace repo copy should be cleaned"
   assert_dir_exists "${run_dir}/artifacts/scans/${scan_label}/logs" "logs dir should exist"
   assert_dir_exists "${run_dir}/artifacts/scans/${scan_label}/metadata" "metadata dir should exist"
   assert_file_exists "${run_dir}/artifacts/scans/${scan_label}/metadata/scan-state.json" "service state file missing"

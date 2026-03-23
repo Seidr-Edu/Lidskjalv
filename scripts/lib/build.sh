@@ -18,6 +18,7 @@ BUILD_RESULT_JDK=""
 BUILD_RESULT_REASON=""
 BUILD_RESULT_MESSAGE=""
 BUILD_RESULT_ATTEMPTS=0
+BUILD_RESULT_ATTEMPTED_JDKS_CSV=""
 
 # ============================================================================
 # Build Orchestration
@@ -40,6 +41,7 @@ build_project() {
   BUILD_RESULT_REASON=""
   BUILD_RESULT_MESSAGE=""
   BUILD_RESULT_ATTEMPTS=0
+  BUILD_RESULT_ATTEMPTED_JDKS_CSV=""
   
   log_info "Building project: $key (tool: $build_tool)"
   
@@ -97,7 +99,12 @@ build_project() {
     
     ((++attempt))
     BUILD_RESULT_ATTEMPTS=$attempt
-    
+    if [[ -z "$BUILD_RESULT_ATTEMPTED_JDKS_CSV" ]]; then
+      BUILD_RESULT_ATTEMPTED_JDKS_CSV="$jdk_version"
+    else
+      BUILD_RESULT_ATTEMPTED_JDKS_CSV="${BUILD_RESULT_ATTEMPTED_JDKS_CSV}:${jdk_version}"
+    fi
+
     log_info "  Attempt $attempt: JDK $jdk_version with args: $build_args"
     
     # Select JDK

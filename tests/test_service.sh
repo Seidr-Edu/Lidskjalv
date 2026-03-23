@@ -96,6 +96,9 @@ assert_json_value "${manifest_owned_run}/outputs/run_report.json" '.scan_label' 
 assert_json_value "${manifest_owned_run}/outputs/run_report.json" '.project_key' "manifest-owned" "service should ignore env project_key overrides"
 assert_json_value "${manifest_owned_run}/outputs/run_report.json" '.project_name' "manifest-owned" "service should parse quoted YAML strings"
 assert_json_value "${manifest_owned_run}/outputs/run_report.json" '.inputs.repo_subdir' "app" "service should ignore env repo_subdir overrides"
+assert_json_value "${manifest_owned_run}/outputs/run_report.json" '.scan.build_subdir' "app" "service should report detected build_subdir"
+assert_json_value "${manifest_owned_run}/outputs/run_report.json" '.scan.java_version_hint' "17" "service should report detected java version hint"
+assert_json_path_exists "${manifest_owned_run}/outputs/run_report.json" '.scan.attempted_jdks | length >= 1' "service should report attempted jdks"
 assert_dir_exists "${manifest_owned_run}/artifacts/scans/original/workspace/repo" "manifest-owned scan should use manifest label"
 assert_not_exists "${manifest_owned_run}/artifacts/scans/generated" "env scan_label override should not create generated scan dir"
 
@@ -125,6 +128,8 @@ LIDSKJALV_MANIFEST="${gradle_run}/config/manifest.yaml" \
 LIDSKJALV_INPUT_REPO="${ROOT_DIR}/tests/fixtures/gradle_app" \
 ./lidskjalv-service.sh >/dev/null
 assert_json_value "${gradle_run}/outputs/run_report.json" '.scan.build_tool' "gradle" "gradle fixture should use gradle build tool"
+assert_json_value "${gradle_run}/outputs/run_report.json" '.scan.java_version_hint' "17" "gradle fixture should surface java version hint"
+assert_json_path_exists "${gradle_run}/outputs/run_report.json" '.scan.attempted_jdks | length >= 1' "gradle run should record attempted jdks"
 assert_json_value "${gradle_run}/outputs/run_report.json" '.status' "passed" "gradle service run should pass"
 
 subdir_run="${tmp}/subdir-service-run"
@@ -137,6 +142,9 @@ LIDSKJALV_INPUT_REPO="${ROOT_DIR}/tests/fixtures/maven_monorepo" \
 ./lidskjalv-service.sh >/dev/null
 assert_json_value "${subdir_run}/outputs/run_report.json" '.inputs.repo_subdir' "app" "service should preserve repo_subdir"
 assert_json_value "${subdir_run}/outputs/run_report.json" '.scan.build_tool' "maven" "subdir run should use maven"
+assert_json_value "${subdir_run}/outputs/run_report.json" '.scan.build_subdir' "app" "subdir run should report build_subdir"
+assert_json_value "${subdir_run}/outputs/run_report.json" '.scan.java_version_hint' "17" "subdir run should report java version hint"
+assert_json_path_exists "${subdir_run}/outputs/run_report.json" '.scan.attempted_jdks | length >= 1' "subdir run should record attempted jdks"
 assert_json_value "${subdir_run}/outputs/run_report.json" '.status' "passed" "subdir service run should pass"
 
 updated_root_state_checksum="$(file_checksum "${ROOT_DIR}/.data/lidskjalv/state/scan-state.json")"

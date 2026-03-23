@@ -24,6 +24,9 @@ PIPELINE_REPO_DIR=""
 PIPELINE_BUILD_DIR=""
 PIPELINE_BUILD_TOOL=""
 PIPELINE_BUILD_JDK=""
+PIPELINE_BUILD_SUBDIR=""
+PIPELINE_JAVA_VERSION_HINT=""
+PIPELINE_ATTEMPTED_JDKS_CSV=""
 
 pipeline_detect_build_tool_for_dir() {
   local dir="$1"
@@ -69,6 +72,9 @@ run_scan_for_prepared_repo() {
   PIPELINE_BUILD_DIR=""
   PIPELINE_BUILD_TOOL=""
   PIPELINE_BUILD_JDK=""
+  PIPELINE_BUILD_SUBDIR=""
+  PIPELINE_JAVA_VERSION_HINT=""
+  PIPELINE_ATTEMPTED_JDKS_CSV=""
 
   state_increment_attempts "$key"
 
@@ -118,6 +124,8 @@ run_scan_for_prepared_repo() {
 
   PIPELINE_BUILD_TOOL="$build_tool"
   PIPELINE_BUILD_DIR="$build_dir"
+  PIPELINE_BUILD_SUBDIR="$build_subdir"
+  PIPELINE_JAVA_VERSION_HINT="$(detect_java_version "$repo_dir" "$build_tool" "$build_subdir")"
 
   log_info "Detected build system: $build_tool${build_subdir:+ (subdir: $build_subdir)}"
 
@@ -139,11 +147,13 @@ run_scan_for_prepared_repo() {
   state_set_build_info "$key" "$build_tool" ""
 
   if ! build_project "$key" "$build_dir" "$build_tool" "$effective_jdk"; then
+    PIPELINE_ATTEMPTED_JDKS_CSV="$BUILD_RESULT_ATTEMPTED_JDKS_CSV"
     state_set_status "$key" "failed" "$BUILD_RESULT_REASON" "$BUILD_RESULT_MESSAGE"
     return 1
   fi
 
   PIPELINE_BUILD_JDK="$BUILD_RESULT_JDK"
+  PIPELINE_ATTEMPTED_JDKS_CSV="$BUILD_RESULT_ATTEMPTED_JDKS_CSV"
   state_set_build_info "$key" "$build_tool" "$BUILD_RESULT_JDK"
   state_set_successful_build "$key" "$build_tool" "$BUILD_RESULT_JDK"
 

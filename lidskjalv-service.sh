@@ -38,6 +38,9 @@ LIDSKJALV_SERVICE_REPORT_PATH=""
 LIDSKJALV_SERVICE_SUMMARY_PATH=""
 LIDSKJALV_SERVICE_SCAN_BUILD_TOOL=""
 LIDSKJALV_SERVICE_SCAN_BUILD_JDK=""
+LIDSKJALV_SERVICE_SCAN_BUILD_SUBDIR=""
+LIDSKJALV_SERVICE_SCAN_JAVA_VERSION_HINT=""
+LIDSKJALV_SERVICE_SCAN_ATTEMPTED_JDKS_CSV=""
 LIDSKJALV_SERVICE_SONAR_TASK_ID=""
 LIDSKJALV_SERVICE_CE_TASK_STATUS=""
 LIDSKJALV_SERVICE_QUALITY_GATE_STATUS=""
@@ -375,6 +378,9 @@ lidskjalv_service_write_report() {
   LIDSKJALV_SERVICE_METADATA_DIR="$LIDSKJALV_SERVICE_METADATA_DIR" \
   LIDSKJALV_SERVICE_SCAN_BUILD_TOOL="$LIDSKJALV_SERVICE_SCAN_BUILD_TOOL" \
   LIDSKJALV_SERVICE_SCAN_BUILD_JDK="$LIDSKJALV_SERVICE_SCAN_BUILD_JDK" \
+  LIDSKJALV_SERVICE_SCAN_BUILD_SUBDIR="$LIDSKJALV_SERVICE_SCAN_BUILD_SUBDIR" \
+  LIDSKJALV_SERVICE_SCAN_JAVA_VERSION_HINT="$LIDSKJALV_SERVICE_SCAN_JAVA_VERSION_HINT" \
+  LIDSKJALV_SERVICE_SCAN_ATTEMPTED_JDKS_CSV="$LIDSKJALV_SERVICE_SCAN_ATTEMPTED_JDKS_CSV" \
   LIDSKJALV_SERVICE_SONAR_TASK_ID="$LIDSKJALV_SERVICE_SONAR_TASK_ID" \
   LIDSKJALV_SERVICE_CE_TASK_STATUS="$LIDSKJALV_SERVICE_CE_TASK_STATUS" \
   LIDSKJALV_SERVICE_QUALITY_GATE_STATUS="$LIDSKJALV_SERVICE_QUALITY_GATE_STATUS" \
@@ -402,6 +408,12 @@ def nullable(name):
     value = os.environ.get(name, "")
     return value if value else None
 
+def split_csv(name):
+    value = os.environ.get(name, "")
+    if not value:
+        return []
+    return [item for item in value.split(":") if item]
+
 report = {
     "service_schema_version": env("LIDSKJALV_SERVICE_SCHEMA_VERSION"),
     "run_id": env("LIDSKJALV_SERVICE_RUN_ID"),
@@ -427,6 +439,9 @@ report = {
     "scan": {
         "build_tool": nullable("LIDSKJALV_SERVICE_SCAN_BUILD_TOOL"),
         "build_jdk": nullable("LIDSKJALV_SERVICE_SCAN_BUILD_JDK"),
+        "build_subdir": nullable("LIDSKJALV_SERVICE_SCAN_BUILD_SUBDIR"),
+        "java_version_hint": nullable("LIDSKJALV_SERVICE_SCAN_JAVA_VERSION_HINT"),
+        "attempted_jdks": split_csv("LIDSKJALV_SERVICE_SCAN_ATTEMPTED_JDKS_CSV"),
         "sonar_task_id": nullable("LIDSKJALV_SERVICE_SONAR_TASK_ID"),
         "ce_task_status": nullable("LIDSKJALV_SERVICE_CE_TASK_STATUS"),
         "quality_gate_status": nullable("LIDSKJALV_SERVICE_QUALITY_GATE_STATUS"),
@@ -455,6 +470,9 @@ summary_lines = [
     f"| repo_subdir | {report['inputs']['repo_subdir'] or ''} |",
     f"| build_tool | {report['scan']['build_tool'] or ''} |",
     f"| build_jdk | {report['scan']['build_jdk'] or ''} |",
+    f"| build_subdir | {report['scan']['build_subdir'] or ''} |",
+    f"| java_version_hint | {report['scan']['java_version_hint'] or ''} |",
+    f"| attempted_jdks | {', '.join(report['scan']['attempted_jdks']) if report['scan']['attempted_jdks'] else ''} |",
     f"| sonar_task_id | {report['scan']['sonar_task_id'] or ''} |",
     f"| ce_task_status | {report['scan']['ce_task_status'] or ''} |",
     f"| quality_gate_status | {report['scan']['quality_gate_status'] or ''} |",
@@ -474,12 +492,15 @@ lidskjalv_service_load_scan_metadata() {
   local task_id=""
   task_id="$(state_get "$project_key" "sonar_task_id" 2>/dev/null || true)"
   local build_tool=""
-  build_tool="$(state_get "$project_key" "build_tool" 2>/dev/null || true)"
+  build_tool="${PIPELINE_BUILD_TOOL:-$(state_get "$project_key" "build_tool" 2>/dev/null || true)}"
   local build_jdk=""
-  build_jdk="$(state_get "$project_key" "jdk_version" 2>/dev/null || true)"
+  build_jdk="${PIPELINE_BUILD_JDK:-$(state_get "$project_key" "jdk_version" 2>/dev/null || true)}"
 
   LIDSKJALV_SERVICE_SCAN_BUILD_TOOL="$build_tool"
   LIDSKJALV_SERVICE_SCAN_BUILD_JDK="$build_jdk"
+  LIDSKJALV_SERVICE_SCAN_BUILD_SUBDIR="${PIPELINE_BUILD_SUBDIR:-}"
+  LIDSKJALV_SERVICE_SCAN_JAVA_VERSION_HINT="${PIPELINE_JAVA_VERSION_HINT:-}"
+  LIDSKJALV_SERVICE_SCAN_ATTEMPTED_JDKS_CSV="${PIPELINE_ATTEMPTED_JDKS_CSV:-}"
   LIDSKJALV_SERVICE_SONAR_TASK_ID="$task_id"
   LIDSKJALV_SERVICE_QUALITY_GATE_STATUS=""
   LIDSKJALV_SERVICE_CE_TASK_STATUS=""

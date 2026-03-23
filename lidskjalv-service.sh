@@ -374,7 +374,7 @@ lidskjalv_service_write_report() {
   LIDSKJALV_SERVICE_INPUT_SUBDIR="$LIDSKJALV_SERVICE_INPUT_SUBDIR" \
   LIDSKJALV_SERVICE_SCAN_DIR="$LIDSKJALV_SERVICE_SCAN_DIR" \
   LIDSKJALV_SERVICE_LOGS_DIR="$LIDSKJALV_SERVICE_LOGS_DIR" \
-  LIDSKJALV_SERVICE_WORKSPACE_DIR="$LIDSKJALV_SERVICE_WORKSPACE_DIR" \
+  LIDSKJALV_SERVICE_WORKSPACE_DIR="" \
   LIDSKJALV_SERVICE_METADATA_DIR="$LIDSKJALV_SERVICE_METADATA_DIR" \
   LIDSKJALV_SERVICE_SCAN_BUILD_TOOL="$LIDSKJALV_SERVICE_SCAN_BUILD_TOOL" \
   LIDSKJALV_SERVICE_SCAN_BUILD_JDK="$LIDSKJALV_SERVICE_SCAN_BUILD_JDK" \
@@ -433,7 +433,7 @@ report = {
     "artifacts": {
         "scan_dir": env("LIDSKJALV_SERVICE_SCAN_DIR"),
         "logs_dir": env("LIDSKJALV_SERVICE_LOGS_DIR"),
-        "workspace_dir": env("LIDSKJALV_SERVICE_WORKSPACE_DIR"),
+        "workspace_dir": nullable("LIDSKJALV_SERVICE_WORKSPACE_DIR"),
         "metadata_dir": env("LIDSKJALV_SERVICE_METADATA_DIR"),
     },
     "scan": {
@@ -484,6 +484,19 @@ summary_lines = [
 with open(os.environ["LIDSKJALV_SUMMARY_PATH"], "w", encoding="utf-8") as f:
     f.write("\n".join(summary_lines) + "\n")
 PY
+}
+
+lidskjalv_service_cleanup_workspace() {
+  [[ -n "${LIDSKJALV_SERVICE_WORKSPACE_DIR:-}" ]] || return 0
+  [[ -e "$LIDSKJALV_SERVICE_WORKSPACE_DIR" ]] || return 0
+  rm -rf "$LIDSKJALV_SERVICE_WORKSPACE_DIR"
+}
+
+lidskjalv_service_finalize_run() {
+  lidskjalv_service_write_report || return 1
+  if ! lidskjalv_service_cleanup_workspace; then
+    printf 'warning: failed to clean workspace dir: %s\n' "$LIDSKJALV_SERVICE_WORKSPACE_DIR" >&2
+  fi
 }
 
 lidskjalv_service_load_scan_metadata() {
@@ -629,7 +642,7 @@ lidskjalv_service_main() {
   if [[ ! -f "$manifest_path" ]]; then
     lidskjalv_service_apply_service_error "missing-service-manifest" "manifest_not_found"
     LIDSKJALV_SERVICE_FINISHED_AT="$(timestamp)"
-    lidskjalv_service_write_report || return 1
+    lidskjalv_service_finalize_run || return 1
     return 0
   fi
 
@@ -637,7 +650,7 @@ lidskjalv_service_main() {
   if ! manifest_assignments="$(lidskjalv_service_load_manifest "$manifest_path")"; then
     lidskjalv_service_apply_service_error "invalid-service-manifest" "invalid_manifest"
     LIDSKJALV_SERVICE_FINISHED_AT="$(timestamp)"
-    lidskjalv_service_write_report || return 1
+    lidskjalv_service_finalize_run || return 1
     return 0
   fi
   eval "$manifest_assignments"
@@ -663,14 +676,14 @@ lidskjalv_service_main() {
   if [[ "$resolved_scan_label" != "original" && "$resolved_scan_label" != "generated" ]]; then
     lidskjalv_service_apply_service_error "invalid-service-config" "scan_label must be original or generated"
     LIDSKJALV_SERVICE_FINISHED_AT="$(timestamp)"
-    lidskjalv_service_write_report || return 1
+    lidskjalv_service_finalize_run || return 1
     return 0
   fi
 
   [[ -n "$resolved_project_key" ]] || {
     lidskjalv_service_apply_service_error "invalid-service-config" "project_key is required"
     LIDSKJALV_SERVICE_FINISHED_AT="$(timestamp)"
-    lidskjalv_service_write_report || return 1
+    lidskjalv_service_finalize_run || return 1
     return 0
   }
 
@@ -678,7 +691,7 @@ lidskjalv_service_main() {
     if ! resolved_repo_subdir="$(lidskjalv_service_normalize_rel_path "$resolved_repo_subdir")"; then
       lidskjalv_service_apply_service_error "invalid-service-config" "repo_subdir must be a safe relative path"
       LIDSKJALV_SERVICE_FINISHED_AT="$(timestamp)"
-      lidskjalv_service_write_report || return 1
+      lidskjalv_service_finalize_run || return 1
       return 0
     fi
   fi
@@ -686,7 +699,7 @@ lidskjalv_service_main() {
   if ! [[ "$resolved_timeout" =~ ^[0-9]+$ && "$resolved_poll" =~ ^[0-9]+$ ]]; then
     lidskjalv_service_apply_service_error "invalid-service-config" "sonar wait settings must be non-negative integers"
     LIDSKJALV_SERVICE_FINISHED_AT="$(timestamp)"
-    lidskjalv_service_write_report || return 1
+    lidskjalv_service_finalize_run || return 1
     return 0
   fi
 
@@ -708,14 +721,14 @@ lidskjalv_service_main() {
   if ! lidskjalv_service_prepare_scan_dirs; then
     lidskjalv_service_apply_service_error "run-dir-not-writable" "run_artifacts_not_writable"
     LIDSKJALV_SERVICE_FINISHED_AT="$(timestamp)"
-    lidskjalv_service_write_report || return 1
+    lidskjalv_service_finalize_run || return 1
     return 0
   fi
 
   if [[ ! -d "$LIDSKJALV_SERVICE_INPUT_REPO" ]]; then
     lidskjalv_service_apply_service_error "missing-input-repo" "input_repo_missing"
     LIDSKJALV_SERVICE_FINISHED_AT="$(timestamp)"
-    lidskjalv_service_write_report || return 1
+    lidskjalv_service_finalize_run || return 1
     return 0
   fi
 
@@ -723,7 +736,7 @@ lidskjalv_service_main() {
     if [[ -z "${SONAR_HOST_URL:-}" || -z "${SONAR_TOKEN:-}" || -z "${SONAR_ORGANIZATION:-}" ]]; then
       lidskjalv_service_apply_service_error "missing-sonar-env" "sonar_env_required"
       LIDSKJALV_SERVICE_FINISHED_AT="$(timestamp)"
-      lidskjalv_service_write_report || return 1
+      lidskjalv_service_finalize_run || return 1
       return 0
     fi
   fi
@@ -731,7 +744,7 @@ lidskjalv_service_main() {
   if ! lidskjalv_service_prepare_workspace_copy "$LIDSKJALV_SERVICE_INPUT_REPO"; then
     lidskjalv_service_apply_service_error "workspace-copy-failed" "input_repo_copy_failed"
     LIDSKJALV_SERVICE_FINISHED_AT="$(timestamp)"
-    lidskjalv_service_write_report || return 1
+    lidskjalv_service_finalize_run || return 1
     return 0
   fi
 
@@ -767,7 +780,7 @@ lidskjalv_service_main() {
   fi
 
   LIDSKJALV_SERVICE_FINISHED_AT="$(timestamp)"
-  lidskjalv_service_write_report || return 1
+  lidskjalv_service_finalize_run || return 1
 
   return 0
 }

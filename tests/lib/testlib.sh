@@ -42,6 +42,15 @@ assert_contains() {
   fi
 }
 
+assert_not_contains() {
+  local needle="$1"
+  local haystack="$2"
+  local message="${3:-unexpected substring}"
+  if [[ "$haystack" == *"$needle"* ]]; then
+    test_fail "${message}: '${needle}'"
+  fi
+}
+
 assert_json_value() {
   local file="$1"
   local jq_expr="$2"

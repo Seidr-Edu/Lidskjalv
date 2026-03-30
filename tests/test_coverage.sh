@@ -300,6 +300,7 @@ run_scan() {
 pushd "$ROOT_DIR" >/dev/null
 
 source "${ROOT_DIR}/scripts/lib/coverage.sh"
+source "${ROOT_DIR}/scripts/strategies/gradle.sh"
 
 assert_eq "0.8.6" "$(coverage_select_jacoco_version 14)" "JaCoCo version mapping for Java 14 mismatch"
 assert_eq "0.8.7" "$(coverage_select_jacoco_version 16)" "JaCoCo version mapping for Java 16 mismatch"
@@ -309,6 +310,13 @@ assert_eq "0.8.11" "$(coverage_select_jacoco_version 21)" "JaCoCo version mappin
 assert_eq "0.8.12" "$(coverage_select_jacoco_version 22)" "JaCoCo version mapping for Java 22 mismatch"
 assert_eq "0.8.13" "$(coverage_select_jacoco_version 24)" "JaCoCo version mapping for Java 24 mismatch"
 assert_eq "0.8.14" "$(coverage_select_jacoco_version 25)" "JaCoCo version mapping for Java 25 mismatch"
+
+generated_gradle_init="${tmp}/jacoco-init.gradle"
+gradle_write_jacoco_init_script "$generated_gradle_init" "0.8.8"
+generated_gradle_init_contents="$(cat "$generated_gradle_init")"
+assert_contains "project.afterEvaluate {" "$generated_gradle_init_contents" "Gradle JaCoCo init script should defer report task wiring until after evaluation"
+assert_not_contains "project.tasks.withType(Test).configureEach { testTask ->" "$generated_gradle_init_contents" "Gradle JaCoCo init script should not register report tasks from inside configureEach"
+assert_contains "project.tasks.create(reportTaskName, JacocoReport)" "$generated_gradle_init_contents" "Gradle JaCoCo init script should create report tasks in the deferred configuration phase"
 
 resolver_build_dir="${tmp}/resolver-build"
 mkdir -p "${resolver_build_dir}/target/classes"

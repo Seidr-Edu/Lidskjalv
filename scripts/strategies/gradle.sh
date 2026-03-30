@@ -207,9 +207,17 @@ import org.gradle.api.tasks.testing.Test
 import org.gradle.testing.jacoco.plugins.JacocoPluginExtension
 import org.gradle.testing.jacoco.tasks.JacocoReport
 
+def ensureRootCoverageTask = {
+    def rootCoverageTask = gradle.rootProject.tasks.findByName("lidskjalvCoverage")
+    if (rootCoverageTask == null) {
+        rootCoverageTask = gradle.rootProject.tasks.create("lidskjalvCoverage")
+    }
+    rootCoverageTask
+}
+
 gradle.rootProject {
     if (tasks.findByName("lidskjalvCoverage") == null) {
-        tasks.register("lidskjalvCoverage")
+        tasks.create("lidskjalvCoverage")
     }
 }
 
@@ -224,36 +232,38 @@ allprojects { project ->
             jacocoExtension.toolVersion = "${jacoco_version}"
         }
 
-        project.tasks.withType(Test).configureEach { testTask ->
-            def capitalized = testTask.name.substring(0, 1).toUpperCase() + testTask.name.substring(1)
-            def reportTaskName = "lidskjalvJacoco\${capitalized}Report"
-            if (project.tasks.findByName(reportTaskName) == null) {
-                project.tasks.register(reportTaskName, JacocoReport) { reportTask ->
-                    dependsOn(testTask)
-                    executionData(testTask)
-                    if (project.extensions.findByName("sourceSets") != null) {
-                        def mainSourceSet = project.sourceSets.findByName("main")
-                        if (mainSourceSet != null) {
-                            sourceDirectories.from(mainSourceSet.allSource.srcDirs)
-                            additionalSourceDirs.from(mainSourceSet.allSource.srcDirs)
-                            classDirectories.from(mainSourceSet.output)
+        project.afterEvaluate {
+            def rootCoverageTask = ensureRootCoverageTask()
+            project.tasks.withType(Test).each { testTask ->
+                def capitalized = testTask.name.substring(0, 1).toUpperCase() + testTask.name.substring(1)
+                def reportTaskName = "lidskjalvJacoco\${capitalized}Report"
+                def reportTask = project.tasks.findByName(reportTaskName)
+                if (reportTask == null) {
+                    reportTask = project.tasks.create(reportTaskName, JacocoReport) { jacocoReportTask ->
+                        dependsOn(testTask)
+                        executionData(testTask)
+                        if (project.extensions.findByName("sourceSets") != null) {
+                            def mainSourceSet = project.sourceSets.findByName("main")
+                            if (mainSourceSet != null) {
+                                sourceDirectories.from(mainSourceSet.allSource.srcDirs)
+                                additionalSourceDirs.from(mainSourceSet.allSource.srcDirs)
+                                classDirectories.from(mainSourceSet.output)
+                            }
+                        }
+                        reports {
+                            xml.required = true
+                            html.required = false
+                            csv.required = false
+                            xml.outputLocation = project.layout.buildDirectory.file("reports/jacoco/\${testTask.name}/\${reportTaskName}.xml")
+                        }
+                        onlyIf {
+                            executionData.files.any { it.exists() }
                         }
                     }
-                    reports {
-                        xml.required = true
-                        html.required = false
-                        csv.required = false
-                        xml.outputLocation = project.layout.buildDirectory.file("reports/jacoco/\${testTask.name}/\${reportTaskName}.xml")
-                    }
-                    onlyIf {
-                        executionData.files.any { it.exists() }
-                    }
                 }
-            }
-            testTask.finalizedBy(reportTaskName)
-            gradle.rootProject.tasks.named("lidskjalvCoverage").configure {
-                dependsOn(testTask)
-                dependsOn(project.tasks.named(reportTaskName))
+                testTask.finalizedBy(reportTask)
+                rootCoverageTask.dependsOn(testTask)
+                rootCoverageTask.dependsOn(reportTask)
             }
         }
     }

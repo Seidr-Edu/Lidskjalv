@@ -99,6 +99,8 @@ assert_json_value "${manifest_owned_run}/outputs/run_report.json" '.inputs.repo_
 assert_json_value "${manifest_owned_run}/outputs/run_report.json" '.artifacts.workspace_dir' "null" "workspace dir should be reported as ephemeral"
 assert_json_value "${manifest_owned_run}/outputs/run_report.json" '.scan.build_subdir' "app" "service should report detected build_subdir"
 assert_json_value "${manifest_owned_run}/outputs/run_report.json" '.scan.java_version_hint' "17" "service should report detected java version hint"
+assert_json_value "${manifest_owned_run}/outputs/run_report.json" '.scan.coverage.status' "skipped" "skip-sonar runs should record skipped coverage"
+assert_json_value "${manifest_owned_run}/outputs/run_report.json" '.scan.coverage.reason' "skip_sonar" "skip-sonar coverage reason mismatch"
 assert_json_path_exists "${manifest_owned_run}/outputs/run_report.json" '.scan.attempted_jdks | length >= 1' "service should report attempted jdks"
 assert_not_exists "${manifest_owned_run}/artifacts/scans/original/workspace" "workspace copy should be cleaned after reporting"
 assert_not_exists "${manifest_owned_run}/artifacts/scans/generated" "env scan_label override should not create generated scan dir"

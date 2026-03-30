@@ -19,6 +19,16 @@ if [[ "$*" == *"clean compile"* ]]; then
   : > target/classes/App.class
   exit 0
 fi
+if [[ "$*" == *" test "* || "$*" == test* ]]; then
+  if [[ -n "${FAKE_COVERAGE_TEST_EXIT_CODE:-}" ]]; then
+    exit "${FAKE_COVERAGE_TEST_EXIT_CODE}"
+  fi
+  if [[ "${FAKE_COVERAGE_REPORT_MODE:-present}" != "missing" ]]; then
+    mkdir -p target/site/jacoco
+    printf '%s\n' '<report name="fake"/>' > target/site/jacoco/jacoco.xml
+  fi
+  exit 0
+fi
 if [[ "$*" == *"org.sonarsource.scanner.maven:sonar-maven-plugin:sonar"* ]]; then
   if [[ -n "${FAKE_SONAR_SUBMIT_EXIT_CODE:-}" ]]; then
     exit "${FAKE_SONAR_SUBMIT_EXIT_CODE}"
@@ -26,6 +36,14 @@ if [[ "$*" == *"org.sonarsource.scanner.maven:sonar-maven-plugin:sonar"* ]]; the
   if [[ "${FAKE_REQUIRE_SONAR_SCM_DISABLED:-}" == "true" && "$*" != *"-Dsonar.scm.disabled=true"* ]]; then
     printf '%s\n' "missing -Dsonar.scm.disabled=true" >&2
     exit 91
+  fi
+  if [[ "${FAKE_REQUIRE_COVERAGE_REPORT_PATHS:-}" == "true" && "$*" != *"-Dsonar.coverage.jacoco.xmlReportPaths="* ]]; then
+    printf '%s\n' "missing -Dsonar.coverage.jacoco.xmlReportPaths" >&2
+    exit 92
+  fi
+  if [[ "${FAKE_FORBID_COVERAGE_REPORT_PATHS:-}" == "true" && "$*" == *"-Dsonar.coverage.jacoco.xmlReportPaths="* ]]; then
+    printf '%s\n' "unexpected -Dsonar.coverage.jacoco.xmlReportPaths" >&2
+    exit 93
   fi
   mkdir -p .scannerwork
   printf 'ceTaskId=%s\n' "${FAKE_SONAR_TASK_ID-fake-task}" > .scannerwork/report-task.txt
@@ -101,6 +119,7 @@ make_fake_bin "$fake_bin"
 
 scm_disabled_run="${tmp}/scm-disabled-run"
 FAKE_REQUIRE_SONAR_SCM_DISABLED="true" \
+FAKE_REQUIRE_COVERAGE_REPORT_PATHS="true" \
 FAKE_SONAR_CE_STATUS="SUCCESS" \
 FAKE_SONAR_QG_STATUS="OK" \
 FAKE_SONAR_MEASURES_MODE="present" \
@@ -113,6 +132,9 @@ assert_json_value "${scm_disabled_run}/outputs/run_report.json" '.status' "passe
 assert_json_value "${scm_disabled_run}/outputs/run_report.json" '.scan.sonar_task_id' "fake-task" "successful async submission should persist task id"
 assert_json_value "${scm_disabled_run}/outputs/run_report.json" '.scan.data_status' "pending" "successful async submission should mark follow-up pending"
 assert_json_value "${scm_disabled_run}/outputs/run_report.json" '.scan.quality_gate_status' "null" "quality gate should not be resolved during async submission"
+assert_json_value "${scm_disabled_run}/outputs/run_report.json" '.scan.coverage.status' "available" "successful submission should record available coverage"
+assert_json_value "${scm_disabled_run}/outputs/run_report.json" '.scan.coverage.jacoco_version' "0.8.8" "java 17 fixture should select JaCoCo 0.8.8"
+assert_json_path_exists "${scm_disabled_run}/outputs/run_report.json" '.scan.coverage.report_paths | length == 1' "coverage report path should be recorded"
 
 missing_task_run="${tmp}/missing-task-run"
 FAKE_SONAR_TASK_ID="" \
@@ -133,5 +155,17 @@ run_service_with_fake_sonar \
 
 assert_json_value "${submit_failure_run}/outputs/run_report.json" '.status' "failed" "submission failure should fail immediately"
 assert_json_value "${submit_failure_run}/outputs/run_report.json" '.reason' "sonar_submission_failed" "submission failure reason mismatch"
+
+fallback_run="${tmp}/fallback-run"
+FAKE_COVERAGE_REPORT_MODE="missing" \
+FAKE_FORBID_COVERAGE_REPORT_PATHS="true" \
+run_service_with_fake_sonar \
+  "$fallback_run" \
+  $'version: 1\nscan_label: generated\nproject_key: fallback-run\nproject_name: fallback-run\nskip_sonar: false' \
+  "$fake_bin"
+
+assert_json_value "${fallback_run}/outputs/run_report.json" '.status' "passed" "coverage fallback should still submit sonar successfully"
+assert_json_value "${fallback_run}/outputs/run_report.json" '.scan.coverage.status' "fallback" "missing coverage report should trigger fallback metadata"
+assert_json_value "${fallback_run}/outputs/run_report.json" '.scan.coverage.reason' "maven_coverage_report_missing" "fallback reason mismatch"
 
 popd >/dev/null

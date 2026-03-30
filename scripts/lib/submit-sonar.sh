@@ -5,6 +5,7 @@
 # Ensure dependencies are sourced
 _SUBMIT_SH_DIR="$(dirname "${BASH_SOURCE[0]}")"
 source "${_SUBMIT_SH_DIR}/common.sh"
+source "${_SUBMIT_SH_DIR}/coverage.sh"
 source "${_SUBMIT_SH_DIR}/../strategies/maven.sh"
 source "${_SUBMIT_SH_DIR}/../strategies/gradle.sh"
 
@@ -146,6 +147,85 @@ sonar_set_project_public_visibility() {
   return 0
 }
 
+sonar_record_coverage_info() {
+  local key="$1"
+
+  if declare -f state_set_coverage_info >/dev/null 2>&1; then
+    state_set_coverage_info \
+      "$key" \
+      "$COVERAGE_STATUS" \
+      "$COVERAGE_REASON" \
+      "$COVERAGE_JACOCO_VERSION" \
+      "$COVERAGE_JAVA_TARGET" \
+      "$COVERAGE_REPORT_PATHS_CSV"
+  fi
+}
+
+sonar_cleanup_support_dir() {
+  local support_dir="${1:-}"
+  [[ -n "$support_dir" ]] || return 0
+  [[ -d "$support_dir" ]] || return 0
+  rm -rf "$support_dir"
+}
+
+sonar_prepare_coverage() {
+  local key="$1"
+  local build_dir="$2"
+  local build_tool="$3"
+  local coverage_log="$4"
+  local support_dir="$5"
+  local repo_dir="${PIPELINE_REPO_DIR:-$build_dir}"
+  local build_jdk="${PIPELINE_BUILD_JDK:-}"
+  local java_version_hint="${PIPELINE_JAVA_VERSION_HINT:-}"
+  local effective_build_dir="$build_dir"
+
+  coverage_reset_metadata
+  COVERAGE_JAVA_TARGET="$(coverage_detect_java_target "$build_dir" "$java_version_hint" "$build_jdk")"
+  COVERAGE_JACOCO_VERSION="$(coverage_select_jacoco_version "$COVERAGE_JAVA_TARGET")"
+  COVERAGE_SUPPORT_DIR="$support_dir"
+
+  case "$build_tool" in
+    maven)
+      if ! maven_prepare_coverage "$repo_dir" "$build_dir" "$COVERAGE_JACOCO_VERSION" "$coverage_log" "$support_dir"; then
+        coverage_mark_fallback "${MAVEN_COVERAGE_REASON:-maven_coverage_prepare_failed}"
+        sonar_record_coverage_info "$key"
+        return 1
+      fi
+      effective_build_dir="${MAVEN_COVERAGE_BUILD_DIR:-$build_dir}"
+      ;;
+    gradle)
+      if ! gradle_prepare_coverage "$build_dir" "$COVERAGE_JACOCO_VERSION" "$coverage_log" "$support_dir"; then
+        coverage_mark_fallback "${GRADLE_COVERAGE_REASON:-gradle_coverage_prepare_failed}"
+        sonar_record_coverage_info "$key"
+        return 1
+      fi
+      ;;
+    *)
+      coverage_mark_fallback "coverage_unsupported_build_tool"
+      sonar_record_coverage_info "$key"
+      return 1
+      ;;
+  esac
+
+  local -a reports=()
+  local report_path=""
+  while IFS= read -r report_path; do
+    [[ -n "$report_path" ]] || continue
+    reports+=("$report_path")
+  done < <(coverage_find_xml_reports "$effective_build_dir")
+  if [[ ${#reports[@]} -eq 0 ]]; then
+    coverage_mark_fallback "${build_tool}_coverage_report_missing"
+    sonar_record_coverage_info "$key"
+    return 1
+  fi
+
+  COVERAGE_REPORT_PATHS_CSV="$(coverage_format_report_paths "$effective_build_dir" "${reports[@]}")"
+  coverage_mark_available "$COVERAGE_JACOCO_VERSION" "$COVERAGE_JAVA_TARGET" "$COVERAGE_REPORT_PATHS_CSV"
+  COVERAGE_BUILD_DIR="$effective_build_dir"
+  sonar_record_coverage_info "$key"
+  return 0
+}
+
 # Submit a project to SonarQube for analysis
 # Usage: submit_to_sonar <project_key> <build_dir> <build_tool>
 # Returns: 0 on success, 1 on failure
@@ -157,6 +237,10 @@ submit_to_sonar() {
   
   local log_dir="${LOG_DIR}/${key}"
   local log_file="${log_dir}/sonar.log"
+  local coverage_log="${log_dir}/coverage.log"
+  local support_dir=""
+  local analysis_dir="$build_dir"
+  local coverage_ready="false"
   ensure_dir "$log_dir"
   
   require_env "SONAR_HOST_URL" "Set in .env file"
@@ -173,44 +257,63 @@ submit_to_sonar() {
     return 1
   fi
 
+  ensure_dir "$WORK_DIR"
+  support_dir="$(mktemp -d "${WORK_DIR%/}/sonar-support-${key}.XXXXXX")"
+
+  if sonar_prepare_coverage "$key" "$build_dir" "$build_tool" "$coverage_log" "$support_dir"; then
+    coverage_ready="true"
+    analysis_dir="${COVERAGE_BUILD_DIR:-$build_dir}"
+    log_info "Prepared JaCoCo coverage using JaCoCo ${COVERAGE_JACOCO_VERSION}${COVERAGE_JAVA_TARGET:+ for Java ${COVERAGE_JAVA_TARGET}}"
+  else
+    log_warn "Proceeding without coverage for ${key}: ${COVERAGE_REASON:-coverage preparation failed}"
+    analysis_dir="$build_dir"
+  fi
+
   # Ensure task ID we extract belongs to this run, not a previous submission.
-  sonar_cleanup_report_files "$build_dir"
+  sonar_cleanup_report_files "$analysis_dir"
   
   # Run analysis based on build tool
   local exit_code=0
   case "$build_tool" in
     maven)
-      maven_sonar "$build_dir" "$key" "$log_file" || exit_code=$?
+      maven_sonar "$analysis_dir" "$key" "$log_file" "$COVERAGE_REPORT_PATHS_CSV" || exit_code=$?
       ;;
     gradle)
-      gradle_sonar "$build_dir" "$key" "$log_file" || exit_code=$?
+      gradle_sonar "$analysis_dir" "$key" "$log_file" "$COVERAGE_REPORT_PATHS_CSV" "$support_dir" || exit_code=$?
       ;;
     *)
       log_error "Unsupported build tool for SonarQube: $build_tool"
+      sonar_cleanup_support_dir "$support_dir"
       return 1
       ;;
   esac
   
   if [[ $exit_code -ne 0 ]]; then
     log_error "SonarQube analysis failed for $key"
+    sonar_cleanup_support_dir "$support_dir"
     return 1
   fi
 
-  if ! sonar_validate_main_source_indexing "$build_dir" "$log_file"; then
+  if ! sonar_validate_main_source_indexing "$analysis_dir" "$log_file"; then
+    sonar_cleanup_support_dir "$support_dir"
     return 1
   fi
   
   # Record analysis method if available
-  if [[ -f "${build_dir}/.sonar-analysis-method" ]]; then
+  if [[ -f "${analysis_dir}/.sonar-analysis-method" ]]; then
     local method
-    method="$(cat "${build_dir}/.sonar-analysis-method")"
+    method="$(cat "${analysis_dir}/.sonar-analysis-method")"
     log_info "Analysis completed using method: $method"
     # Clean up marker file
-    rm -f "${build_dir}/.sonar-analysis-method"
+    rm -f "${analysis_dir}/.sonar-analysis-method"
+  fi
+
+  if [[ "$coverage_ready" == "true" ]]; then
+    log_info "Submitted SonarQube analysis with coverage reports: ${COVERAGE_REPORT_PATHS_CSV}"
   fi
   
   # Extract task ID; without it we cannot verify a real SonarQube submission happened.
-  SONAR_TASK_ID="$(sonar_extract_task_id_from_report "$build_dir")"
+  SONAR_TASK_ID="$(sonar_extract_task_id_from_report "$analysis_dir")"
   if [[ -z "$SONAR_TASK_ID" ]]; then
     SONAR_TASK_ID="$(sonar_extract_task_id_from_log "$log_file")"
   fi
@@ -219,10 +322,12 @@ submit_to_sonar() {
     log_error "SonarQube command exited but produced no task ID for $key"
     log_error "Likely no analysis was submitted (for example, a custom wrapper ignored the sonar task)"
     log_error "See log: $log_file"
+    sonar_cleanup_support_dir "$support_dir"
     return 1
   fi
 
   log_success "Analysis submitted. Task ID: $SONAR_TASK_ID"
+  sonar_cleanup_support_dir "$support_dir"
   
   return 0
 }

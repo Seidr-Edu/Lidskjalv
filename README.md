@@ -92,8 +92,8 @@ Runtime Sonar credentials remain env-driven:
 - `SONAR_ORGANIZATION`
 
 `run_report.json` uses schema `lidskjalv_service_report.v1` and includes
-top-level run status, input paths, artifact paths, build metadata, Sonar task
-state, quality gate status, and fetched measures.
+top-level run status, input paths, artifact paths, build metadata, coverage
+metadata, Sonar task state, quality gate status, and fetched measures.
 Missing or `NONE` quality gate states are treated as informational; only
 explicit non-`OK` gate verdicts fail the service run.
 

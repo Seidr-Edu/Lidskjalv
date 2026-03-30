@@ -306,6 +306,57 @@ state_set_analysis_method() {
   state_set "$key" "analysis_method" "$method"
 }
 
+# Clear coverage metadata for a repository.
+# Usage: state_clear_coverage_info <project_key>
+state_clear_coverage_info() {
+  local key="$1"
+
+  local current_state
+  current_state="$(state_read)"
+
+  local new_state
+  new_state="$(echo "$current_state" | jq --arg key "$key" '
+    del(.repositories[$key].coverage_status) |
+    del(.repositories[$key].coverage_reason) |
+    del(.repositories[$key].coverage_jacoco_version) |
+    del(.repositories[$key].coverage_java_target) |
+    del(.repositories[$key].coverage_report_paths)
+  ')"
+
+  state_write "$new_state"
+}
+
+# Set coverage metadata for a repository.
+# Usage: state_set_coverage_info <project_key> <status> <reason> <jacoco_version> <java_target> <report_paths_csv>
+state_set_coverage_info() {
+  local key="$1"
+  local status="$2"
+  local reason="$3"
+  local jacoco_version="$4"
+  local java_target="$5"
+  local report_paths="$6"
+
+  local current_state
+  current_state="$(state_read)"
+
+  local new_state
+  new_state="$(echo "$current_state" | jq \
+    --arg key "$key" \
+    --arg status "$status" \
+    --arg reason "$reason" \
+    --arg jacoco_version "$jacoco_version" \
+    --arg java_target "$java_target" \
+    --arg report_paths "$report_paths" '
+    .repositories[$key].coverage_status = (if $status == "" then null else $status end) |
+    .repositories[$key].coverage_reason = (if $reason == "" then null else $reason end) |
+    .repositories[$key].coverage_jacoco_version = (if $jacoco_version == "" then null else $jacoco_version end) |
+    .repositories[$key].coverage_java_target = (if $java_target == "" then null else $java_target end) |
+    .repositories[$key].coverage_report_paths = (if $report_paths == "" then null else $report_paths end)
+  ')"
+
+  state_write "$new_state"
+}
+
 # Set clone timestamp (when repo was last cloned or fetched)
 # Usage: state_set_clone_timestamp <project_key>
 state_set_clone_timestamp() {

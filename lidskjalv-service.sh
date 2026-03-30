@@ -46,6 +46,11 @@ LIDSKJALV_SERVICE_CE_TASK_STATUS=""
 LIDSKJALV_SERVICE_QUALITY_GATE_STATUS=""
 LIDSKJALV_SERVICE_DATA_STATUS="unavailable"
 LIDSKJALV_SERVICE_MEASURES_JSON="{}"
+LIDSKJALV_SERVICE_COVERAGE_STATUS=""
+LIDSKJALV_SERVICE_COVERAGE_REASON=""
+LIDSKJALV_SERVICE_COVERAGE_JACOCO_VERSION=""
+LIDSKJALV_SERVICE_COVERAGE_JAVA_TARGET=""
+LIDSKJALV_SERVICE_COVERAGE_REPORT_PATHS=""
 
 lidskjalv_service_usage() {
   cat <<'EOF'
@@ -386,6 +391,11 @@ lidskjalv_service_write_report() {
   LIDSKJALV_SERVICE_QUALITY_GATE_STATUS="$LIDSKJALV_SERVICE_QUALITY_GATE_STATUS" \
   LIDSKJALV_SERVICE_DATA_STATUS="$LIDSKJALV_SERVICE_DATA_STATUS" \
   LIDSKJALV_SERVICE_MEASURES_JSON="$LIDSKJALV_SERVICE_MEASURES_JSON" \
+  LIDSKJALV_SERVICE_COVERAGE_STATUS="$LIDSKJALV_SERVICE_COVERAGE_STATUS" \
+  LIDSKJALV_SERVICE_COVERAGE_REASON="$LIDSKJALV_SERVICE_COVERAGE_REASON" \
+  LIDSKJALV_SERVICE_COVERAGE_JACOCO_VERSION="$LIDSKJALV_SERVICE_COVERAGE_JACOCO_VERSION" \
+  LIDSKJALV_SERVICE_COVERAGE_JAVA_TARGET="$LIDSKJALV_SERVICE_COVERAGE_JAVA_TARGET" \
+  LIDSKJALV_SERVICE_COVERAGE_REPORT_PATHS="$LIDSKJALV_SERVICE_COVERAGE_REPORT_PATHS" \
   LIDSKJALV_REPORT_PATH="$report_path" \
   LIDSKJALV_SUMMARY_PATH="$summary_path" \
   python3 - <<'PY'
@@ -413,6 +423,12 @@ def split_csv(name):
     if not value:
         return []
     return [item for item in value.split(":") if item]
+
+def split_comma(name):
+    value = os.environ.get(name, "")
+    if not value:
+        return []
+    return [item for item in value.split(",") if item]
 
 report = {
     "service_schema_version": env("LIDSKJALV_SERVICE_SCHEMA_VERSION"),
@@ -447,6 +463,13 @@ report = {
         "quality_gate_status": nullable("LIDSKJALV_SERVICE_QUALITY_GATE_STATUS"),
         "data_status": env("LIDSKJALV_SERVICE_DATA_STATUS", "unavailable"),
         "measures": env_json("LIDSKJALV_SERVICE_MEASURES_JSON", {}),
+        "coverage": {
+            "status": nullable("LIDSKJALV_SERVICE_COVERAGE_STATUS"),
+            "reason": nullable("LIDSKJALV_SERVICE_COVERAGE_REASON"),
+            "jacoco_version": nullable("LIDSKJALV_SERVICE_COVERAGE_JACOCO_VERSION"),
+            "java_target": nullable("LIDSKJALV_SERVICE_COVERAGE_JAVA_TARGET"),
+            "report_paths": split_comma("LIDSKJALV_SERVICE_COVERAGE_REPORT_PATHS"),
+        },
     },
 }
 
@@ -476,6 +499,11 @@ summary_lines = [
     f"| sonar_task_id | {report['scan']['sonar_task_id'] or ''} |",
     f"| ce_task_status | {report['scan']['ce_task_status'] or ''} |",
     f"| quality_gate_status | {report['scan']['quality_gate_status'] or ''} |",
+    f"| coverage_status | {report['scan']['coverage']['status'] or ''} |",
+    f"| coverage_reason | {report['scan']['coverage']['reason'] or ''} |",
+    f"| coverage_jacoco_version | {report['scan']['coverage']['jacoco_version'] or ''} |",
+    f"| coverage_java_target | {report['scan']['coverage']['java_target'] or ''} |",
+    f"| coverage_report_paths | {', '.join(report['scan']['coverage']['report_paths']) if report['scan']['coverage']['report_paths'] else ''} |",
     f"| data_status | {report['scan']['data_status']} |",
     f"| started_at | {report['started_at']} |",
     f"| finished_at | {report['finished_at']} |",
@@ -518,6 +546,11 @@ lidskjalv_service_load_scan_metadata() {
   LIDSKJALV_SERVICE_QUALITY_GATE_STATUS=""
   LIDSKJALV_SERVICE_CE_TASK_STATUS=""
   LIDSKJALV_SERVICE_MEASURES_JSON="{}"
+  LIDSKJALV_SERVICE_COVERAGE_STATUS="$(state_get "$project_key" "coverage_status" 2>/dev/null || true)"
+  LIDSKJALV_SERVICE_COVERAGE_REASON="$(state_get "$project_key" "coverage_reason" 2>/dev/null || true)"
+  LIDSKJALV_SERVICE_COVERAGE_JACOCO_VERSION="$(state_get "$project_key" "coverage_jacoco_version" 2>/dev/null || true)"
+  LIDSKJALV_SERVICE_COVERAGE_JAVA_TARGET="$(state_get "$project_key" "coverage_java_target" 2>/dev/null || true)"
+  LIDSKJALV_SERVICE_COVERAGE_REPORT_PATHS="$(state_get "$project_key" "coverage_report_paths" 2>/dev/null || true)"
 
   if [[ "$skip_sonar" == "true" ]]; then
     LIDSKJALV_SERVICE_CE_TASK_STATUS=""

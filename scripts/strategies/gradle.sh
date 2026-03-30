@@ -33,6 +33,8 @@ GRADLE_STRATEGIES=(
   "17|compileJava"
 )
 
+GRADLE_COVERAGE_REASON=""
+
 # Get Gradle command for a build
 # Usage: get_gradle_command <build_dir>
 # Returns: gradle command (./gradlew or gradle)
@@ -119,6 +121,171 @@ get_gradle_command() {
   echo "gradle"
 }
 
+gradle_run_command() {
+  local log_file="$1"
+  local gradle_user_home="$2"
+  local gradle_cmd="$3"
+  shift 3
+
+  local exit_code=0
+  run_logged "$log_file" env "GRADLE_USER_HOME=$gradle_user_home" "$gradle_cmd" "$@" --stacktrace || exit_code=$?
+
+  if [[ $exit_code -ne 0 ]] && [[ "$(basename "$gradle_cmd")" == "gradlew" ]]; then
+    if grep -Eq "Unsupported task: --stacktrace|Unknown option.*--stacktrace" "$log_file" 2>/dev/null; then
+      log_warn "Custom gradlew detected (no --stacktrace support), retrying without --stacktrace"
+      exit_code=0
+      run_logged "$log_file" env "GRADLE_USER_HOME=$gradle_user_home" "$gradle_cmd" "$@" || exit_code=$?
+    fi
+  fi
+
+  return $exit_code
+}
+
+gradle_detect_version_info() {
+  local build_dir="$1"
+  local gradle_major_version=8
+  local gradle_full_version="unknown"
+
+  if [[ -f "${build_dir}/gradle/wrapper/gradle-wrapper.properties" ]]; then
+    local gradle_dist_url=""
+    gradle_dist_url="$(grep -E "distributionUrl" "${build_dir}/gradle/wrapper/gradle-wrapper.properties" 2>/dev/null | cut -d'=' -f2)"
+    if [[ -n "$gradle_dist_url" ]]; then
+      gradle_full_version="$(echo "$gradle_dist_url" | grep -oE '[0-9]+\.[0-9]+\.?[0-9]*' | head -1)"
+      gradle_major_version="$(echo "$gradle_full_version" | cut -d'.' -f1)"
+    fi
+  fi
+
+  echo "${gradle_full_version}|${gradle_major_version}"
+}
+
+gradle_select_sonar_plugin_version() {
+  local gradle_major_version="${1:-8}"
+
+  if [[ "$gradle_major_version" -le 7 ]]; then
+    echo "3.5.0.2730"
+  elif [[ "$gradle_major_version" -eq 8 ]]; then
+    echo "4.4.1.3373"
+  else
+    echo "5.1.0.4882"
+  fi
+}
+
+gradle_build_file_matches() {
+  local build_dir="$1"
+  local pattern="$2"
+  local build_file=""
+
+  for build_file in \
+    "${build_dir}/build.gradle" \
+    "${build_dir}/build.gradle.kts" \
+    "${build_dir}/settings.gradle" \
+    "${build_dir}/settings.gradle.kts"; do
+    if [[ -f "$build_file" ]] && grep -Eq "$pattern" "$build_file" 2>/dev/null; then
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+gradle_has_sonarqube_plugin() {
+  local build_dir="$1"
+  gradle_build_file_matches "$build_dir" "org\\.sonarqube|\\bsonarqube\\b"
+}
+
+gradle_has_jacoco_plugin() {
+  local build_dir="$1"
+  gradle_build_file_matches "$build_dir" "id[[:space:]]*['\"]jacoco['\"]|apply[[:space:]]+plugin:[[:space:]]*['\"]jacoco['\"]|\\bjacoco[[:space:]]*\\{"
+}
+
+gradle_write_jacoco_init_script() {
+  local init_script="$1"
+  local jacoco_version="$2"
+
+  cat > "$init_script" <<GRADLE_INIT
+allprojects { project ->
+    project.pluginManager.withPlugin("java") {
+        def hadJacoco = project.plugins.hasPlugin("jacoco")
+        if (!hadJacoco) {
+            project.pluginManager.apply("jacoco")
+            project.jacoco.toolVersion = "${jacoco_version}"
+        }
+
+        project.tasks.matching { it.name == "test" }.configureEach {
+            finalizedBy("jacocoTestReport")
+        }
+
+        project.tasks.matching { it.name == "jacocoTestReport" }.configureEach {
+            dependsOn("test")
+            reports {
+                xml.required = true
+                csv.required = false
+            }
+        }
+    }
+}
+GRADLE_INIT
+}
+
+gradle_write_sonar_init_script() {
+  local init_script="$1"
+  local sonar_plugin_version="$2"
+
+  cat > "$init_script" <<GRADLE_INIT
+initscript {
+    repositories {
+        maven { url = uri("https://plugins.gradle.org/m2/") }
+    }
+    dependencies {
+        classpath "org.sonarsource.scanner.gradle:sonarqube-gradle-plugin:${sonar_plugin_version}"
+    }
+}
+allprojects {
+    apply plugin: org.sonarqube.gradle.SonarQubePlugin
+}
+GRADLE_INIT
+}
+
+gradle_prepare_coverage() {
+  local build_dir="$1"
+  local jacoco_version="$2"
+  local log_file="$3"
+  local support_dir="$4"
+
+  GRADLE_COVERAGE_REASON=""
+
+  if ! gradle_validate_project_layout "$build_dir" "$log_file"; then
+    GRADLE_COVERAGE_REASON="gradle_coverage_invalid_project_layout"
+    return 1
+  fi
+
+  local gradle_cmd
+  gradle_cmd="$(get_gradle_command "$build_dir")"
+  local gradle_user_home="${build_dir}/.gradle-user-home"
+  ensure_dir "$gradle_user_home"
+  ensure_dir "$support_dir"
+
+  local init_script="${support_dir}/jacoco-init.gradle"
+  gradle_write_jacoco_init_script "$init_script" "$jacoco_version"
+
+  pushd "$build_dir" >/dev/null || {
+    GRADLE_COVERAGE_REASON="gradle_coverage_workspace_unavailable"
+    return 1
+  }
+
+  local exit_code=0
+  gradle_run_command "$log_file" "$gradle_user_home" "$gradle_cmd" --init-script "$init_script" test jacocoTestReport || exit_code=$?
+
+  popd >/dev/null || true
+
+  if [[ $exit_code -ne 0 ]]; then
+    GRADLE_COVERAGE_REASON="gradle_coverage_test_failed"
+    return 1
+  fi
+
+  return 0
+}
+
 # Build Gradle project with specific strategy
 # Usage: gradle_build <build_dir> <strategy_args> <log_file>
 # Returns: 0 on success, non-zero on failure
@@ -135,36 +302,27 @@ gradle_build() {
   gradle_cmd="$(get_gradle_command "$build_dir")"
   local gradle_user_home="${build_dir}/.gradle-user-home"
   ensure_dir "$gradle_user_home"
+  local -a strategy_parts=()
+  read -r -a strategy_parts <<< "$strategy_args"
   
   # Save and restore working directory
   pushd "$build_dir" >/dev/null || return 1
   
-  # Run the build.
-  # Prefer --stacktrace for standard Gradle, but retry without it for custom
-  # wrapper scripts that only accept task names.
   local exit_code=0
-  # shellcheck disable=SC2086
-  run_logged "$log_file" env "GRADLE_USER_HOME=$gradle_user_home" $gradle_cmd $strategy_args --stacktrace || exit_code=$?
-
-  if [[ $exit_code -ne 0 ]] && [[ "$(basename "$gradle_cmd")" == "gradlew" ]]; then
-    if grep -q "Unsupported task: --stacktrace" "$log_file" 2>/dev/null; then
-      log_warn "Custom gradlew detected (no --stacktrace support), retrying without --stacktrace"
-      exit_code=0
-      # shellcheck disable=SC2086
-      run_logged "$log_file" env "GRADLE_USER_HOME=$gradle_user_home" $gradle_cmd $strategy_args || exit_code=$?
-    fi
-  fi
+  gradle_run_command "$log_file" "$gradle_user_home" "$gradle_cmd" "${strategy_parts[@]}" || exit_code=$?
   
   popd >/dev/null || return 1
   return $exit_code
 }
 
 # Run SonarQube analysis for Gradle project
-# Usage: gradle_sonar <build_dir> <project_key> <log_file>
+# Usage: gradle_sonar <build_dir> <project_key> <log_file> [coverage_report_paths] [support_dir]
 gradle_sonar() {
   local build_dir="$1"
   local project_key="$2"
   local log_file="$3"
+  local coverage_report_paths="${4:-}"
+  local support_dir="${5:-}"
 
   if ! gradle_validate_project_layout "$build_dir" "$log_file"; then
     return 1
@@ -180,70 +338,48 @@ gradle_sonar() {
   
   local exit_code=0
   
-  # Common sonar args to skip recompilation (already built) and tests
-  local sonar_args="-Dsonar.host.url=$SONAR_HOST_URL -Dsonar.token=$SONAR_TOKEN -Dsonar.projectKey=$project_key -Dsonar.organization=$SONAR_ORGANIZATION -Dsonar.gradle.skipCompile=true"
+  local -a sonar_args=(
+    "-Dsonar.host.url=$SONAR_HOST_URL"
+    "-Dsonar.token=$SONAR_TOKEN"
+    "-Dsonar.projectKey=$project_key"
+    "-Dsonar.organization=$SONAR_ORGANIZATION"
+    -Dsonar.gradle.skipCompile=true
+  )
+  if [[ -n "$coverage_report_paths" ]]; then
+    sonar_args+=("-Dsonar.coverage.jacoco.xmlReportPaths=$coverage_report_paths")
+  fi
   if [[ "${SONAR_SCM_EXCLUSIONS_DISABLED:-}" == "true" ]]; then
-    sonar_args="${sonar_args} -Dsonar.scm.exclusions.disabled=true"
+    sonar_args+=(-Dsonar.scm.exclusions.disabled=true)
   fi
   if [[ "${SONAR_SCM_DISABLED:-}" == "true" ]]; then
-    sonar_args="${sonar_args} -Dsonar.scm.disabled=true"
+    sonar_args+=(-Dsonar.scm.disabled=true)
   fi
   
-  # Detect Gradle version for SonarQube plugin compatibility
-  local gradle_major_version=8
-  local gradle_full_version="unknown"
-  if [[ -f "${build_dir}/gradle/wrapper/gradle-wrapper.properties" ]]; then
-    local gradle_dist_url
-    gradle_dist_url="$(grep -E "distributionUrl" "${build_dir}/gradle/wrapper/gradle-wrapper.properties" 2>/dev/null | cut -d'=' -f2)"
-    if [[ -n "$gradle_dist_url" ]]; then
-      gradle_full_version=$(echo "$gradle_dist_url" | grep -oE '[0-9]+\.[0-9]+\.?[0-9]*' | head -1)
-      gradle_major_version=$(echo "$gradle_full_version" | cut -d'.' -f1)
-    fi
-  fi
+  local version_info=""
+  version_info="$(gradle_detect_version_info "$build_dir")"
+  local gradle_full_version="${version_info%%|*}"
+  local gradle_major_version="${version_info#*|}"
   
   log_info "Detected Gradle version: ${gradle_full_version} (major: ${gradle_major_version})"
   
-  # Select SonarQube Gradle plugin version based on Gradle version
-  # Reference: https://docs.sonarsource.com/sonarqube/latest/analyzing-source-code/scanners/sonarscanner-for-gradle/#requirements
-  # - Gradle 5.x-7.x: Use plugin 3.5.0.2730 (supports older Gradle APIs)
-  # - Gradle 8.x: Use plugin 4.4.1.3373 (compatible with Gradle 8 APIs)
-  # - Gradle 9.x+: Use plugin 5.1.0.4882 (supports latest Gradle APIs)
-  local sonar_plugin_version="4.4.1.3373"
-  if [[ "$gradle_major_version" -le 7 ]]; then
-    sonar_plugin_version="3.5.0.2730"
-  elif [[ "$gradle_major_version" -eq 8 ]]; then
-    sonar_plugin_version="4.4.1.3373"
-  else
-    sonar_plugin_version="5.1.0.4882"
-  fi
+  local sonar_plugin_version=""
+  sonar_plugin_version="$(gradle_select_sonar_plugin_version "$gradle_major_version")"
   
   log_info "Selected SonarQube plugin version: ${sonar_plugin_version} for Gradle ${gradle_major_version}.x"
   
-  if grep -qE "sonarqube|org.sonarqube" build.gradle* 2>/dev/null; then
+  if gradle_has_sonarqube_plugin "$build_dir"; then
     log_info "Project has SonarQube plugin configured, using 'sonar' task"
-    # shellcheck disable=SC2086
-    run_logged "$log_file" env "GRADLE_USER_HOME=$gradle_user_home" $gradle_cmd sonar $sonar_args -x test || exit_code=$?
+    gradle_run_command "$log_file" "$gradle_user_home" "$gradle_cmd" sonar "${sonar_args[@]}" -x test || exit_code=$?
   else
     log_info "No SonarQube plugin found, injecting via init script"
-    local init_script="${build_dir}/sonar-init.gradle"
-    cat > "$init_script" << GRADLE_INIT
-initscript {
-    repositories {
-        maven { url = uri("https://plugins.gradle.org/m2/") }
-    }
-    dependencies {
-        classpath "org.sonarsource.scanner.gradle:sonarqube-gradle-plugin:${sonar_plugin_version}"
-    }
-}
-allprojects {
-    apply plugin: org.sonarqube.gradle.SonarQubePlugin
-}
-GRADLE_INIT
-    
-    # shellcheck disable=SC2086
-    run_logged "$log_file" env "GRADLE_USER_HOME=$gradle_user_home" $gradle_cmd --init-script "$init_script" sonar $sonar_args -x test || exit_code=$?
-    
-    rm -f "$init_script"
+    if [[ -z "$support_dir" ]]; then
+      ensure_dir "$WORK_DIR"
+      support_dir="$(mktemp -d "${WORK_DIR%/}/gradle-sonar-${project_key}.XXXXXX")"
+    fi
+    ensure_dir "$support_dir"
+    local init_script="${support_dir}/sonar-init.gradle"
+    gradle_write_sonar_init_script "$init_script" "$sonar_plugin_version"
+    gradle_run_command "$log_file" "$gradle_user_home" "$gradle_cmd" --init-script "$init_script" sonar "${sonar_args[@]}" -x test || exit_code=$?
   fi
   
   if [[ $exit_code -ne 0 ]]; then
@@ -315,6 +451,9 @@ GRADLE_INIT
       # Only add binaries parameter if we found compiled classes
       if [[ -n "$binary_dirs" ]]; then
         sonar_cmd+=(-Dsonar.java.binaries="$binary_dirs")
+      fi
+      if [[ -n "$coverage_report_paths" ]]; then
+        sonar_cmd+=(-Dsonar.coverage.jacoco.xmlReportPaths="$coverage_report_paths")
       fi
       if [[ "${SONAR_SCM_EXCLUSIONS_DISABLED:-}" == "true" ]]; then
         sonar_cmd+=(-Dsonar.scm.exclusions.disabled=true)

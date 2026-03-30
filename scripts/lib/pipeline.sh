@@ -77,6 +77,9 @@ run_scan_for_prepared_repo() {
   PIPELINE_ATTEMPTED_JDKS_CSV=""
 
   state_increment_attempts "$key"
+  if declare -f state_clear_coverage_info >/dev/null 2>&1; then
+    state_clear_coverage_info "$key"
+  fi
 
   if [[ ! -d "$repo_dir" ]]; then
     state_set_status "$key" "failed" "missing_prepared_repo" "Prepared repository path does not exist"
@@ -159,6 +162,9 @@ run_scan_for_prepared_repo() {
 
   if [[ "$skip_sonar" == "true" ]]; then
     log_info "Skipping SonarQube submission (--skip-sonar)"
+    if declare -f state_set_coverage_info >/dev/null 2>&1; then
+      state_set_coverage_info "$key" "skipped" "skip_sonar" "" "" ""
+    fi
     state_set_status "$key" "success"
     state_set_scan_timestamp "$key"
     return 0

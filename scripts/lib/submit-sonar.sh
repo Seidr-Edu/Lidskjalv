@@ -497,7 +497,7 @@ sonar_prepare_coverage() {
   COVERAGE_JAVA_TARGET="$(coverage_detect_java_target "$build_dir" "$java_version_hint" "$build_jdk")"
   COVERAGE_JACOCO_VERSION="$(coverage_select_jacoco_version "$COVERAGE_JAVA_TARGET")"
   COVERAGE_JDK="$build_jdk"
-  # shellcheck disable=SC2034  # Support dir is kept in shared coverage metadata for debugging.
+  # shellcheck disable=SC2034  # Support dir path is recorded in shared coverage metadata; the directory itself is ephemeral.
   COVERAGE_SUPPORT_DIR="$support_dir"
 
   case "$build_tool" in

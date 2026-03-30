@@ -261,8 +261,17 @@ extract_maven_error_message() {
 
 maven_repo_declares_jacoco() {
   local repo_dir="$1"
-  find "$repo_dir" -type f -name "pom.xml" -print0 2>/dev/null | \
-    xargs -0 grep -l "jacoco-maven-plugin" >/dev/null 2>&1
+  local pom_file=""
+
+  [[ -d "$repo_dir" ]] || return 1
+
+  while IFS= read -r -d '' pom_file; do
+    if grep -q "jacoco-maven-plugin" "$pom_file" 2>/dev/null; then
+      return 0
+    fi
+  done < <(find "$repo_dir" -type f -name "pom.xml" -print0 2>/dev/null)
+
+  return 1
 }
 
 maven_has_jacoco_xml_reports() {

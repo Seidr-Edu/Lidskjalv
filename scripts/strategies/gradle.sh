@@ -358,6 +358,7 @@ gradle_sonar() {
   local coverage_report_paths="${4:-}"
   local support_dir="${5:-}"
   local java_jdk_home="${6:-}"
+  local created_support_dir="false"
 
   if ! gradle_validate_project_layout "$build_dir" "$log_file"; then
     return 1
@@ -413,6 +414,7 @@ gradle_sonar() {
     if [[ -z "$support_dir" ]]; then
       ensure_dir "$WORK_DIR"
       support_dir="$(mktemp -d "${WORK_DIR%/}/gradle-sonar-${project_key}.XXXXXX")"
+      created_support_dir="true"
     fi
     ensure_dir "$support_dir"
     local init_script="${support_dir}/sonar-init.gradle"
@@ -421,6 +423,9 @@ gradle_sonar() {
   fi
   
   popd >/dev/null || return 1
+  if [[ "$created_support_dir" == "true" ]] && [[ -d "$support_dir" ]]; then
+    rm -rf "$support_dir"
+  fi
   return $exit_code
 }
 

@@ -140,8 +140,13 @@ assert_json_value "${scm_disabled_run}/outputs/run_report.json" '.status' "passe
 assert_json_value "${scm_disabled_run}/outputs/run_report.json" '.scan.sonar_task_id' "fake-task" "successful async submission should persist task id"
 assert_json_value "${scm_disabled_run}/outputs/run_report.json" '.scan.data_status' "pending" "successful async submission should mark follow-up pending"
 assert_json_value "${scm_disabled_run}/outputs/run_report.json" '.scan.quality_gate_status' "null" "quality gate should not be resolved during async submission"
+assert_json_value "${scm_disabled_run}/outputs/run_report.json" '.scan.scanner_mode' "native_maven" "service report should capture the native scanner mode"
+assert_json_value "${scm_disabled_run}/outputs/run_report.json" '.scan.scanner_version' "5.5.0.6356" "service report should capture the Maven scanner version"
 assert_json_value "${scm_disabled_run}/outputs/run_report.json" '.scan.coverage.status' "available" "successful submission should record available coverage"
+assert_json_value "${scm_disabled_run}/outputs/run_report.json" '.scan.coverage.jdk' "17" "coverage JDK should match the successful build JDK"
 assert_json_value "${scm_disabled_run}/outputs/run_report.json" '.scan.coverage.jacoco_version' "0.8.8" "java 17 fixture should select JaCoCo 0.8.8"
+assert_json_value "${scm_disabled_run}/outputs/run_report.json" '.scan.coverage.attempted' "true" "coverage should be marked as attempted"
+assert_json_value "${scm_disabled_run}/outputs/run_report.json" '.scan.coverage.tests_forced' "true" "Maven coverage should record forced test re-enable"
 assert_json_path_exists "${scm_disabled_run}/outputs/run_report.json" '.scan.coverage.report_paths | length == 1' "coverage report path should be recorded"
 
 missing_task_run="${tmp}/missing-task-run"
@@ -152,7 +157,7 @@ run_service_with_fake_sonar \
   "$fake_bin"
 
 assert_json_value "${missing_task_run}/outputs/run_report.json" '.status' "failed" "missing task id should fail immediately"
-assert_json_value "${missing_task_run}/outputs/run_report.json" '.reason' "sonar_submission_failed" "missing task id reason mismatch"
+assert_json_value "${missing_task_run}/outputs/run_report.json" '.reason' "sonar_submission_missing_task_id" "missing task id reason mismatch"
 
 submit_failure_run="${tmp}/submit-failure-run"
 FAKE_SONAR_SUBMIT_EXIT_CODE="42" \
@@ -162,7 +167,7 @@ run_service_with_fake_sonar \
   "$fake_bin"
 
 assert_json_value "${submit_failure_run}/outputs/run_report.json" '.status' "failed" "submission failure should fail immediately"
-assert_json_value "${submit_failure_run}/outputs/run_report.json" '.reason' "sonar_submission_failed" "submission failure reason mismatch"
+assert_json_value "${submit_failure_run}/outputs/run_report.json" '.reason' "cli_fallback_failed" "submission failure reason mismatch"
 
 fallback_run="${tmp}/fallback-run"
 FAKE_COVERAGE_REPORT_MODE="missing" \
@@ -174,6 +179,6 @@ run_service_with_fake_sonar \
 
 assert_json_value "${fallback_run}/outputs/run_report.json" '.status' "passed" "coverage fallback should still submit sonar successfully"
 assert_json_value "${fallback_run}/outputs/run_report.json" '.scan.coverage.status' "fallback" "missing coverage report should trigger fallback metadata"
-assert_json_value "${fallback_run}/outputs/run_report.json" '.scan.coverage.reason' "maven_coverage_report_missing" "fallback reason mismatch"
+assert_json_value "${fallback_run}/outputs/run_report.json" '.scan.coverage.reason' "tests_skipped_by_config" "fallback reason mismatch"
 
 popd >/dev/null

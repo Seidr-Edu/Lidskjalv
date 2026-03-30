@@ -161,12 +161,12 @@ gradle_detect_version_info() {
 gradle_select_sonar_plugin_version() {
   local gradle_major_version="${1:-8}"
 
-  if [[ "$gradle_major_version" -le 7 ]]; then
-    echo "3.5.0.2730"
-  elif [[ "$gradle_major_version" -eq 8 ]]; then
+  if [[ "$gradle_major_version" -le 6 ]]; then
     echo "4.4.1.3373"
+  elif [[ "$gradle_major_version" -le 8 ]]; then
+    echo "6.3.1.5724"
   else
-    echo "5.1.0.4882"
+    echo "7.2.3.7755"
   fi
 }
 
@@ -203,23 +203,57 @@ gradle_write_jacoco_init_script() {
   local jacoco_version="$2"
 
   cat > "$init_script" <<GRADLE_INIT
+import org.gradle.api.tasks.testing.Test
+import org.gradle.testing.jacoco.plugins.JacocoPluginExtension
+import org.gradle.testing.jacoco.tasks.JacocoReport
+
+gradle.rootProject {
+    if (tasks.findByName("lidskjalvCoverage") == null) {
+        tasks.register("lidskjalvCoverage")
+    }
+}
+
 allprojects { project ->
     project.pluginManager.withPlugin("java") {
         def hadJacoco = project.plugins.hasPlugin("jacoco")
         if (!hadJacoco) {
             project.pluginManager.apply("jacoco")
-            project.jacoco.toolVersion = "${jacoco_version}"
+        }
+        def jacocoExtension = project.extensions.findByType(JacocoPluginExtension)
+        if (jacocoExtension != null && (!hadJacoco || !jacocoExtension.toolVersion)) {
+            jacocoExtension.toolVersion = "${jacoco_version}"
         }
 
-        project.tasks.matching { it.name == "test" }.configureEach {
-            finalizedBy("jacocoTestReport")
-        }
-
-        project.tasks.matching { it.name == "jacocoTestReport" }.configureEach {
-            dependsOn("test")
-            reports {
-                xml.required = true
-                csv.required = false
+        project.tasks.withType(Test).configureEach { testTask ->
+            def capitalized = testTask.name.substring(0, 1).toUpperCase() + testTask.name.substring(1)
+            def reportTaskName = "lidskjalvJacoco\${capitalized}Report"
+            if (project.tasks.findByName(reportTaskName) == null) {
+                project.tasks.register(reportTaskName, JacocoReport) { reportTask ->
+                    dependsOn(testTask)
+                    executionData(testTask)
+                    if (project.extensions.findByName("sourceSets") != null) {
+                        def mainSourceSet = project.sourceSets.findByName("main")
+                        if (mainSourceSet != null) {
+                            sourceDirectories.from(mainSourceSet.allSource.srcDirs)
+                            additionalSourceDirs.from(mainSourceSet.allSource.srcDirs)
+                            classDirectories.from(mainSourceSet.output)
+                        }
+                    }
+                    reports {
+                        xml.required = true
+                        html.required = false
+                        csv.required = false
+                        xml.outputLocation = project.layout.buildDirectory.file("reports/jacoco/\${testTask.name}/\${reportTaskName}.xml")
+                    }
+                    onlyIf {
+                        executionData.files.any { it.exists() }
+                    }
+                }
+            }
+            testTask.finalizedBy(reportTaskName)
+            gradle.rootProject.tasks.named("lidskjalvCoverage").configure {
+                dependsOn(testTask)
+                dependsOn(project.tasks.named(reportTaskName))
             }
         }
     }
@@ -274,7 +308,7 @@ gradle_prepare_coverage() {
   }
 
   local exit_code=0
-  gradle_run_command "$log_file" "$gradle_user_home" "$gradle_cmd" --init-script "$init_script" test jacocoTestReport || exit_code=$?
+  gradle_run_command "$log_file" "$gradle_user_home" "$gradle_cmd" --init-script "$init_script" lidskjalvCoverage || exit_code=$?
 
   popd >/dev/null || true
 
@@ -315,14 +349,15 @@ gradle_build() {
   return $exit_code
 }
 
-# Run SonarQube analysis for Gradle project
-# Usage: gradle_sonar <build_dir> <project_key> <log_file> [coverage_report_paths] [support_dir]
+# Run native SonarQube analysis for Gradle project.
+# Usage: gradle_sonar <build_dir> <project_key> <log_file> [coverage_report_paths] [support_dir] [java_jdk_home]
 gradle_sonar() {
   local build_dir="$1"
   local project_key="$2"
   local log_file="$3"
   local coverage_report_paths="${4:-}"
   local support_dir="${5:-}"
+  local java_jdk_home="${6:-}"
 
   if ! gradle_validate_project_layout "$build_dir" "$log_file"; then
     return 1
@@ -347,6 +382,9 @@ gradle_sonar() {
   )
   if [[ -n "$coverage_report_paths" ]]; then
     sonar_args+=("-Dsonar.coverage.jacoco.xmlReportPaths=$coverage_report_paths")
+  fi
+  if [[ -n "$java_jdk_home" ]]; then
+    sonar_args+=("-Dsonar.java.jdkHome=$java_jdk_home")
   fi
   if [[ "${SONAR_SCM_EXCLUSIONS_DISABLED:-}" == "true" ]]; then
     sonar_args+=(-Dsonar.scm.exclusions.disabled=true)
@@ -382,103 +420,6 @@ gradle_sonar() {
     gradle_run_command "$log_file" "$gradle_user_home" "$gradle_cmd" --init-script "$init_script" sonar "${sonar_args[@]}" -x test || exit_code=$?
   fi
   
-  if [[ $exit_code -ne 0 ]]; then
-    log_warn "Gradle-based SonarQube analysis failed (exit code: $exit_code)"
-    
-    if grep -q "com/android/build/gradle" "$log_file" 2>/dev/null; then
-      log_warn "Detected Android Gradle Plugin incompatibility, trying sonar-scanner CLI fallback"
-    fi
-    
-    if command -v sonar-scanner &>/dev/null; then
-      log_info "Falling back to sonar-scanner CLI"
-      # Reset exit status before fallback; otherwise a successful fallback can still
-      # return the original Gradle failure code.
-      exit_code=0
-      
-      local source_dirs=""
-      local binary_dirs=""
-      
-      while IFS= read -r src_dir; do
-        if [[ -n "$source_dirs" ]]; then
-          source_dirs="${source_dirs},"
-        fi
-        local rel_path="${src_dir#"$build_dir"/}"
-        source_dirs="${source_dirs}${rel_path}"
-      done < <(find "$build_dir" -type d -path "*/src/main/java" 2>/dev/null)
-      
-      if [[ -z "$source_dirs" ]]; then
-        while IFS= read -r src_dir; do
-          if [[ -n "$source_dirs" ]]; then
-            source_dirs="${source_dirs},"
-          fi
-          local rel_path="${src_dir#"$build_dir"/}"
-          source_dirs="${source_dirs}${rel_path}"
-        done < <(find "$build_dir" -type d -name "src" -maxdepth 3 2>/dev/null)
-      fi
-      
-      while IFS= read -r class_dir; do
-        if [[ -n "$binary_dirs" ]]; then
-          binary_dirs="${binary_dirs},"
-        fi
-        local rel_path="${class_dir#"$build_dir"/}"
-        binary_dirs="${binary_dirs}${rel_path}"
-      done < <(find "$build_dir" -type d \( -path "*/build/*/classes" -o -path "*/build/classes" \) 2>/dev/null)
-      
-      if [[ -z "$source_dirs" ]]; then
-        source_dirs="src/main/java"
-        log_warn "No source directories auto-detected, using default: $source_dirs"
-      else
-        log_info "Auto-detected source directories: $source_dirs"
-      fi
-      
-      if [[ -n "$binary_dirs" ]]; then
-        log_info "Auto-detected binary directories: $binary_dirs"
-      else
-        log_warn "No compiled classes found - analysis will run without bytecode (reduced rule coverage)"
-      fi
-      
-      # Build sonar-scanner command with optional binaries
-      local sonar_cmd=(
-        sonar-scanner
-        -Dsonar.host.url="$SONAR_HOST_URL"
-        -Dsonar.token="$SONAR_TOKEN"
-        -Dsonar.projectKey="$project_key"
-        -Dsonar.organization="$SONAR_ORGANIZATION"
-        -Dsonar.projectBaseDir="$build_dir"
-        -Dsonar.sources="$source_dirs"
-      )
-      
-      # Only add binaries parameter if we found compiled classes
-      if [[ -n "$binary_dirs" ]]; then
-        sonar_cmd+=(-Dsonar.java.binaries="$binary_dirs")
-      fi
-      if [[ -n "$coverage_report_paths" ]]; then
-        sonar_cmd+=(-Dsonar.coverage.jacoco.xmlReportPaths="$coverage_report_paths")
-      fi
-      if [[ "${SONAR_SCM_EXCLUSIONS_DISABLED:-}" == "true" ]]; then
-        sonar_cmd+=(-Dsonar.scm.exclusions.disabled=true)
-      fi
-      if [[ "${SONAR_SCM_DISABLED:-}" == "true" ]]; then
-        sonar_cmd+=(-Dsonar.scm.disabled=true)
-      fi
-      
-      run_logged "$log_file" "${sonar_cmd[@]}" || exit_code=$?
-      
-      if [[ $exit_code -eq 0 ]]; then
-        log_success "SonarQube analysis succeeded via CLI fallback"
-        echo "CLI" > "${build_dir}/.sonar-analysis-method"
-      else
-        log_error "sonar-scanner CLI fallback failed (exit code: $exit_code)"
-      fi
-    else
-      log_error "sonar-scanner CLI not available for fallback"
-      log_error "Install with: brew install sonar-scanner"
-      log_error "Or run this in CI where sonar-scanner is pre-installed"
-    fi
-  else
-    echo "GRADLE" > "${build_dir}/.sonar-analysis-method"
-  fi
-  
   popd >/dev/null || return 1
   return $exit_code
 }
@@ -500,11 +441,11 @@ parse_gradle_error() {
   elif grep -q "Task .* not found in root project" "$log_file" 2>/dev/null; then
     echo "task_not_found"
   elif grep -q "Unsupported class file major version" "$log_file" 2>/dev/null; then
-    echo "jdk_mismatch"
+    echo "build_jdk_mismatch"
   elif grep -qE "Could not determine java version|UnsupportedClassVersionError" "$log_file" 2>/dev/null; then
-    echo "jdk_mismatch"
+    echo "build_jdk_mismatch"
   elif grep -qE "Incompatible .* version" "$log_file" 2>/dev/null; then
-    echo "jdk_mismatch"
+    echo "build_jdk_mismatch"
   elif grep -qE "(Cannot resolve|Could not resolve)" "$log_file" 2>/dev/null; then
     echo "dependency_failure"
   elif grep -qE "(401|403|Unauthorized)" "$log_file" 2>/dev/null; then
@@ -547,4 +488,18 @@ extract_gradle_error_message() {
   fi
   
   echo "$error_line"
+}
+
+gradle_classify_sonar_failure() {
+  local log_file="$1"
+
+  if grep -Eiq "UnsupportedClassVersionError|Could not determine java version|class file version [0-9]+" "$log_file" 2>/dev/null; then
+    echo "scanner_runtime_mismatch"
+  elif grep -Eiq "Fail to download|Unable to download|PKIX path building failed|Could not GET" "$log_file" 2>/dev/null; then
+    echo "native_scanner_server_download_failure"
+  elif grep -Eiq "com/android/build/gradle|configuration-cache|Plugin with id 'org\.sonarqube' not found|No signature of method: .*sonar|Could not create task ':sonar'" "$log_file" 2>/dev/null; then
+    echo "native_scanner_incompatible"
+  else
+    echo "native_scanner_incompatible"
+  fi
 }

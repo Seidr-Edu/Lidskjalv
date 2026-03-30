@@ -11,11 +11,11 @@ make_fake_sonar_bin() {
   local fake_bin="$1"
   mkdir -p "$fake_bin"
 
-  cat > "${fake_bin}/mvn" <<'EOF'
+cat > "${fake_bin}/mvn" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 
-printf 'mvn|%s|%s\n' "$PWD" "$*" >> "${FAKE_COMMAND_LOG:?}"
+printf 'mvn|%s|%s|%s\n' "$PWD" "${JAVA_HOME:-}" "$*" >> "${FAKE_COMMAND_LOG:?}"
 
 has_arg() {
   local needle="$1"
@@ -117,11 +117,11 @@ exit 0
 EOF
   chmod +x "${fake_bin}/mvn"
 
-  cat > "${fake_bin}/gradle" <<'EOF'
+cat > "${fake_bin}/gradle" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 
-printf 'gradle|%s|%s\n' "$PWD" "$*" >> "${FAKE_COMMAND_LOG:?}"
+printf 'gradle|%s|%s|%s\n' "$PWD" "${JAVA_HOME:-}" "$*" >> "${FAKE_COMMAND_LOG:?}"
 
 has_arg() {
   local needle="$1"
@@ -198,15 +198,15 @@ if has_arg sonar "$@"; then
     printf '%s\n' "unexpected coverage report paths" >&2
     exit 101
   fi
-  if [[ -n "${FAKE_GRADLE_SONAR_EXIT_CODE:-}" ]]; then
-    exit "${FAKE_GRADLE_SONAR_EXIT_CODE}"
+  if [[ -n "${FAKE_GRADLE_NATIVE_SONAR_EXIT_CODE:-}" ]]; then
+    exit "${FAKE_GRADLE_NATIVE_SONAR_EXIT_CODE}"
   fi
   mkdir -p build/sonar
   printf 'ceTaskId=%s\n' "${FAKE_SONAR_TASK_ID:-fake-task}" > build/sonar/report-task.txt
   exit 0
 fi
 
-if has_arg jacocoTestReport "$@" || has_arg test "$@"; then
+if has_arg lidskjalvCoverage "$@" || has_arg jacocoTestReport "$@" || has_arg test "$@"; then
   if [[ "$has_jacoco" != "true" && -z "$init_script" ]]; then
     printf '%s\n' "missing init script for JaCoCo injection" >&2
     exit 98
@@ -216,7 +216,7 @@ if has_arg jacocoTestReport "$@" || has_arg test "$@"; then
   fi
   if [[ "${FAKE_GRADLE_COVERAGE_REPORT_MODE:-present}" != "missing" ]]; then
     mkdir -p build/reports/jacoco/test
-    printf '%s\n' '<report name="fake"/>' > build/reports/jacoco/test/jacocoTestReport.xml
+    printf '%s\n' '<report name="fake"/>' > build/reports/jacoco/test/lidskjalvJacocoTestReport.xml
   fi
   exit 0
 fi
@@ -224,6 +224,36 @@ fi
 exit 0
 EOF
   chmod +x "${fake_bin}/gradle"
+
+  cat > "${fake_bin}/sonar-scanner" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf 'sonar-scanner|%s|%s|%s\n' "$PWD" "${JAVA_HOME:-}" "$*" >> "${FAKE_COMMAND_LOG:?}"
+
+project_base_dir="$PWD"
+arg=""
+for arg in "$@"; do
+  case "$arg" in
+    -Dsonar.projectBaseDir=*)
+      project_base_dir="${arg#-Dsonar.projectBaseDir=}"
+      ;;
+  esac
+done
+
+if [[ "${FAKE_REQUIRE_COVERAGE_REPORT_PATHS:-false}" == "true" && "$*" != *"-Dsonar.coverage.jacoco.xmlReportPaths="* ]]; then
+  printf '%s\n' "missing coverage report paths" >&2
+  exit 102
+fi
+if [[ -n "${FAKE_SONAR_SCANNER_EXIT_CODE:-}" ]]; then
+  exit "${FAKE_SONAR_SCANNER_EXIT_CODE}"
+fi
+
+mkdir -p "${project_base_dir}/.scannerwork"
+printf 'ceTaskId=%s\n' "${FAKE_SONAR_TASK_ID:-fake-task}" > "${project_base_dir}/.scannerwork/report-task.txt"
+exit 0
+EOF
+  chmod +x "${fake_bin}/sonar-scanner"
 
   cat > "${fake_bin}/curl" <<'EOF'
 #!/usr/bin/env bash
@@ -305,6 +335,7 @@ run_scan "$maven_injected_data" "$maven_injected_repo" "maven_injected" "$fake_b
 
 assert_json_value "${maven_injected_data}/state/scan-state.json" '.repositories["maven_injected"].status' "success" "injected Maven scan should succeed"
 assert_json_value "${maven_injected_data}/state/scan-state.json" '.repositories["maven_injected"].coverage_status' "available" "injected Maven scan should record available coverage"
+assert_json_value "${maven_injected_data}/state/scan-state.json" '.repositories["maven_injected"].scanner_mode' "native_maven" "injected Maven scan should use native Maven submission"
 assert_json_value "${maven_injected_data}/state/scan-state.json" '.repositories["maven_injected"].coverage_report_paths' "target/site/jacoco/jacoco.xml" "injected Maven coverage report path mismatch"
 assert_eq "$maven_injected_checksum" "$(file_checksum "${maven_injected_repo}/pom.xml")" "local path Maven scan should not mutate pom.xml"
 assert_contains "lidskjalv-coverage" "$(cat "$maven_injected_log")" "injected Maven run should activate the temporary coverage profile"
@@ -350,7 +381,8 @@ assert_json_value "${maven_existing_data}/state/scan-state.json" '.repositories[
 if grep -q "lidskjalv-coverage" "$maven_existing_log"; then
   test_fail "existing Maven JaCoCo configuration should not trigger injected coverage profile"
 fi
-assert_contains "org.sonarsource.scanner.maven:sonar-maven-plugin:3.11.0.3922:sonar" "$(cat "$maven_existing_log")" "Maven Sonar submission should pin the scanner version"
+assert_contains "org.sonarsource.scanner.maven:sonar-maven-plugin:5.5.0.6356:sonar" "$(cat "$maven_existing_log")" "Maven Sonar submission should pin the scanner version"
+assert_json_value "${maven_existing_data}/state/scan-state.json" '.repositories["maven_existing"].scanner_version' "5.5.0.6356" "Maven scanner version metadata mismatch"
 
 maven_existing_late_repo="${tmp}/maven-existing-late"
 mkdir -p "${maven_existing_late_repo}/src/main/java/example"
@@ -394,6 +426,39 @@ assert_json_value "${maven_existing_late_data}/state/scan-state.json" '.reposito
 assert_contains "mvn|" "$(cat "$maven_existing_late_log")" "late-report Maven scenario should log executed commands"
 assert_contains "|install -Dmaven.repo.local=" "$(cat "$maven_existing_late_log")" "late-report Maven scenario should run install preparation before Sonar"
 
+legacy_maven_repo="${tmp}/maven-legacy-runtime"
+mkdir -p "${legacy_maven_repo}/src/main/java/example"
+cat > "${legacy_maven_repo}/pom.xml" <<'EOF'
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>example</groupId>
+  <artifactId>maven-legacy-runtime</artifactId>
+  <version>1.0.0</version>
+  <properties>
+    <maven.compiler.source>1.8</maven.compiler.source>
+    <maven.compiler.target>1.8</maven.compiler.target>
+  </properties>
+</project>
+EOF
+cat > "${legacy_maven_repo}/src/main/java/example/App.java" <<'EOF'
+package example;
+
+class App {}
+EOF
+legacy_maven_log="${tmp}/maven-legacy-runtime.log"
+legacy_maven_data="${tmp}/maven-legacy-runtime-data"
+FAKE_COMMAND_LOG="$legacy_maven_log" \
+FAKE_REQUIRE_COVERAGE_REPORT_PATHS="true" \
+run_scan "$legacy_maven_data" "$legacy_maven_repo" "maven_legacy_runtime" "$fake_bin"
+
+assert_json_value "${legacy_maven_data}/state/scan-state.json" '.repositories["maven_legacy_runtime"].jdk_version' "11" "legacy Maven build should prefer JDK 11"
+assert_json_value "${legacy_maven_data}/state/scan-state.json" '.repositories["maven_legacy_runtime"].coverage_jdk' "11" "coverage should stay on the build JDK"
+assert_json_value "${legacy_maven_data}/state/scan-state.json" '.repositories["maven_legacy_runtime"].scanner_mode' "native_maven" "legacy Maven scan should still use the native Maven scanner"
+assert_json_value "${legacy_maven_data}/state/scan-state.json" '.repositories["maven_legacy_runtime"].scanner_jdk' "21" "legacy Maven scan should switch to the dedicated scanner JDK"
+assert_json_value "${legacy_maven_data}/state/scan-state.json" '.repositories["maven_legacy_runtime"].coverage_tests_forced' "true" "Maven coverage should force tests back on"
+
 gradle_repo="${tmp}/gradle-coverage"
 cp -a "${ROOT_DIR}/tests/fixtures/gradle_app/." "$gradle_repo/"
 gradle_log="${tmp}/gradle.log"
@@ -404,8 +469,24 @@ FAKE_REQUIRE_COVERAGE_REPORT_PATHS="true" \
 run_scan "$gradle_data" "$gradle_repo" "gradle_coverage" "$fake_bin"
 
 assert_json_value "${gradle_data}/state/scan-state.json" '.repositories["gradle_coverage"].coverage_status' "available" "Gradle coverage scan should record available coverage"
-assert_json_value "${gradle_data}/state/scan-state.json" '.repositories["gradle_coverage"].coverage_report_paths' "build/reports/jacoco/test/jacocoTestReport.xml" "Gradle coverage report path mismatch"
+assert_json_value "${gradle_data}/state/scan-state.json" '.repositories["gradle_coverage"].coverage_report_paths' "build/reports/jacoco/test/lidskjalvJacocoTestReport.xml" "Gradle coverage report path mismatch"
+assert_json_value "${gradle_data}/state/scan-state.json" '.repositories["gradle_coverage"].scanner_mode' "native_gradle" "Gradle scan should use the native Gradle scanner when it succeeds"
 assert_not_exists "${gradle_repo}/sonar-init.gradle" "Gradle Sonar init script should not be written into the repository"
 assert_not_exists "${gradle_repo}/jacoco-init.gradle" "Gradle JaCoCo init script should not be written into the repository"
+
+gradle_cli_repo="${tmp}/gradle-cli-fallback"
+cp -a "${ROOT_DIR}/tests/fixtures/gradle_app/." "$gradle_cli_repo/"
+gradle_cli_log="${tmp}/gradle-cli.log"
+gradle_cli_data="${tmp}/gradle-cli-data"
+FAKE_COMMAND_LOG="$gradle_cli_log" \
+FAKE_REQUIRE_INIT_OUTSIDE_REPO="true" \
+FAKE_REQUIRE_COVERAGE_REPORT_PATHS="true" \
+FAKE_GRADLE_NATIVE_SONAR_EXIT_CODE="42" \
+run_scan "$gradle_cli_data" "$gradle_cli_repo" "gradle_cli_fallback" "$fake_bin"
+
+assert_json_value "${gradle_cli_data}/state/scan-state.json" '.repositories["gradle_cli_fallback"].status' "success" "Gradle CLI fallback scan should still succeed"
+assert_json_value "${gradle_cli_data}/state/scan-state.json" '.repositories["gradle_cli_fallback"].scanner_mode' "cli_fallback" "Gradle fallback should record CLI submission mode"
+assert_json_value "${gradle_cli_data}/state/scan-state.json" '.repositories["gradle_cli_fallback"].fallback_chain' "native_gradle,cli_fallback" "Gradle fallback chain mismatch"
+assert_contains "sonar-scanner|" "$(cat "$gradle_cli_log")" "Gradle fallback should invoke sonar-scanner"
 
 popd >/dev/null

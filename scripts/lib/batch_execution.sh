@@ -96,8 +96,9 @@ batch_process_repo_entry() {
 
 batch_run_loop() {
   local total=${#BATCH_REPOS_TO_PROCESS[@]}
-  local entry source_type source_ref jdk subdir key_override name_override
+  local entry source_type source_ref _jdk _subdir key_override name_override
 
+  # shellcheck disable=SC2034  # Read by batch-scan.sh after this loop completes.
   BATCH_PROCESSED=0
   BATCH_SUCCEEDED=0
   BATCH_FAILED=0
@@ -112,11 +113,12 @@ batch_run_loop() {
 
     if ! batch_should_continue_processing; then
       log_info "Stopped due to time limit - will resume next run"
+      # shellcheck disable=SC2034  # Read by batch-scan.sh after the loop exits.
       BATCH_STOPPED_EARLY=true
       break
     fi
 
-    IFS='|' read -r source_type source_ref jdk subdir key_override name_override <<< "$entry"
+    IFS='|' read -r source_type source_ref _jdk _subdir key_override name_override <<< "$entry"
 
     ((++BATCH_PROCESSED))
     log_info "[$BATCH_PROCESSED/$total] Processing..."

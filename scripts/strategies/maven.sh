@@ -10,7 +10,7 @@
 MAVEN_COVERAGE_BUILD_DIR=""
 # shellcheck disable=SC2034  # Referenced by submit-sonar.sh after sourcing this file.
 MAVEN_COVERAGE_REASON=""
-MAVEN_SONAR_PLUGIN_VERSION="3.11.0.3922"
+MAVEN_SONAR_PLUGIN_VERSION="5.5.0.6356"
 
 # Each strategy is: "JDK_VERSION|BUILD_ARGS"
 # Strategies are tried in order until one succeeds
@@ -161,13 +161,14 @@ maven_build() {
   return $exit_code
 }
 
-# Run SonarQube analysis for Maven project
-# Usage: maven_sonar <build_dir> <project_key> <log_file> [coverage_report_paths]
+# Run native SonarQube analysis for Maven project.
+# Usage: maven_sonar <build_dir> <project_key> <log_file> [coverage_report_paths] [java_jdk_home]
 maven_sonar() {
   local build_dir="$1"
   local project_key="$2"
   local log_file="$3"
   local coverage_report_paths="${4:-}"
+  local java_jdk_home="${5:-}"
 
   if ! maven_validate_project_layout "$build_dir" "$log_file"; then
     return 1
@@ -198,6 +199,9 @@ maven_sonar() {
   if [[ -n "$coverage_report_paths" ]]; then
     sonar_cmd+=("-Dsonar.coverage.jacoco.xmlReportPaths=$coverage_report_paths")
   fi
+  if [[ -n "$java_jdk_home" ]]; then
+    sonar_cmd+=("-Dsonar.java.jdkHome=$java_jdk_home")
+  fi
   if [[ "${SONAR_SCM_EXCLUSIONS_DISABLED:-}" == "true" ]]; then
     sonar_cmd+=(-Dsonar.scm.exclusions.disabled=true)
   fi
@@ -219,9 +223,9 @@ parse_maven_error() {
   if grep -q "Invalid Maven layout: pom.xml uses <packaging>pom</packaging>" "$log_file" 2>/dev/null; then
     echo "invalid_project_layout"
   elif grep -q "release version .* not supported" "$log_file" 2>/dev/null; then
-    echo "jdk_mismatch"
+    echo "build_jdk_mismatch"
   elif grep -q "Unsupported class file major version" "$log_file" 2>/dev/null; then
-    echo "jdk_mismatch"
+    echo "build_jdk_mismatch"
   elif grep -qE "(Cannot resolve|Could not find artifact)" "$log_file" 2>/dev/null; then
     echo "dependency_failure"
   elif grep -qE "(401|403|Unauthorized)" "$log_file" 2>/dev/null; then
@@ -430,6 +434,8 @@ maven_prepare_coverage() {
     "$mvn_cmd"
     test
     "-Dmaven.repo.local=$maven_repo_local"
+    -DskipTests=false
+    -Dmaven.test.skip=false
     -B
   )
   if [[ -n "$injected_profile" ]]; then
@@ -465,4 +471,28 @@ maven_prepare_coverage() {
   # shellcheck disable=SC2034  # Read by submit-sonar.sh after sourcing.
   MAVEN_COVERAGE_BUILD_DIR="$effective_build_dir"
   return 0
+}
+
+maven_classify_sonar_failure() {
+  local log_file="$1"
+
+  if grep -Eiq "UnsupportedClassVersionError|has been compiled by a more recent version of the Java Runtime|class file version [0-9]+" "$log_file" 2>/dev/null; then
+    echo "scanner_runtime_mismatch"
+  elif grep -Eiq "Fail to download libraries from server|Failed to download|Index [0-9]+ out of bounds" "$log_file" 2>/dev/null; then
+    echo "native_scanner_server_download_failure"
+  elif grep -Eiq "ClassRealm|NoClassDefFoundError|NoSuchMethodError|PluginContainerException|Unable to load the mojo|Could not find goal 'sonar'" "$log_file" 2>/dev/null; then
+    echo "native_scanner_incompatible"
+  else
+    echo "native_scanner_incompatible"
+  fi
+}
+
+maven_classify_coverage_missing_reports() {
+  local log_file="$1"
+
+  if grep -Eiq "Tests are skipped|maven\.test\.skip|Skipping execution due to missing execution data file" "$log_file" 2>/dev/null; then
+    echo "tests_skipped_by_config"
+  else
+    echo "coverage_report_missing"
+  fi
 }

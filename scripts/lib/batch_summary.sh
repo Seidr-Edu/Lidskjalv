@@ -3,7 +3,8 @@
 # Creates timestamped summary files with success/failure/skipped repository lists
 
 batch_generate_summary() {
-  local summary_file="${LOG_DIR}/summary-$(date +%Y%m%d-%H%M%S).txt"
+  local summary_file=""
+  summary_file="${LOG_DIR}/summary-$(date +%Y%m%d-%H%M%S).txt"
 
   ensure_dir "$LOG_DIR"
 

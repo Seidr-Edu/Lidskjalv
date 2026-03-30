@@ -29,6 +29,18 @@ has_arg() {
   return 1
 }
 
+has_sonar_goal() {
+  local arg
+  for arg in "$@"; do
+    case "$arg" in
+      org.sonarsource.scanner.maven:sonar-maven-plugin:*:sonar)
+        return 0
+        ;;
+    esac
+  done
+  return 1
+}
+
 write_class_file() {
   local path="$1"
   local major="${2:-61}"
@@ -66,14 +78,25 @@ if has_arg test "$@"; then
   if [[ -n "${FAKE_MAVEN_TEST_EXIT_CODE:-}" ]]; then
     exit "${FAKE_MAVEN_TEST_EXIT_CODE}"
   fi
-  if [[ "${FAKE_MAVEN_COVERAGE_REPORT_MODE:-present}" != "missing" ]]; then
+  if [[ "${FAKE_MAVEN_COVERAGE_REPORT_MODE:-present}" == "present" ]]; then
     mkdir -p target/site/jacoco
     printf '%s\n' '<report name="fake"/>' > target/site/jacoco/jacoco.xml
   fi
   exit 0
 fi
 
-if has_arg org.sonarsource.scanner.maven:sonar-maven-plugin:sonar "$@"; then
+if has_arg install "$@"; then
+  if [[ -n "${FAKE_MAVEN_INSTALL_EXIT_CODE:-}" ]]; then
+    exit "${FAKE_MAVEN_INSTALL_EXIT_CODE}"
+  fi
+  if [[ "${FAKE_MAVEN_COVERAGE_REPORT_MODE:-present}" == "late" ]]; then
+    mkdir -p target/site/jacoco
+    printf '%s\n' '<report name="fake"/>' > target/site/jacoco/jacoco.xml
+  fi
+  exit 0
+fi
+
+if has_sonar_goal "$@"; then
   if [[ "${FAKE_REQUIRE_COVERAGE_REPORT_PATHS:-false}" == "true" && "$*" != *"-Dsonar.coverage.jacoco.xmlReportPaths="* ]]; then
     printf '%s\n' "missing coverage report paths" >&2
     exit 95
@@ -327,6 +350,49 @@ assert_json_value "${maven_existing_data}/state/scan-state.json" '.repositories[
 if grep -q "lidskjalv-coverage" "$maven_existing_log"; then
   test_fail "existing Maven JaCoCo configuration should not trigger injected coverage profile"
 fi
+assert_contains "org.sonarsource.scanner.maven:sonar-maven-plugin:3.11.0.3922:sonar" "$(cat "$maven_existing_log")" "Maven Sonar submission should pin the scanner version"
+
+maven_existing_late_repo="${tmp}/maven-existing-late"
+mkdir -p "${maven_existing_late_repo}/src/main/java/example"
+cat > "${maven_existing_late_repo}/pom.xml" <<'EOF'
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>example</groupId>
+  <artifactId>maven-existing-late-jacoco</artifactId>
+  <version>1.0.0</version>
+  <properties>
+    <maven.compiler.source>17</maven.compiler.source>
+    <maven.compiler.target>17</maven.compiler.target>
+  </properties>
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <version>0.8.8</version>
+      </plugin>
+    </plugins>
+  </build>
+</project>
+EOF
+cat > "${maven_existing_late_repo}/src/main/java/example/App.java" <<'EOF'
+package example;
+
+class App {}
+EOF
+maven_existing_late_log="${tmp}/maven-existing-late.log"
+maven_existing_late_data="${tmp}/maven-existing-late-data"
+FAKE_COMMAND_LOG="$maven_existing_late_log" \
+FAKE_FORBID_INJECTED_PROFILE="true" \
+FAKE_MAVEN_COVERAGE_REPORT_MODE="late" \
+FAKE_REQUIRE_COVERAGE_REPORT_PATHS="true" \
+run_scan "$maven_existing_late_data" "$maven_existing_late_repo" "maven_existing_late" "$fake_bin"
+
+assert_json_value "${maven_existing_late_data}/state/scan-state.json" '.repositories["maven_existing_late"].coverage_status' "available" "existing Maven JaCoCo should become available after submission prep"
+assert_contains "mvn|" "$(cat "$maven_existing_late_log")" "late-report Maven scenario should log executed commands"
+assert_contains "|install -Dmaven.repo.local=" "$(cat "$maven_existing_late_log")" "late-report Maven scenario should run install preparation before Sonar"
 
 gradle_repo="${tmp}/gradle-coverage"
 cp -a "${ROOT_DIR}/tests/fixtures/gradle_app/." "$gradle_repo/"

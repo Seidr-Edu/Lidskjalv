@@ -11,9 +11,17 @@ make_fake_bin() {
   local fake_bin="$1"
   mkdir -p "$fake_bin"
 
-  cat > "${fake_bin}/mvn" <<'EOF'
+cat > "${fake_bin}/mvn" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+is_sonar_goal() {
+  case "$*" in
+    *org.sonarsource.scanner.maven:sonar-maven-plugin:*:sonar*)
+      return 0
+      ;;
+  esac
+  return 1
+}
 if [[ "$*" == *"clean compile"* ]]; then
   mkdir -p target/classes
   : > target/classes/App.class
@@ -29,7 +37,7 @@ if [[ "$*" == *" test "* || "$*" == test* ]]; then
   fi
   exit 0
 fi
-if [[ "$*" == *"org.sonarsource.scanner.maven:sonar-maven-plugin:sonar"* ]]; then
+if is_sonar_goal "$*"; then
   if [[ -n "${FAKE_SONAR_SUBMIT_EXIT_CODE:-}" ]]; then
     exit "${FAKE_SONAR_SUBMIT_EXIT_CODE}"
   fi

@@ -6,8 +6,11 @@
 # Maven Build Strategies
 # ============================================================================
 
+# shellcheck disable=SC2034  # Referenced by submit-sonar.sh after sourcing this file.
 MAVEN_COVERAGE_BUILD_DIR=""
+# shellcheck disable=SC2034  # Referenced by submit-sonar.sh after sourcing this file.
 MAVEN_COVERAGE_REASON=""
+MAVEN_SONAR_PLUGIN_VERSION="3.11.0.3922"
 
 # Each strategy is: "JDK_VERSION|BUILD_ARGS"
 # Strategies are tried in order until one succeeds
@@ -183,7 +186,7 @@ maven_sonar() {
   local exit_code=0
   local -a sonar_cmd=(
     "$mvn_cmd"
-    org.sonarsource.scanner.maven:sonar-maven-plugin:sonar
+    "org.sonarsource.scanner.maven:sonar-maven-plugin:${MAVEN_SONAR_PLUGIN_VERSION}:sonar"
     "-Dsonar.host.url=$SONAR_HOST_URL"
     "-Dsonar.token=$SONAR_TOKEN"
     "-Dsonar.projectKey=$project_key"
@@ -258,6 +261,49 @@ maven_repo_declares_jacoco() {
     xargs -0 grep -l "jacoco-maven-plugin" >/dev/null 2>&1
 }
 
+maven_has_jacoco_xml_reports() {
+  local build_dir="$1"
+  find "$build_dir" -type f -path "*/target/site/jacoco/*.xml" -print -quit 2>/dev/null | grep -q .
+}
+
+maven_requires_submission_prep() {
+  local build_dir="$1"
+  local pom_path="${build_dir}/pom.xml"
+
+  [[ -f "$pom_path" ]] || return 1
+  maven_has_modules_declared "$pom_path" || maven_has_pom_packaging "$pom_path"
+}
+
+maven_prepare_submission() {
+  local build_dir="$1"
+  local log_file="$2"
+
+  if ! maven_validate_project_layout "$build_dir" "$log_file"; then
+    return 1
+  fi
+
+  local mvn_cmd
+  mvn_cmd="$(get_maven_command "$build_dir")"
+  local maven_user_home="${build_dir}/.m2"
+  local maven_repo_local="${maven_user_home}/repository"
+  ensure_dir "$maven_repo_local"
+
+  pushd "$build_dir" >/dev/null || return 1
+
+  local exit_code=0
+  local -a prep_cmd=(
+    "$mvn_cmd"
+    install
+    "-Dmaven.repo.local=$maven_repo_local"
+    -DskipTests=true
+    -B
+  )
+  run_logged "$log_file" env "MAVEN_USER_HOME=$maven_user_home" "${prep_cmd[@]}" || exit_code=$?
+
+  popd >/dev/null || return 1
+  return $exit_code
+}
+
 maven_inject_lidskjalv_coverage_profile() {
   local pom_path="$1"
   local jacoco_version="$2"
@@ -327,16 +373,23 @@ maven_prepare_coverage() {
   local support_dir="$5"
   local effective_build_dir="$build_dir"
   local injected_profile=""
+  local repo_declares_jacoco="false"
+  local needs_submission_prep="false"
 
+  # shellcheck disable=SC2034  # Read by submit-sonar.sh after sourcing.
   MAVEN_COVERAGE_BUILD_DIR="$build_dir"
+  # shellcheck disable=SC2034  # Read by submit-sonar.sh after sourcing.
   MAVEN_COVERAGE_REASON=""
 
   if ! maven_validate_project_layout "$build_dir" "$log_file"; then
+    # shellcheck disable=SC2034  # Read by submit-sonar.sh after sourcing.
     MAVEN_COVERAGE_REASON="maven_coverage_invalid_project_layout"
     return 1
   fi
 
-  if ! maven_repo_declares_jacoco "$repo_dir"; then
+  if maven_repo_declares_jacoco "$repo_dir"; then
+    repo_declares_jacoco="true"
+  else
     local temp_repo_dir="${support_dir}/repo"
     local relative_build_dir=""
 
@@ -345,13 +398,14 @@ maven_prepare_coverage() {
     cp -a "${repo_dir}/." "$temp_repo_dir/"
 
     if [[ "$build_dir" != "$repo_dir" ]]; then
-      relative_build_dir="${build_dir#$repo_dir/}"
+      relative_build_dir="${build_dir#"$repo_dir"/}"
       effective_build_dir="${temp_repo_dir}/${relative_build_dir}"
     else
       effective_build_dir="$temp_repo_dir"
     fi
 
     if ! maven_inject_lidskjalv_coverage_profile "${effective_build_dir}/pom.xml" "$jacoco_version" 2>>"$log_file"; then
+      # shellcheck disable=SC2034  # Read by submit-sonar.sh after sourcing.
       MAVEN_COVERAGE_REASON="maven_coverage_profile_injection_failed"
       return 1
     fi
@@ -366,6 +420,7 @@ maven_prepare_coverage() {
   ensure_dir "$maven_repo_local"
 
   pushd "$effective_build_dir" >/dev/null || {
+    # shellcheck disable=SC2034  # Read by submit-sonar.sh after sourcing.
     MAVEN_COVERAGE_REASON="maven_coverage_workspace_unavailable"
     return 1
   }
@@ -386,10 +441,28 @@ maven_prepare_coverage() {
   popd >/dev/null || true
 
   if [[ $exit_code -ne 0 ]]; then
+    # shellcheck disable=SC2034  # Read by submit-sonar.sh after sourcing.
     MAVEN_COVERAGE_REASON="maven_coverage_test_failed"
     return 1
   fi
 
+  if maven_requires_submission_prep "$effective_build_dir"; then
+    needs_submission_prep="true"
+  fi
+  if [[ "$repo_declares_jacoco" == "true" ]] && ! maven_has_jacoco_xml_reports "$effective_build_dir"; then
+    needs_submission_prep="true"
+  fi
+
+  if [[ "$needs_submission_prep" == "true" ]]; then
+    log_info "Running Maven install -DskipTests to prepare Sonar submission"
+    if ! maven_prepare_submission "$effective_build_dir" "$log_file"; then
+      # shellcheck disable=SC2034  # Read by submit-sonar.sh after sourcing.
+      MAVEN_COVERAGE_REASON="maven_coverage_submission_prep_failed"
+      return 1
+    fi
+  fi
+
+  # shellcheck disable=SC2034  # Read by submit-sonar.sh after sourcing.
   MAVEN_COVERAGE_BUILD_DIR="$effective_build_dir"
   return 0
 }

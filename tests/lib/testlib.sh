@@ -87,11 +87,13 @@ if [[ "$*" == *"clean compile"* ]]; then
   : > target/classes/App.class
   exit 0
 fi
-if [[ "$*" == *"org.sonarsource.scanner.maven:sonar-maven-plugin:sonar"* ]]; then
+case "$*" in
+  *org.sonarsource.scanner.maven:sonar-maven-plugin:*:sonar*)
   mkdir -p .scannerwork
   printf 'ceTaskId=%s\n' "${FAKE_SONAR_TASK_ID:-fake-task}" > .scannerwork/report-task.txt
   exit 0
-fi
+  ;;
+esac
 exit 0
 EOF
   chmod +x "${fake_bin}/mvn"

@@ -41,11 +41,25 @@ LIDSKJALV_SERVICE_SCAN_BUILD_JDK=""
 LIDSKJALV_SERVICE_SCAN_BUILD_SUBDIR=""
 LIDSKJALV_SERVICE_SCAN_JAVA_VERSION_HINT=""
 LIDSKJALV_SERVICE_SCAN_ATTEMPTED_JDKS_CSV=""
+LIDSKJALV_SERVICE_SCAN_SCANNER_MODE=""
+LIDSKJALV_SERVICE_SCAN_SCANNER_JDK=""
+LIDSKJALV_SERVICE_SCAN_SCANNER_RUNTIME_SOURCE=""
+LIDSKJALV_SERVICE_SCAN_SCANNER_VERSION=""
+LIDSKJALV_SERVICE_SCAN_FALLBACK_CHAIN=""
 LIDSKJALV_SERVICE_SONAR_TASK_ID=""
 LIDSKJALV_SERVICE_CE_TASK_STATUS=""
 LIDSKJALV_SERVICE_QUALITY_GATE_STATUS=""
 LIDSKJALV_SERVICE_DATA_STATUS="unavailable"
 LIDSKJALV_SERVICE_MEASURES_JSON="{}"
+LIDSKJALV_SERVICE_COVERAGE_JDK=""
+LIDSKJALV_SERVICE_COVERAGE_STATUS=""
+LIDSKJALV_SERVICE_COVERAGE_REASON=""
+LIDSKJALV_SERVICE_COVERAGE_JACOCO_VERSION=""
+LIDSKJALV_SERVICE_COVERAGE_JAVA_TARGET=""
+LIDSKJALV_SERVICE_COVERAGE_ATTEMPTED="false"
+LIDSKJALV_SERVICE_COVERAGE_TESTS_FORCED="false"
+LIDSKJALV_SERVICE_COVERAGE_REPORTS_FOUND="0"
+LIDSKJALV_SERVICE_COVERAGE_REPORT_PATHS=""
 
 lidskjalv_service_usage() {
   cat <<'EOF'
@@ -381,11 +395,25 @@ lidskjalv_service_write_report() {
   LIDSKJALV_SERVICE_SCAN_BUILD_SUBDIR="$LIDSKJALV_SERVICE_SCAN_BUILD_SUBDIR" \
   LIDSKJALV_SERVICE_SCAN_JAVA_VERSION_HINT="$LIDSKJALV_SERVICE_SCAN_JAVA_VERSION_HINT" \
   LIDSKJALV_SERVICE_SCAN_ATTEMPTED_JDKS_CSV="$LIDSKJALV_SERVICE_SCAN_ATTEMPTED_JDKS_CSV" \
+  LIDSKJALV_SERVICE_SCAN_SCANNER_MODE="$LIDSKJALV_SERVICE_SCAN_SCANNER_MODE" \
+  LIDSKJALV_SERVICE_SCAN_SCANNER_JDK="$LIDSKJALV_SERVICE_SCAN_SCANNER_JDK" \
+  LIDSKJALV_SERVICE_SCAN_SCANNER_RUNTIME_SOURCE="$LIDSKJALV_SERVICE_SCAN_SCANNER_RUNTIME_SOURCE" \
+  LIDSKJALV_SERVICE_SCAN_SCANNER_VERSION="$LIDSKJALV_SERVICE_SCAN_SCANNER_VERSION" \
+  LIDSKJALV_SERVICE_SCAN_FALLBACK_CHAIN="$LIDSKJALV_SERVICE_SCAN_FALLBACK_CHAIN" \
   LIDSKJALV_SERVICE_SONAR_TASK_ID="$LIDSKJALV_SERVICE_SONAR_TASK_ID" \
   LIDSKJALV_SERVICE_CE_TASK_STATUS="$LIDSKJALV_SERVICE_CE_TASK_STATUS" \
   LIDSKJALV_SERVICE_QUALITY_GATE_STATUS="$LIDSKJALV_SERVICE_QUALITY_GATE_STATUS" \
   LIDSKJALV_SERVICE_DATA_STATUS="$LIDSKJALV_SERVICE_DATA_STATUS" \
   LIDSKJALV_SERVICE_MEASURES_JSON="$LIDSKJALV_SERVICE_MEASURES_JSON" \
+  LIDSKJALV_SERVICE_COVERAGE_JDK="$LIDSKJALV_SERVICE_COVERAGE_JDK" \
+  LIDSKJALV_SERVICE_COVERAGE_STATUS="$LIDSKJALV_SERVICE_COVERAGE_STATUS" \
+  LIDSKJALV_SERVICE_COVERAGE_REASON="$LIDSKJALV_SERVICE_COVERAGE_REASON" \
+  LIDSKJALV_SERVICE_COVERAGE_JACOCO_VERSION="$LIDSKJALV_SERVICE_COVERAGE_JACOCO_VERSION" \
+  LIDSKJALV_SERVICE_COVERAGE_JAVA_TARGET="$LIDSKJALV_SERVICE_COVERAGE_JAVA_TARGET" \
+  LIDSKJALV_SERVICE_COVERAGE_ATTEMPTED="$LIDSKJALV_SERVICE_COVERAGE_ATTEMPTED" \
+  LIDSKJALV_SERVICE_COVERAGE_TESTS_FORCED="$LIDSKJALV_SERVICE_COVERAGE_TESTS_FORCED" \
+  LIDSKJALV_SERVICE_COVERAGE_REPORTS_FOUND="$LIDSKJALV_SERVICE_COVERAGE_REPORTS_FOUND" \
+  LIDSKJALV_SERVICE_COVERAGE_REPORT_PATHS="$LIDSKJALV_SERVICE_COVERAGE_REPORT_PATHS" \
   LIDSKJALV_REPORT_PATH="$report_path" \
   LIDSKJALV_SUMMARY_PATH="$summary_path" \
   python3 - <<'PY'
@@ -413,6 +441,12 @@ def split_csv(name):
     if not value:
         return []
     return [item for item in value.split(":") if item]
+
+def split_comma(name):
+    value = os.environ.get(name, "")
+    if not value:
+        return []
+    return [item for item in value.split(",") if item]
 
 report = {
     "service_schema_version": env("LIDSKJALV_SERVICE_SCHEMA_VERSION"),
@@ -442,11 +476,27 @@ report = {
         "build_subdir": nullable("LIDSKJALV_SERVICE_SCAN_BUILD_SUBDIR"),
         "java_version_hint": nullable("LIDSKJALV_SERVICE_SCAN_JAVA_VERSION_HINT"),
         "attempted_jdks": split_csv("LIDSKJALV_SERVICE_SCAN_ATTEMPTED_JDKS_CSV"),
+        "scanner_mode": nullable("LIDSKJALV_SERVICE_SCAN_SCANNER_MODE"),
+        "scanner_jdk": nullable("LIDSKJALV_SERVICE_SCAN_SCANNER_JDK"),
+        "scanner_runtime_source": nullable("LIDSKJALV_SERVICE_SCAN_SCANNER_RUNTIME_SOURCE"),
+        "scanner_version": nullable("LIDSKJALV_SERVICE_SCAN_SCANNER_VERSION"),
+        "fallback_chain": split_comma("LIDSKJALV_SERVICE_SCAN_FALLBACK_CHAIN"),
         "sonar_task_id": nullable("LIDSKJALV_SERVICE_SONAR_TASK_ID"),
         "ce_task_status": nullable("LIDSKJALV_SERVICE_CE_TASK_STATUS"),
         "quality_gate_status": nullable("LIDSKJALV_SERVICE_QUALITY_GATE_STATUS"),
         "data_status": env("LIDSKJALV_SERVICE_DATA_STATUS", "unavailable"),
         "measures": env_json("LIDSKJALV_SERVICE_MEASURES_JSON", {}),
+        "coverage": {
+            "jdk": nullable("LIDSKJALV_SERVICE_COVERAGE_JDK"),
+            "status": nullable("LIDSKJALV_SERVICE_COVERAGE_STATUS"),
+            "reason": nullable("LIDSKJALV_SERVICE_COVERAGE_REASON"),
+            "jacoco_version": nullable("LIDSKJALV_SERVICE_COVERAGE_JACOCO_VERSION"),
+            "java_target": nullable("LIDSKJALV_SERVICE_COVERAGE_JAVA_TARGET"),
+            "attempted": env("LIDSKJALV_SERVICE_COVERAGE_ATTEMPTED", "false") == "true",
+            "tests_forced": env("LIDSKJALV_SERVICE_COVERAGE_TESTS_FORCED", "false") == "true",
+            "reports_found": int(env("LIDSKJALV_SERVICE_COVERAGE_REPORTS_FOUND", "0") or "0"),
+            "report_paths": split_comma("LIDSKJALV_SERVICE_COVERAGE_REPORT_PATHS"),
+        },
     },
 }
 
@@ -473,9 +523,23 @@ summary_lines = [
     f"| build_subdir | {report['scan']['build_subdir'] or ''} |",
     f"| java_version_hint | {report['scan']['java_version_hint'] or ''} |",
     f"| attempted_jdks | {', '.join(report['scan']['attempted_jdks']) if report['scan']['attempted_jdks'] else ''} |",
+    f"| scanner_mode | {report['scan']['scanner_mode'] or ''} |",
+    f"| scanner_jdk | {report['scan']['scanner_jdk'] or ''} |",
+    f"| scanner_runtime_source | {report['scan']['scanner_runtime_source'] or ''} |",
+    f"| scanner_version | {report['scan']['scanner_version'] or ''} |",
+    f"| fallback_chain | {', '.join(report['scan']['fallback_chain']) if report['scan']['fallback_chain'] else ''} |",
     f"| sonar_task_id | {report['scan']['sonar_task_id'] or ''} |",
     f"| ce_task_status | {report['scan']['ce_task_status'] or ''} |",
     f"| quality_gate_status | {report['scan']['quality_gate_status'] or ''} |",
+    f"| coverage_jdk | {report['scan']['coverage']['jdk'] or ''} |",
+    f"| coverage_status | {report['scan']['coverage']['status'] or ''} |",
+    f"| coverage_reason | {report['scan']['coverage']['reason'] or ''} |",
+    f"| coverage_jacoco_version | {report['scan']['coverage']['jacoco_version'] or ''} |",
+    f"| coverage_java_target | {report['scan']['coverage']['java_target'] or ''} |",
+    f"| coverage_attempted | {report['scan']['coverage']['attempted']} |",
+    f"| coverage_tests_forced | {report['scan']['coverage']['tests_forced']} |",
+    f"| coverage_reports_found | {report['scan']['coverage']['reports_found']} |",
+    f"| coverage_report_paths | {', '.join(report['scan']['coverage']['report_paths']) if report['scan']['coverage']['report_paths'] else ''} |",
     f"| data_status | {report['scan']['data_status']} |",
     f"| started_at | {report['started_at']} |",
     f"| finished_at | {report['finished_at']} |",
@@ -514,10 +578,24 @@ lidskjalv_service_load_scan_metadata() {
   LIDSKJALV_SERVICE_SCAN_BUILD_SUBDIR="${PIPELINE_BUILD_SUBDIR:-}"
   LIDSKJALV_SERVICE_SCAN_JAVA_VERSION_HINT="${PIPELINE_JAVA_VERSION_HINT:-}"
   LIDSKJALV_SERVICE_SCAN_ATTEMPTED_JDKS_CSV="${PIPELINE_ATTEMPTED_JDKS_CSV:-}"
+  LIDSKJALV_SERVICE_SCAN_SCANNER_MODE="$(state_get "$project_key" "scanner_mode" 2>/dev/null || true)"
+  LIDSKJALV_SERVICE_SCAN_SCANNER_JDK="$(state_get "$project_key" "scanner_jdk" 2>/dev/null || true)"
+  LIDSKJALV_SERVICE_SCAN_SCANNER_RUNTIME_SOURCE="$(state_get "$project_key" "scanner_runtime_source" 2>/dev/null || true)"
+  LIDSKJALV_SERVICE_SCAN_SCANNER_VERSION="$(state_get "$project_key" "scanner_version" 2>/dev/null || true)"
+  LIDSKJALV_SERVICE_SCAN_FALLBACK_CHAIN="$(state_get "$project_key" "fallback_chain" 2>/dev/null || true)"
   LIDSKJALV_SERVICE_SONAR_TASK_ID="$task_id"
   LIDSKJALV_SERVICE_QUALITY_GATE_STATUS=""
   LIDSKJALV_SERVICE_CE_TASK_STATUS=""
   LIDSKJALV_SERVICE_MEASURES_JSON="{}"
+  LIDSKJALV_SERVICE_COVERAGE_JDK="$(state_get "$project_key" "coverage_jdk" 2>/dev/null || true)"
+  LIDSKJALV_SERVICE_COVERAGE_STATUS="$(state_get "$project_key" "coverage_status" 2>/dev/null || true)"
+  LIDSKJALV_SERVICE_COVERAGE_REASON="$(state_get "$project_key" "coverage_reason" 2>/dev/null || true)"
+  LIDSKJALV_SERVICE_COVERAGE_JACOCO_VERSION="$(state_get "$project_key" "coverage_jacoco_version" 2>/dev/null || true)"
+  LIDSKJALV_SERVICE_COVERAGE_JAVA_TARGET="$(state_get "$project_key" "coverage_java_target" 2>/dev/null || true)"
+  LIDSKJALV_SERVICE_COVERAGE_ATTEMPTED="$(state_get "$project_key" "coverage_attempted" 2>/dev/null || true)"
+  LIDSKJALV_SERVICE_COVERAGE_TESTS_FORCED="$(state_get "$project_key" "coverage_tests_forced" 2>/dev/null || true)"
+  LIDSKJALV_SERVICE_COVERAGE_REPORTS_FOUND="$(state_get "$project_key" "coverage_reports_found" 2>/dev/null || true)"
+  LIDSKJALV_SERVICE_COVERAGE_REPORT_PATHS="$(state_get "$project_key" "coverage_report_paths" 2>/dev/null || true)"
 
   if [[ "$skip_sonar" == "true" ]]; then
     LIDSKJALV_SERVICE_CE_TASK_STATUS=""

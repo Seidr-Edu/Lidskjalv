@@ -306,6 +306,121 @@ state_set_analysis_method() {
   state_set "$key" "analysis_method" "$method"
 }
 
+# Clear coverage metadata for a repository.
+# Usage: state_clear_coverage_info <project_key>
+state_clear_coverage_info() {
+  local key="$1"
+
+  local current_state
+  current_state="$(state_read)"
+
+  local new_state
+  new_state="$(echo "$current_state" | jq --arg key "$key" '
+    del(.repositories[$key].coverage_status) |
+    del(.repositories[$key].coverage_reason) |
+    del(.repositories[$key].coverage_jdk) |
+    del(.repositories[$key].coverage_jacoco_version) |
+    del(.repositories[$key].coverage_java_target) |
+    del(.repositories[$key].coverage_report_paths) |
+    del(.repositories[$key].coverage_attempted) |
+    del(.repositories[$key].coverage_tests_forced) |
+    del(.repositories[$key].coverage_reports_found)
+  ')"
+
+  state_write "$new_state"
+}
+
+# Set coverage metadata for a repository.
+# Usage: state_set_coverage_info <project_key> <status> <reason> <coverage_jdk> <jacoco_version> <java_target> <report_paths_csv> [attempted] [tests_forced] [reports_found]
+state_set_coverage_info() {
+  local key="$1"
+  local status="$2"
+  local reason="$3"
+  local coverage_jdk="$4"
+  local jacoco_version="$5"
+  local java_target="$6"
+  local report_paths="$7"
+  local attempted="${8:-}"
+  local tests_forced="${9:-}"
+  local reports_found="${10:-}"
+
+  local current_state
+  current_state="$(state_read)"
+
+  local new_state
+  new_state="$(echo "$current_state" | jq \
+    --arg key "$key" \
+    --arg status "$status" \
+    --arg reason "$reason" \
+    --arg coverage_jdk "$coverage_jdk" \
+    --arg jacoco_version "$jacoco_version" \
+    --arg java_target "$java_target" \
+    --arg report_paths "$report_paths" \
+    --arg attempted "$attempted" \
+    --arg tests_forced "$tests_forced" \
+    --arg reports_found "$reports_found" '
+    .repositories[$key].coverage_status = (if $status == "" then null else $status end) |
+    .repositories[$key].coverage_reason = (if $reason == "" then null else $reason end) |
+    .repositories[$key].coverage_jdk = (if $coverage_jdk == "" then null else $coverage_jdk end) |
+    .repositories[$key].coverage_jacoco_version = (if $jacoco_version == "" then null else $jacoco_version end) |
+    .repositories[$key].coverage_java_target = (if $java_target == "" then null else $java_target end) |
+    .repositories[$key].coverage_report_paths = (if $report_paths == "" then null else $report_paths end) |
+    .repositories[$key].coverage_attempted = (if $attempted == "" then null else ($attempted == "true") end) |
+    .repositories[$key].coverage_tests_forced = (if $tests_forced == "" then null else ($tests_forced == "true") end) |
+    .repositories[$key].coverage_reports_found = (if $reports_found == "" then null else ($reports_found | tonumber) end)
+  ')"
+
+  state_write "$new_state"
+}
+
+state_clear_scanner_info() {
+  local key="$1"
+
+  local current_state
+  current_state="$(state_read)"
+
+  local new_state
+  new_state="$(echo "$current_state" | jq --arg key "$key" '
+    del(.repositories[$key].scanner_mode) |
+    del(.repositories[$key].scanner_jdk) |
+    del(.repositories[$key].scanner_runtime_source) |
+    del(.repositories[$key].scanner_version) |
+    del(.repositories[$key].fallback_chain)
+  ')"
+
+  state_write "$new_state"
+}
+
+# Usage: state_set_scanner_info <project_key> <mode> <scanner_jdk> <runtime_source> <scanner_version> <fallback_chain_csv>
+state_set_scanner_info() {
+  local key="$1"
+  local mode="$2"
+  local scanner_jdk="$3"
+  local runtime_source="$4"
+  local scanner_version="$5"
+  local fallback_chain="$6"
+
+  local current_state
+  current_state="$(state_read)"
+
+  local new_state
+  new_state="$(echo "$current_state" | jq \
+    --arg key "$key" \
+    --arg mode "$mode" \
+    --arg scanner_jdk "$scanner_jdk" \
+    --arg runtime_source "$runtime_source" \
+    --arg scanner_version "$scanner_version" \
+    --arg fallback_chain "$fallback_chain" '
+    .repositories[$key].scanner_mode = (if $mode == "" then null else $mode end) |
+    .repositories[$key].scanner_jdk = (if $scanner_jdk == "" then null else $scanner_jdk end) |
+    .repositories[$key].scanner_runtime_source = (if $runtime_source == "" then null else $runtime_source end) |
+    .repositories[$key].scanner_version = (if $scanner_version == "" then null else $scanner_version end) |
+    .repositories[$key].fallback_chain = (if $fallback_chain == "" then null else $fallback_chain end)
+  ')"
+
+  state_write "$new_state"
+}
+
 # Set clone timestamp (when repo was last cloned or fetched)
 # Usage: state_set_clone_timestamp <project_key>
 state_set_clone_timestamp() {

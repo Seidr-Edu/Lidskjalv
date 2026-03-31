@@ -5,7 +5,7 @@ This document lists the main failure modes and what to do.
 
 ---
 
-## 1) JDK mismatch (most common)
+## 1) Build JDK mismatch (most common)
 
 **Symptom**
 - Maven: `release version X not supported`
@@ -15,7 +15,7 @@ This document lists the main failure modes and what to do.
 - Repo requires JDK X (8/11/17/21), but the runner is using a different JDK.
 
 **Fix**
-- Ensure the scan runner selects the correct JDK per repo.
+- Ensure the scan runner selects the correct build JDK per repo.
 - Always print and verify:
   - `java -version`
   - `mvn -v` / `./gradlew -version`
@@ -42,7 +42,29 @@ This document lists the main failure modes and what to do.
 
 ---
 
-## 3) Sonar Maven plugin not found
+## 3) Scanner runtime mismatch / incompatible native scanner
+
+**Symptom**
+- Maven or Gradle build succeeds, but Sonar submission fails with:
+  - `UnsupportedClassVersionError`
+  - `compiled by a more recent version of the Java Runtime`
+  - scanner/plugin classpath incompatibility
+
+**Cause**
+- The repo builds on one JDK, but the Sonar scanner requires a newer runtime
+  or the repo pins an outdated scanner/plugin version.
+
+**Fix**
+- Keep build and coverage on the successful build JDK.
+- Run Sonar submission with a separate scanner runtime when needed.
+- Always pass `sonar.java.jdkHome` when analysis runtime differs from the
+  project JDK.
+- Prefer a Lidskjalv-owned scanner version and fall back to `sonar-scanner`
+  CLI when native Maven/Gradle submission is incompatible.
+
+---
+
+## 4) Sonar Maven plugin not found
 
 **Symptom**
 - `No plugin found for prefix 'sonar'`
@@ -56,7 +78,7 @@ This document lists the main failure modes and what to do.
 
 ---
 
-## 4) Dependency / repository access failures
+## 5) Dependency / repository access failures
 
 **Symptom**
 - 401/403 downloading deps
@@ -72,7 +94,7 @@ This document lists the main failure modes and what to do.
 
 ---
 
-## 5) Tests / build steps still run
+## 6) Tests / build steps still run
 
 **Symptom**
 - Build fails even with `-DskipTests=true`
@@ -85,7 +107,26 @@ This document lists the main failure modes and what to do.
 
 ---
 
-## 6) Non-Java prerequisites (rare but real)
+## 7) Coverage report missing even though tests ran
+
+**Symptom**
+- Build and tests succeed, but Sonar runs without coverage.
+- JaCoCo is configured, but no XML report is found.
+
+**Cause**
+- Repo binds JaCoCo report generation later than `test`, skips tests by
+  configuration, or writes reports to module-specific locations.
+
+**Fix**
+- Force unit tests back on during the coverage phase.
+- If needed, run one late non-test lifecycle pass (`install -DskipTests`) to
+  materialize report goals and reactor artifacts.
+- Discover actual JaCoCo XML reports recursively instead of assuming a single
+  default path.
+
+---
+
+## 8) Non-Java prerequisites (rare but real)
 
 **Symptom**
 - build fails due to missing Node, Python, native libs, git submodules, git-lfs, etc.
@@ -96,7 +137,7 @@ This document lists the main failure modes and what to do.
 
 ---
 
-## 7) SonarQube server readiness / processing delays
+## 9) SonarQube server readiness / processing delays
 
 **Symptom**
 - Scan uploads but results aren’t visible yet.
@@ -115,4 +156,5 @@ This document lists the main failure modes and what to do.
 - Load `.env` automatically (no manual exporting required).
 - Print `java -version` and `mvn -v` for each repo.
 - Support per-repo overrides: `jdk`, `buildTool`, `subdir`, `extraArgs`.
+- Track build JDK, coverage JDK, scanner JDK, scanner mode, and fallback chain.
 - Continue-on-error and produce a failure report with reason per repo.

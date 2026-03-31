@@ -2,6 +2,7 @@
 # batch_cli.sh - CLI argument parsing and defaults for batch scanner
 # Handles command-line option parsing and default initialization
 
+# shellcheck disable=SC2034  # Parsed here and consumed by batch-scan.sh.
 batch_init_defaults() {
   FORCE_RERUN=false
   DRY_RUN=false

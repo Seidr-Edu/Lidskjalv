@@ -92,8 +92,9 @@ Runtime Sonar credentials remain env-driven:
 - `SONAR_ORGANIZATION`
 
 `run_report.json` uses schema `lidskjalv_service_report.v1` and includes
-top-level run status, input paths, artifact paths, build metadata, Sonar task
-state, quality gate status, and fetched measures.
+top-level run status, input paths, artifact paths, build metadata, scanner
+runtime metadata, coverage metadata, Sonar task state, quality gate status,
+and fetched measures.
 Missing or `NONE` quality gate states are treated as informational; only
 explicit non-`OK` gate verdicts fail the service run.
 
@@ -174,6 +175,9 @@ bash tests/test_container_integration.sh
 The tests cover:
 
 - local path and URL scans
+- separate build/coverage/scanner JDK handling
+- Maven and Gradle coverage submission with JaCoCo XML discovery
+- native-to-CLI Sonar fallback tracking
 - batch state reuse
 - service manifest validation
 - service output layout

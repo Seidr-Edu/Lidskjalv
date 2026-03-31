@@ -24,6 +24,7 @@ detect_build_system() {
   local log_file=""
   
   if [[ -n "$key" ]]; then
+    # shellcheck disable=SC2153  # LOG_DIR comes from common.sh at runtime.
     local log_dir="${LOG_DIR}/${key}"
     ensure_dir "$log_dir"
     log_file="${log_dir}/detect.log"
@@ -72,25 +73,25 @@ detect_build_system() {
     if [[ -n "$subdir_pom" ]]; then
       local subdir
       subdir="$(dirname "$subdir_pom")"
-      subdir="${subdir#$repo_dir/}"
+      subdir="${subdir#"$repo_dir"/}"
       result="maven:${subdir}"
       _log_detect "$log_file" "Found pom.xml in subdir: $subdir -> maven:$subdir"
     elif [[ -n "$subdir_gradle" ]]; then
       local subdir
       subdir="$(dirname "$subdir_gradle")"
-      subdir="${subdir#$repo_dir/}"
+      subdir="${subdir#"$repo_dir"/}"
       result="gradle:${subdir}"
       _log_detect "$log_file" "Found build.gradle in subdir: $subdir -> gradle:$subdir"
     elif [[ -n "$subdir_mvnw" ]]; then
       local subdir
       subdir="$(dirname "$subdir_mvnw")"
-      subdir="${subdir#$repo_dir/}"
+      subdir="${subdir#"$repo_dir"/}"
       result="maven:${subdir}"
       _log_detect "$log_file" "Found mvnw in subdir: $subdir -> maven:$subdir"
     elif [[ -n "$subdir_gradlew" ]]; then
       local subdir
       subdir="$(dirname "$subdir_gradlew")"
-      subdir="${subdir#$repo_dir/}"
+      subdir="${subdir#"$repo_dir"/}"
       result="gradle:${subdir}"
       _log_detect "$log_file" "Found gradlew in subdir: $subdir -> gradle:$subdir"
     else
@@ -177,24 +178,80 @@ is_gradle() {
 extract_maven_java_version() {
   local pom_file="$1"
   local version=""
-  
-  # Try different property patterns
+
   for pattern in \
+    "maven.compiler.release" \
     "maven.compiler.source" \
     "maven.compiler.target" \
-    "maven.compiler.release" \
     "java.version" \
-    "jdk.version"; do
-    
+    "jdk.version" \
+    "java.source.version" \
+    "java.target.version"; do
     version="$(sed -n "s/.*<${pattern}>\([^<]*\)<.*/\1/p" "$pom_file" 2>/dev/null | head -1)"
     if [[ -n "$version" ]]; then
-      # Normalize version (1.8 -> 8, etc.)
       version="$(_normalize_java_version "$version")"
-      break
+      [[ -n "$version" ]] && break
     fi
   done
-  
+
+  if [[ -z "$version" ]]; then
+    version="$(sed -n 's/.*<release>\([^<]*\)<.*/\1/p' "$pom_file" 2>/dev/null | head -1)"
+    [[ -n "$version" ]] && version="$(_normalize_java_version "$version")"
+  fi
+
+  if [[ -z "$version" ]]; then
+    version="$(sed -n 's/.*<source>\([^<]*\)<.*/\1/p' "$pom_file" 2>/dev/null | head -1)"
+    [[ -n "$version" ]] && version="$(_normalize_java_version "$version")"
+  fi
+
+  if [[ -z "$version" ]]; then
+    version="$(sed -n 's/.*<target>\([^<]*\)<.*/\1/p' "$pom_file" 2>/dev/null | head -1)"
+    [[ -n "$version" ]] && version="$(_normalize_java_version "$version")"
+  fi
+
   echo "$version"
+}
+
+extract_maven_java_version_from_jvm_config() {
+  local jvm_config="$1"
+  local version=""
+
+  [[ -f "$jvm_config" ]] || {
+    echo ""
+    return 0
+  }
+
+  version="$(grep -Eo 'maven\.compiler\.(release|source|target)=[^[:space:]]+' "$jvm_config" 2>/dev/null | head -1 | cut -d'=' -f2)"
+  if [[ -z "$version" ]]; then
+    version="$(grep -Eo '(java|jdk)\.version=[^[:space:]]+' "$jvm_config" 2>/dev/null | head -1 | cut -d'=' -f2)"
+  fi
+
+  if [[ -n "$version" ]]; then
+    version="$(_normalize_java_version "$version")"
+  fi
+
+  echo "$version"
+}
+
+find_maven_jvm_config() {
+  local repo_dir="$1"
+  local build_dir="$2"
+  local dir="$build_dir"
+
+  while [[ -n "$dir" ]]; do
+    if [[ -f "${dir}/.mvn/jvm.config" ]]; then
+      echo "${dir}/.mvn/jvm.config"
+      return 0
+    fi
+
+    [[ "$dir" == "$repo_dir" ]] && break
+    local parent
+    parent="$(dirname "$dir")"
+    [[ "$parent" == "$dir" ]] && break
+    dir="$parent"
+  done
+
+  echo ""
 }
 
 # Extract Java version hint from Gradle build file
@@ -203,24 +260,33 @@ extract_maven_java_version() {
 extract_gradle_java_version() {
   local build_file="$1"
   local version=""
-  
-  # Try sourceCompatibility (e.g., sourceCompatibility = '17' or sourceCompatibility = 1.8)
+
   version="$(sed -n "s/.*sourceCompatibility[[:space:]]*=[[:space:]]*['\"\`]*\([0-9.]*\).*/\1/p" "$build_file" 2>/dev/null | head -1)"
-  
+
   if [[ -z "$version" ]]; then
-    # Try toolchain.languageVersion (e.g., languageVersion.set(JavaLanguageVersion.of(17)))
-    version="$(sed -n 's/.*JavaLanguageVersion\.of[[:space:]]*([[:space:]]*\([0-9]*\).*/\1/p' "$build_file" 2>/dev/null | tail -1)"
+    version="$(sed -n "s/.*targetCompatibility[[:space:]]*=[[:space:]]*['\"\`]*\([0-9.]*\).*/\1/p" "$build_file" 2>/dev/null | head -1)"
   fi
-  
+
   if [[ -z "$version" ]]; then
-    # Try JavaVersion enum (e.g., JavaVersion.VERSION_17)
+    version="$(sed -n 's/.*JavaLanguageVersion\.of[[:space:]]*([[:space:]]*\([0-9][0-9]*\).*/\1/p' "$build_file" 2>/dev/null | tail -1)"
+  fi
+
+  if [[ -z "$version" ]]; then
+    version="$(sed -n 's/.*languageVersion[[:space:]]*=[[:space:]]*JavaLanguageVersion\.of[[:space:]]*([[:space:]]*\([0-9][0-9]*\).*/\1/p' "$build_file" 2>/dev/null | tail -1)"
+  fi
+
+  if [[ -z "$version" ]]; then
+    version="$(sed -n 's/.*jvmToolchain[[:space:]]*([[:space:]]*\([0-9][0-9]*\).*/\1/p' "$build_file" 2>/dev/null | head -1)"
+  fi
+
+  if [[ -z "$version" ]]; then
     version="$(sed -n 's/.*JavaVersion\.VERSION_\([0-9_]*\).*/\1/p' "$build_file" 2>/dev/null | head -1 | tr -d '_')"
   fi
-  
+
   if [[ -n "$version" ]]; then
     version="$(_normalize_java_version "$version")"
   fi
-  
+
   echo "$version"
 }
 
@@ -228,16 +294,35 @@ extract_gradle_java_version() {
 # 1.8 -> 8, 1.11 -> 11, 17 -> 17
 _normalize_java_version() {
   local version="$1"
-  
-  # Remove 1. prefix for old-style versions
+
   if [[ "$version" =~ ^1\.([0-9]+) ]]; then
     version="${BASH_REMATCH[1]}"
   fi
-  
-  # Extract just the major version number
-  version="$(echo "$version" | sed 's/^\([0-9]*\).*/\1/')"
-  
+
+  version="${version%%[^0-9]*}"
+
   echo "$version"
+}
+
+detect_gradle_wrapper_java_version_hint() {
+  local build_dir="$1"
+  local version_info=""
+  local gradle_major=""
+  local wrapper_file="${build_dir}/gradle/wrapper/gradle-wrapper.properties"
+
+  [[ -f "$wrapper_file" ]] || {
+    echo ""
+    return 0
+  }
+
+  version_info="$(grep -E "distributionUrl" "$wrapper_file" 2>/dev/null | grep -oE 'gradle-[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1 | sed 's/gradle-//')"
+  gradle_major="${version_info%%.*}"
+
+  case "$gradle_major" in
+    9|8) echo "17" ;;
+    7) echo "11" ;;
+    *) echo "" ;;
+  esac
 }
 
 # Detect Java version requirement for a repository
@@ -247,18 +332,25 @@ detect_java_version() {
   local repo_dir="$1"
   local build_tool="$2"
   local subdir="${3:-}"
-  
+
   local build_dir="$repo_dir"
   if [[ -n "$subdir" ]]; then
     build_dir="${repo_dir}/${subdir}"
   fi
-  
+
   local version=""
-  
+
   case "$build_tool" in
     maven)
       if [[ -f "${build_dir}/pom.xml" ]]; then
         version="$(extract_maven_java_version "${build_dir}/pom.xml")"
+      fi
+      if [[ -z "$version" ]]; then
+        local jvm_config=""
+        jvm_config="$(find_maven_jvm_config "$repo_dir" "$build_dir")"
+        if [[ -n "$jvm_config" ]]; then
+          version="$(extract_maven_java_version_from_jvm_config "$jvm_config")"
+        fi
       fi
       ;;
     gradle)
@@ -267,9 +359,12 @@ detect_java_version() {
       elif [[ -f "${build_dir}/build.gradle.kts" ]]; then
         version="$(extract_gradle_java_version "${build_dir}/build.gradle.kts")"
       fi
+      if [[ -z "$version" ]]; then
+        version="$(detect_gradle_wrapper_java_version_hint "$build_dir")"
+      fi
       ;;
   esac
-  
+
   echo "$version"
 }
 

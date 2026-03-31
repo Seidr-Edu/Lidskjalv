@@ -21,6 +21,7 @@ clone_repo() {
   local url="$1"
   local key="$2"
   local target_dir="${WORK_DIR}/${key}"
+  # shellcheck disable=SC2153  # LOG_DIR comes from common.sh at runtime.
   local log_dir="${LOG_DIR}/${key}"
   local log_file="${log_dir}/clone.log"
   

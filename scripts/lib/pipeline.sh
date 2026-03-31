@@ -19,6 +19,7 @@ if ! declare -f submit_to_sonar >/dev/null 2>&1; then
   source "${_PIPELINE_SH_DIR}/submit-sonar.sh"
 fi
 
+# shellcheck disable=SC2034  # These globals are consumed by service/reporting and submit-sonar.sh.
 # Exported outputs from the last pipeline run
 PIPELINE_REPO_DIR=""
 PIPELINE_BUILD_DIR=""
@@ -60,7 +61,7 @@ run_scan_for_prepared_repo() {
   local key="$1"
   local display_name="$2"
   local source_type="$3"
-  local source_ref="$4"
+  local _source_ref="$4"
   local repo_dir="$5"
   local jdk_hint="${6:-}"
   local subdir_hint="${7:-}"
@@ -77,11 +78,18 @@ run_scan_for_prepared_repo() {
   PIPELINE_ATTEMPTED_JDKS_CSV=""
 
   state_increment_attempts "$key"
+  if declare -f state_clear_coverage_info >/dev/null 2>&1; then
+    state_clear_coverage_info "$key"
+  fi
+  if declare -f state_clear_scanner_info >/dev/null 2>&1; then
+    state_clear_scanner_info "$key"
+  fi
 
   if [[ ! -d "$repo_dir" ]]; then
     state_set_status "$key" "failed" "missing_prepared_repo" "Prepared repository path does not exist"
     return 1
   fi
+  # shellcheck disable=SC2034  # Shared pipeline metadata is consumed by submit-sonar.sh and service reporting.
   PIPELINE_REPO_DIR="$repo_dir"
 
   local build_result
@@ -93,7 +101,9 @@ run_scan_for_prepared_repo() {
   fi
 
   parse_build_result "$build_result"
+  # shellcheck disable=SC2153  # parse_build_result sets these globals for the caller.
   local detected_tool="$BUILD_TOOL"
+  # shellcheck disable=SC2153  # parse_build_result sets these globals for the caller.
   local detected_subdir="$BUILD_SUBDIR"
   local build_tool="$detected_tool"
   local build_subdir="$detected_subdir"
@@ -122,8 +132,11 @@ run_scan_for_prepared_repo() {
     build_dir="${repo_dir}/${build_subdir}"
   fi
 
+  # shellcheck disable=SC2034  # Shared pipeline metadata is consumed by submit-sonar.sh and service reporting.
   PIPELINE_BUILD_TOOL="$build_tool"
+  # shellcheck disable=SC2034  # Shared pipeline metadata is consumed by submit-sonar.sh and service reporting.
   PIPELINE_BUILD_DIR="$build_dir"
+  # shellcheck disable=SC2034  # Shared pipeline metadata is consumed by submit-sonar.sh and service reporting.
   PIPELINE_BUILD_SUBDIR="$build_subdir"
   PIPELINE_JAVA_VERSION_HINT="$(detect_java_version "$repo_dir" "$build_tool" "$build_subdir")"
 
@@ -143,6 +156,10 @@ run_scan_for_prepared_repo() {
     fi
   fi
 
+  if [[ -z "$effective_jdk" ]]; then
+    effective_jdk="$PIPELINE_JAVA_VERSION_HINT"
+  fi
+
   state_set_status "$key" "building"
   state_set_build_info "$key" "$build_tool" ""
 
@@ -152,13 +169,18 @@ run_scan_for_prepared_repo() {
     return 1
   fi
 
+  # shellcheck disable=SC2034  # Shared pipeline metadata is consumed by submit-sonar.sh and service reporting.
   PIPELINE_BUILD_JDK="$BUILD_RESULT_JDK"
+  # shellcheck disable=SC2034  # Shared pipeline metadata is consumed by submit-sonar.sh and service reporting.
   PIPELINE_ATTEMPTED_JDKS_CSV="$BUILD_RESULT_ATTEMPTED_JDKS_CSV"
   state_set_build_info "$key" "$build_tool" "$BUILD_RESULT_JDK"
   state_set_successful_build "$key" "$build_tool" "$BUILD_RESULT_JDK"
 
   if [[ "$skip_sonar" == "true" ]]; then
     log_info "Skipping SonarQube submission (--skip-sonar)"
+    if declare -f state_set_coverage_info >/dev/null 2>&1; then
+      state_set_coverage_info "$key" "skipped" "skip_sonar" "" "" "" "" "false" "false" "0"
+    fi
     state_set_status "$key" "success"
     state_set_scan_timestamp "$key"
     return 0
@@ -180,7 +202,7 @@ run_scan_for_prepared_repo() {
   fi
 
   if ! SONAR_SCM_EXCLUSIONS_DISABLED="$sonar_scm_exclusions_disabled" SONAR_SCM_DISABLED="$sonar_scm_disabled" submit_to_sonar "$key" "$build_dir" "$build_tool"; then
-    state_set_status "$key" "$sonar_failure_status" "sonar_submission_failed" "SonarQube analysis failed"
+    state_set_status "$key" "$sonar_failure_status" "${SONAR_SUBMISSION_REASON:-sonar_submission_failed}" "${SONAR_SUBMISSION_MESSAGE:-SonarQube analysis failed}"
     return 1
   fi
 

@@ -20,6 +20,105 @@ BUILD_RESULT_MESSAGE=""
 BUILD_RESULT_ATTEMPTS=0
 BUILD_RESULT_ATTEMPTED_JDKS_CSV=""
 
+# Normalize a Java version hint to a plain major version.
+build_normalize_java_hint() {
+  local version="${1:-}"
+
+  [[ -n "$version" ]] || {
+    echo ""
+    return 0
+  }
+
+  if [[ "$version" =~ ^1\.([0-9]+) ]]; then
+    version="${BASH_REMATCH[1]}"
+  fi
+
+  version="${version%%[^0-9]*}"
+  echo "$version"
+}
+
+build_preferred_jdks_for_hint() {
+  local build_tool="$1"
+  local raw_hint="${2:-}"
+  local hint=""
+
+  hint="$(build_normalize_java_hint "$raw_hint")"
+  [[ -n "$hint" ]] || {
+    echo ""
+    return 0
+  }
+
+  case "$build_tool" in
+    maven)
+      if (( hint <= 8 )); then
+        echo "11 8 17 21 25"
+      elif (( hint <= 11 )); then
+        echo "11 17 21 25 8"
+      elif (( hint <= 17 )); then
+        echo "17 21 25 11 8"
+      elif (( hint <= 21 )); then
+        echo "21 25 17 11 8"
+      else
+        echo "25 21 17 11 8"
+      fi
+      ;;
+    gradle)
+      if (( hint <= 11 )); then
+        echo "11 17 21 25 8"
+      elif (( hint <= 17 )); then
+        echo "17 21 25 11 8"
+      elif (( hint <= 21 )); then
+        echo "21 25 17 11 8"
+      else
+        echo "25 21 17 11 8"
+      fi
+      ;;
+    *)
+      echo ""
+      ;;
+  esac
+}
+
+build_reorder_strategies_for_hint() {
+  local build_tool="$1"
+  local hint="$2"
+  shift 2
+
+  local preferred_order=""
+  preferred_order="$(build_preferred_jdks_for_hint "$build_tool" "$hint")"
+  if [[ -z "$preferred_order" ]]; then
+    printf '%s\n' "$@"
+    return 0
+  fi
+
+  local -a ordered=()
+  local preferred_jdk=""
+  local strategy=""
+  for preferred_jdk in $preferred_order; do
+    for strategy in "$@"; do
+      if [[ "${strategy%%|*}" == "$preferred_jdk" ]]; then
+        ordered+=("$strategy")
+      fi
+    done
+  done
+
+  for strategy in "$@"; do
+    local already_added="false"
+    local existing=""
+    for existing in "${ordered[@]}"; do
+      if [[ "$existing" == "$strategy" ]]; then
+        already_added="true"
+        break
+      fi
+    done
+    if [[ "$already_added" == "false" ]]; then
+      ordered+=("$strategy")
+    fi
+  done
+
+  printf '%s\n' "${ordered[@]}"
+}
+
 # ============================================================================
 # Build Orchestration
 # ============================================================================
@@ -34,6 +133,7 @@ build_project() {
   local build_tool="$3"
   local jdk_hint="${4:-}"
   
+  # shellcheck disable=SC2153  # LOG_DIR comes from common.sh at runtime.
   local log_dir="${LOG_DIR}/${key}"
   ensure_dir "$log_dir"
   
@@ -65,20 +165,15 @@ build_project() {
   # If JDK hint is provided, try it first by reordering strategies
   if [[ -n "$jdk_hint" ]]; then
     local -a reordered=()
-    local -a rest=()
-    
-    for strategy in "${strategies[@]}"; do
-      local jdk_version="${strategy%%|*}"
-      if [[ "$jdk_version" == "$jdk_hint" ]]; then
-        reordered+=("$strategy")
-      else
-        rest+=("$strategy")
-      fi
-    done
-    
+    local reordered_line=""
+    while IFS= read -r reordered_line; do
+      [[ -n "$reordered_line" ]] || continue
+      reordered+=("$reordered_line")
+    done < <(build_reorder_strategies_for_hint "$build_tool" "$jdk_hint" "${strategies[@]}")
+
     if [[ ${#reordered[@]} -gt 0 ]]; then
-      strategies=("${reordered[@]}" "${rest[@]}")
-      log_info "Prioritizing JDK $jdk_hint based on hint"
+      strategies=("${reordered[@]}")
+      log_info "Prioritizing JDK attempts using detected Java hint: $jdk_hint"
     fi
   fi
   
@@ -158,7 +253,18 @@ build_project() {
   
   # All strategies failed
   BUILD_RESULT_REASON="${last_reason:-build_failure}"
+  local normalized_hint=""
+  normalized_hint="$(build_normalize_java_hint "$jdk_hint")"
+  if [[ -n "$normalized_hint" ]] && (( normalized_hint < 8 )) && ! is_jdk_available 8; then
+    if [[ "$BUILD_RESULT_REASON" == "build_jdk_mismatch" || "$BUILD_RESULT_REASON" == "compilation_failure" ]]; then
+      BUILD_RESULT_REASON="unsupported_legacy_jdk"
+      BUILD_RESULT_MESSAGE="Project hints Java ${normalized_hint}, but no supported legacy JDK is available in this runner"
+    fi
+  fi
   BUILD_RESULT_MESSAGE="${last_message:-All build strategies failed}"
+  if [[ "$BUILD_RESULT_REASON" == "unsupported_legacy_jdk" ]]; then
+    BUILD_RESULT_MESSAGE="Project hints Java ${normalized_hint}, but no supported legacy JDK is available in this runner"
+  fi
   
   log_error "All build strategies failed for $key"
   log_error "Last error: $BUILD_RESULT_REASON - $BUILD_RESULT_MESSAGE"

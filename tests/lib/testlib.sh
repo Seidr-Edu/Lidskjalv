@@ -42,6 +42,15 @@ assert_contains() {
   fi
 }
 
+assert_not_contains() {
+  local needle="$1"
+  local haystack="$2"
+  local message="${3:-unexpected substring}"
+  if [[ "$haystack" == *"$needle"* ]]; then
+    test_fail "${message}: '${needle}'"
+  fi
+}
+
 assert_json_value() {
   local file="$1"
   local jq_expr="$2"
@@ -87,11 +96,13 @@ if [[ "$*" == *"clean compile"* ]]; then
   : > target/classes/App.class
   exit 0
 fi
-if [[ "$*" == *"org.sonarsource.scanner.maven:sonar-maven-plugin:sonar"* ]]; then
+case "$*" in
+  *org.sonarsource.scanner.maven:sonar-maven-plugin:*:sonar*)
   mkdir -p .scannerwork
   printf 'ceTaskId=%s\n' "${FAKE_SONAR_TASK_ID:-fake-task}" > .scannerwork/report-task.txt
   exit 0
-fi
+  ;;
+esac
 exit 0
 EOF
   chmod +x "${fake_bin}/mvn"

@@ -256,7 +256,12 @@ sonar_collect_test_binary_dirs() {
 
   find "$build_dir" -type d \
     \( -path "*/target/test-classes" -o -path "*/build/classes/*/test" -o -path "*/build/classes/test" \
-       -o -path "*/build/tmp/kotlin-classes/test" -o -path "*/build/tmp/kotlin-classes/*Test" \) \
+       -o -path "*/target/it-classes" -o -path "*/target/integration-test-classes" \
+       -o -path "*/build/classes/*/integrationTest" -o -path "*/build/classes/*/functionalTest" \
+       -o -path "*/build/classes/*/testFixtures" \
+       -o -path "*/build/tmp/kotlin-classes/test" -o -path "*/build/tmp/kotlin-classes/*Test" \
+       -o -path "*/build/tmp/kotlin-classes/integrationTest" -o -path "*/build/tmp/kotlin-classes/functionalTest" \
+       -o -path "*/build/tmp/kotlin-classes/testFixtures" \) \
     -print 2>/dev/null | sort -u
 }
 
@@ -431,6 +436,9 @@ sonar_record_coverage_info() {
       "$COVERAGE_STATUS" \
       "$COVERAGE_REASON" \
       "$COVERAGE_JDK" \
+      "$COVERAGE_MODE" \
+      "$COVERAGE_COMMAND" \
+      "$COVERAGE_REPORT_KIND" \
       "$COVERAGE_JACOCO_VERSION" \
       "$COVERAGE_JAVA_TARGET" \
       "$COVERAGE_REPORT_PATHS_CSV" \
@@ -525,7 +533,9 @@ sonar_prepare_coverage() {
   esac
 
   local -a reports=()
+  local -a selected_reports=()
   local report_path=""
+  local selected_reports_file=""
   while IFS= read -r report_path; do
     [[ -n "$report_path" ]] || continue
     reports+=("$report_path")
@@ -545,8 +555,21 @@ sonar_prepare_coverage() {
     return 1
   fi
 
-  COVERAGE_REPORT_PATHS_CSV="$(coverage_format_report_paths "$effective_build_dir" "${reports[@]}")"
-  COVERAGE_REPORTS_FOUND="${#reports[@]}"
+  selected_reports_file="${support_dir}/selected-coverage-reports.txt"
+  : > "$selected_reports_file"
+  coverage_select_preferred_reports "${reports[@]}" > "$selected_reports_file"
+  while IFS= read -r report_path; do
+    [[ -n "$report_path" ]] || continue
+    selected_reports+=("$report_path")
+  done < "$selected_reports_file"
+  if [[ ${#selected_reports[@]} -eq 0 ]]; then
+    coverage_mark_fallback "coverage_report_selection_failed"
+    sonar_record_coverage_info "$key"
+    return 1
+  fi
+
+  COVERAGE_REPORT_PATHS_CSV="$(coverage_format_report_paths "$effective_build_dir" "${selected_reports[@]}")"
+  COVERAGE_REPORTS_FOUND="${#selected_reports[@]}"
   coverage_mark_available "$COVERAGE_JACOCO_VERSION" "$COVERAGE_JAVA_TARGET" "$COVERAGE_JDK" "$COVERAGE_REPORT_PATHS_CSV" "$COVERAGE_REPORTS_FOUND"
   COVERAGE_BUILD_DIR="$effective_build_dir"
   sonar_record_coverage_info "$key"

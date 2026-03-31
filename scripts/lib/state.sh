@@ -319,6 +319,9 @@ state_clear_coverage_info() {
     del(.repositories[$key].coverage_status) |
     del(.repositories[$key].coverage_reason) |
     del(.repositories[$key].coverage_jdk) |
+    del(.repositories[$key].coverage_mode) |
+    del(.repositories[$key].coverage_command) |
+    del(.repositories[$key].coverage_report_kind) |
     del(.repositories[$key].coverage_jacoco_version) |
     del(.repositories[$key].coverage_java_target) |
     del(.repositories[$key].coverage_report_paths) |
@@ -331,18 +334,21 @@ state_clear_coverage_info() {
 }
 
 # Set coverage metadata for a repository.
-# Usage: state_set_coverage_info <project_key> <status> <reason> <coverage_jdk> <jacoco_version> <java_target> <report_paths_csv> [attempted] [tests_forced] [reports_found]
+# Usage: state_set_coverage_info <project_key> <status> <reason> <coverage_jdk> <mode> <command> <report_kind> <jacoco_version> <java_target> <report_paths_csv> [attempted] [tests_forced] [reports_found]
 state_set_coverage_info() {
   local key="$1"
   local status="$2"
   local reason="$3"
   local coverage_jdk="$4"
-  local jacoco_version="$5"
-  local java_target="$6"
-  local report_paths="$7"
-  local attempted="${8:-}"
-  local tests_forced="${9:-}"
-  local reports_found="${10:-}"
+  local coverage_mode="$5"
+  local coverage_command="$6"
+  local coverage_report_kind="$7"
+  local jacoco_version="$8"
+  local java_target="$9"
+  local report_paths="${10}"
+  local attempted="${11:-}"
+  local tests_forced="${12:-}"
+  local reports_found="${13:-}"
 
   local current_state
   current_state="$(state_read)"
@@ -353,6 +359,9 @@ state_set_coverage_info() {
     --arg status "$status" \
     --arg reason "$reason" \
     --arg coverage_jdk "$coverage_jdk" \
+    --arg coverage_mode "$coverage_mode" \
+    --arg coverage_command "$coverage_command" \
+    --arg coverage_report_kind "$coverage_report_kind" \
     --arg jacoco_version "$jacoco_version" \
     --arg java_target "$java_target" \
     --arg report_paths "$report_paths" \
@@ -362,6 +371,9 @@ state_set_coverage_info() {
     .repositories[$key].coverage_status = (if $status == "" then null else $status end) |
     .repositories[$key].coverage_reason = (if $reason == "" then null else $reason end) |
     .repositories[$key].coverage_jdk = (if $coverage_jdk == "" then null else $coverage_jdk end) |
+    .repositories[$key].coverage_mode = (if $coverage_mode == "" then null else $coverage_mode end) |
+    .repositories[$key].coverage_command = (if $coverage_command == "" then null else $coverage_command end) |
+    .repositories[$key].coverage_report_kind = (if $coverage_report_kind == "" then null else $coverage_report_kind end) |
     .repositories[$key].coverage_jacoco_version = (if $jacoco_version == "" then null else $jacoco_version end) |
     .repositories[$key].coverage_java_target = (if $java_target == "" then null else $java_target end) |
     .repositories[$key].coverage_report_paths = (if $report_paths == "" then null else $report_paths end) |

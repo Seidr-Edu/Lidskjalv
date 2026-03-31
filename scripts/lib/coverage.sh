@@ -12,6 +12,9 @@ COVERAGE_REASON=""
 COVERAGE_JACOCO_VERSION=""
 COVERAGE_JAVA_TARGET=""
 COVERAGE_JDK=""
+COVERAGE_MODE=""
+COVERAGE_COMMAND=""
+COVERAGE_REPORT_KIND=""
 COVERAGE_REPORT_PATHS_CSV=""
 COVERAGE_REPORTS_FOUND=0
 COVERAGE_ATTEMPTED="false"
@@ -27,6 +30,9 @@ coverage_reset_metadata() {
   COVERAGE_JACOCO_VERSION=""
   COVERAGE_JAVA_TARGET=""
   COVERAGE_JDK=""
+  COVERAGE_MODE=""
+  COVERAGE_COMMAND=""
+  COVERAGE_REPORT_KIND=""
   COVERAGE_REPORT_PATHS_CSV=""
   COVERAGE_REPORTS_FOUND=0
   COVERAGE_ATTEMPTED="false"
@@ -43,6 +49,9 @@ coverage_mark_skipped() {
   COVERAGE_JACOCO_VERSION=""
   COVERAGE_JAVA_TARGET=""
   COVERAGE_JDK=""
+  COVERAGE_MODE=""
+  COVERAGE_COMMAND=""
+  COVERAGE_REPORT_KIND=""
   COVERAGE_REPORT_PATHS_CSV=""
   COVERAGE_REPORTS_FOUND=0
   COVERAGE_ATTEMPTED="false"
@@ -54,6 +63,7 @@ coverage_mark_skipped() {
 coverage_mark_fallback() {
   COVERAGE_STATUS="fallback"
   COVERAGE_REASON="$1"
+  COVERAGE_REPORT_KIND=""
   COVERAGE_REPORT_PATHS_CSV=""
   COVERAGE_REPORTS_FOUND=0
   # shellcheck disable=SC2034  # Shared coverage metadata is consumed across sourced scripts.
@@ -78,6 +88,8 @@ coverage_mark_available() {
   # shellcheck disable=SC2034  # Shared coverage metadata is consumed across sourced scripts.
   COVERAGE_JDK="$coverage_jdk"
   # shellcheck disable=SC2034  # Shared coverage metadata is consumed across sourced scripts.
+  COVERAGE_REPORT_KIND="${COVERAGE_REPORT_KIND:-$(coverage_report_kind_for_count "$reports_found")}"
+  # shellcheck disable=SC2034  # Shared coverage metadata is consumed across sourced scripts.
   COVERAGE_REPORT_PATHS_CSV="$report_paths_csv"
   # shellcheck disable=SC2034  # Shared coverage metadata is consumed across sourced scripts.
   COVERAGE_REPORTS_FOUND="$reports_found"
@@ -91,6 +103,16 @@ coverage_mark_attempted() {
 coverage_mark_tests_forced() {
   # shellcheck disable=SC2034  # Shared coverage metadata is consumed across sourced scripts.
   COVERAGE_TESTS_FORCED="true"
+}
+
+coverage_set_plan_metadata() {
+  local mode="${1:-}"
+  local command="${2:-}"
+
+  # shellcheck disable=SC2034  # Shared coverage metadata is consumed across sourced scripts.
+  COVERAGE_MODE="$mode"
+  # shellcheck disable=SC2034  # Shared coverage metadata is consumed across sourced scripts.
+  COVERAGE_COMMAND="$command"
 }
 
 coverage_count_report_paths() {
@@ -111,6 +133,17 @@ coverage_count_report_paths() {
   done
 
   echo "$count"
+}
+
+coverage_report_kind_for_count() {
+  local count="${1:-0}"
+  if [[ -z "$count" ]] || (( count <= 0 )); then
+    echo ""
+  elif (( count == 1 )); then
+    echo "single_report"
+  else
+    echo "multi_report"
+  fi
 }
 
 coverage_classify_missing_reports() {
@@ -224,10 +257,79 @@ coverage_select_jacoco_version() {
   fi
 }
 
+coverage_report_is_aggregate() {
+  local report_path="$1"
+  local base_name=""
+  local parent_name=""
+
+  [[ -n "$report_path" ]] || return 1
+
+  base_name="$(basename "$report_path")"
+  parent_name="$(basename "$(dirname "$report_path")")"
+
+  case "$report_path" in
+    */jacoco-aggregate/*)
+      return 0
+      ;;
+  esac
+
+  case "$base_name" in
+    *aggregate*.xml|*CodeCoverageReport.xml)
+      return 0
+      ;;
+  esac
+
+  case "$parent_name" in
+    *aggregate*|*CodeCoverageReport)
+      return 0
+      ;;
+  esac
+
+  return 1
+}
+
+coverage_select_preferred_reports() {
+  local report_path=""
+  local -a aggregate_reports=()
+  local -a standard_reports=()
+  local -a selected_reports=()
+
+  for report_path in "$@"; do
+    [[ -n "$report_path" ]] || continue
+    if coverage_report_is_aggregate "$report_path"; then
+      aggregate_reports+=("$report_path")
+    else
+      standard_reports+=("$report_path")
+    fi
+  done
+
+  if [[ ${#aggregate_reports[@]} -gt 0 ]]; then
+    selected_reports=("${aggregate_reports[@]}")
+    # shellcheck disable=SC2034  # Shared coverage metadata is consumed across sourced scripts.
+    COVERAGE_REPORT_KIND="aggregate"
+  else
+    selected_reports=("${standard_reports[@]}")
+    # shellcheck disable=SC2034  # Shared coverage metadata is consumed across sourced scripts.
+    COVERAGE_REPORT_KIND="$(coverage_report_kind_for_count "${#selected_reports[@]}")"
+  fi
+
+  printf '%s\n' "${selected_reports[@]}"
+}
+
 coverage_find_xml_reports() {
   local build_dir="$1"
   find "$build_dir" -type f \
-    \( -path "*/target/site/jacoco/*.xml" -o -path "*/build/reports/jacoco/*.xml" -o -path "*/build/reports/jacoco/*/*.xml" -o -name "jacoco.xml" -o -name "jacoco*.xml" \) \
+    \( -path "*/target/site/jacoco/*.xml" \
+       -o -path "*/target/site/jacoco-it/*.xml" \
+       -o -path "*/target/site/jacoco-aggregate/*.xml" \
+       -o -path "*/build/reports/jacoco/*.xml" \
+       -o -path "*/build/reports/jacoco/*/*.xml" \
+       -o -path "*/build/reports/jacoco/*/*/*.xml" \
+       -o -path "*/build/reports/jacoco/*CodeCoverageReport/*.xml" \
+       -o -path "*/build/reports/jacoco/*aggregate*/*.xml" \
+       -o -name "jacoco.xml" \
+       -o -name "jacoco*.xml" \
+       -o -name "*CodeCoverageReport.xml" \) \
     -print 2>/dev/null | sort -u
 }
 

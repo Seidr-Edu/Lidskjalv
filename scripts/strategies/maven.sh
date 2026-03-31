@@ -274,9 +274,134 @@ maven_repo_declares_jacoco() {
   return 1
 }
 
+maven_analyze_coverage_plan() {
+  local repo_dir="$1"
+  local build_dir="$2"
+
+  python3 - <<'PY' "$repo_dir" "$build_dir"
+import os
+import sys
+import xml.etree.ElementTree as ET
+
+repo_dir = os.path.abspath(sys.argv[1])
+build_dir = os.path.abspath(sys.argv[2])
+
+verify_source_dirs = {
+    "src/integrationTest",
+    "src/it",
+    "src/functionalTest",
+}
+verify_phases = {
+    "pre-integration-test",
+    "integration-test",
+    "post-integration-test",
+    "verify",
+}
+verify_goals = {
+    "prepare-agent-integration",
+    "report-integration",
+    "merge",
+    "report-aggregate",
+}
+
+pom_paths = []
+seen = set()
+
+current = build_dir
+while True:
+    pom_path = os.path.join(current, "pom.xml")
+    if os.path.isfile(pom_path):
+        pom_real = os.path.realpath(pom_path)
+        if pom_real not in seen:
+            pom_paths.append(pom_path)
+            seen.add(pom_real)
+    if current == repo_dir:
+        break
+    parent = os.path.dirname(current)
+    if parent == current or not os.path.commonpath([repo_dir, parent]).startswith(repo_dir):
+        break
+    current = parent
+
+for root, dirs, files in os.walk(build_dir):
+    dirs[:] = [d for d in dirs if d not in {".git", "target"}]
+    if "pom.xml" in files:
+        pom_path = os.path.join(root, "pom.xml")
+        pom_real = os.path.realpath(pom_path)
+        if pom_real not in seen:
+            pom_paths.append(pom_path)
+            seen.add(pom_real)
+
+repo_declares_jacoco = False
+has_failsafe = False
+has_surefire = False
+aggregate_reports = False
+requires_verify = False
+
+for rel_dir in verify_source_dirs:
+    if os.path.isdir(os.path.join(build_dir, rel_dir)):
+        requires_verify = True
+        break
+
+for pom_path in pom_paths:
+    try:
+        tree = ET.parse(pom_path)
+    except Exception:
+        continue
+
+    root = tree.getroot()
+    namespace = ""
+    if root.tag.startswith("{") and "}" in root.tag:
+      namespace = root.tag[1:].split("}", 1)[0]
+
+    def q(name: str) -> str:
+        return f"{{{namespace}}}{name}" if namespace else name
+
+    for plugin in root.iterfind(f".//{q('plugin')}"):
+        artifact = (plugin.findtext(q("artifactId")) or "").strip()
+        group = (plugin.findtext(q("groupId")) or "").strip()
+
+        if artifact == "maven-surefire-plugin":
+            has_surefire = True
+        elif artifact == "maven-failsafe-plugin":
+            has_failsafe = True
+            requires_verify = True
+
+        if artifact != "jacoco-maven-plugin":
+            continue
+
+        if group and group != "org.jacoco":
+            continue
+
+        repo_declares_jacoco = True
+        for execution in plugin.findall(f"./{q('executions')}/{q('execution')}"):
+            phase = (execution.findtext(q("phase")) or "").strip()
+            goals = [
+                (goal.text or "").strip()
+                for goal in execution.findall(f"./{q('goals')}/{q('goal')}")
+                if (goal.text or "").strip()
+            ]
+            if any(goal in verify_goals for goal in goals):
+                requires_verify = True
+            if "report-aggregate" in goals:
+                aggregate_reports = True
+            if phase in verify_phases:
+                requires_verify = True
+
+mode = "verify" if requires_verify else "test"
+
+print(f"repo_declares_jacoco={'true' if repo_declares_jacoco else 'false'}")
+print(f"has_failsafe={'true' if has_failsafe else 'false'}")
+print(f"has_surefire={'true' if has_surefire else 'false'}")
+print(f"aggregate_reports={'true' if aggregate_reports else 'false'}")
+print(f"coverage_mode={mode}")
+PY
+}
+
 maven_has_jacoco_xml_reports() {
   local build_dir="$1"
-  find "$build_dir" -type f -path "*/target/site/jacoco/*.xml" -print -quit 2>/dev/null | grep -q .
+  find "$build_dir" -type f \
+    \( -path "*/target/site/jacoco/*.xml" -o -path "*/target/site/jacoco-it/*.xml" -o -path "*/target/site/jacoco-aggregate/*.xml" -o -name "jacoco*.xml" \) \
+    -print -quit 2>/dev/null | grep -q .
 }
 
 maven_requires_submission_prep() {
@@ -320,13 +445,15 @@ maven_prepare_submission() {
 maven_inject_lidskjalv_coverage_profile() {
   local pom_path="$1"
   local jacoco_version="$2"
+  local coverage_mode="${3:-test}"
 
-  python3 - <<'PY' "$pom_path" "$jacoco_version"
+  python3 - <<'PY' "$pom_path" "$jacoco_version" "$coverage_mode"
 import sys
 import xml.etree.ElementTree as ET
 
 pom_path = sys.argv[1]
 jacoco_version = sys.argv[2]
+coverage_mode = sys.argv[3]
 profile_id = "lidskjalv-coverage"
 
 ET.register_namespace("", "http://maven.apache.org/POM/4.0.0")
@@ -362,17 +489,34 @@ executions = ET.SubElement(plugin, q("executions"))
 
 prepare_execution = ET.SubElement(executions, q("execution"))
 ET.SubElement(prepare_execution, q("id")).text = "prepare-agent"
+ET.SubElement(prepare_execution, q("phase")).text = "initialize"
 prepare_goals = ET.SubElement(prepare_execution, q("goals"))
 ET.SubElement(prepare_goals, q("goal")).text = "prepare-agent"
 
 report_execution = ET.SubElement(executions, q("execution"))
 ET.SubElement(report_execution, q("id")).text = "report"
-ET.SubElement(report_execution, q("phase")).text = "test"
+ET.SubElement(report_execution, q("phase")).text = "test" if coverage_mode == "test" else "verify"
 report_goals = ET.SubElement(report_execution, q("goals"))
 ET.SubElement(report_goals, q("goal")).text = "report"
 report_config = ET.SubElement(report_execution, q("configuration"))
 formats = ET.SubElement(report_config, q("formats"))
 ET.SubElement(formats, q("format")).text = "XML"
+
+if coverage_mode == "verify":
+    integration_prepare_execution = ET.SubElement(executions, q("execution"))
+    ET.SubElement(integration_prepare_execution, q("id")).text = "prepare-agent-integration"
+    ET.SubElement(integration_prepare_execution, q("phase")).text = "pre-integration-test"
+    integration_prepare_goals = ET.SubElement(integration_prepare_execution, q("goals"))
+    ET.SubElement(integration_prepare_goals, q("goal")).text = "prepare-agent-integration"
+
+    integration_report_execution = ET.SubElement(executions, q("execution"))
+    ET.SubElement(integration_report_execution, q("id")).text = "report-integration"
+    ET.SubElement(integration_report_execution, q("phase")).text = "verify"
+    integration_report_goals = ET.SubElement(integration_report_execution, q("goals"))
+    ET.SubElement(integration_report_goals, q("goal")).text = "report-integration"
+    integration_report_config = ET.SubElement(integration_report_execution, q("configuration"))
+    integration_formats = ET.SubElement(integration_report_config, q("formats"))
+    ET.SubElement(integration_formats, q("format")).text = "XML"
 
 tree.write(pom_path, encoding="utf-8", xml_declaration=True)
 PY
@@ -388,6 +532,11 @@ maven_prepare_coverage() {
   local injected_profile=""
   local repo_declares_jacoco="false"
   local needs_submission_prep="false"
+  local coverage_mode="test"
+  local coverage_plan=""
+  local plan_key=""
+  local plan_value=""
+  local coverage_goal="test"
 
   # shellcheck disable=SC2034  # Read by submit-sonar.sh after sourcing.
   MAVEN_COVERAGE_BUILD_DIR="$build_dir"
@@ -400,9 +549,23 @@ maven_prepare_coverage() {
     return 1
   fi
 
-  if maven_repo_declares_jacoco "$repo_dir"; then
-    repo_declares_jacoco="true"
-  else
+  coverage_plan="$(maven_analyze_coverage_plan "$repo_dir" "$build_dir")"
+  while IFS='=' read -r plan_key plan_value; do
+    case "$plan_key" in
+      repo_declares_jacoco)
+        repo_declares_jacoco="$plan_value"
+        ;;
+      coverage_mode)
+        coverage_mode="$plan_value"
+        ;;
+    esac
+  done <<< "$coverage_plan"
+
+  if [[ "$coverage_mode" == "verify" ]]; then
+    coverage_goal="verify"
+  fi
+
+  if [[ "$repo_declares_jacoco" != "true" ]]; then
     local temp_repo_dir="${support_dir}/repo"
     local relative_build_dir=""
 
@@ -417,7 +580,7 @@ maven_prepare_coverage() {
       effective_build_dir="$temp_repo_dir"
     fi
 
-    if ! maven_inject_lidskjalv_coverage_profile "${effective_build_dir}/pom.xml" "$jacoco_version" 2>>"$log_file"; then
+    if ! maven_inject_lidskjalv_coverage_profile "${effective_build_dir}/pom.xml" "$jacoco_version" "$coverage_mode" 2>>"$log_file"; then
       # shellcheck disable=SC2034  # Read by submit-sonar.sh after sourcing.
       MAVEN_COVERAGE_REASON="maven_coverage_profile_injection_failed"
       return 1
@@ -431,6 +594,7 @@ maven_prepare_coverage() {
   local maven_user_home="${effective_build_dir}/.m2"
   local maven_repo_local="${maven_user_home}/repository"
   ensure_dir "$maven_repo_local"
+  coverage_set_plan_metadata "maven_${coverage_mode}" "$(basename "$mvn_cmd") ${coverage_goal}"
 
   pushd "$effective_build_dir" >/dev/null || {
     # shellcheck disable=SC2034  # Read by submit-sonar.sh after sourcing.
@@ -441,7 +605,7 @@ maven_prepare_coverage() {
   local exit_code=0
   local -a test_cmd=(
     "$mvn_cmd"
-    test
+    "$coverage_goal"
     "-Dmaven.repo.local=$maven_repo_local"
     -DskipTests=false
     -Dmaven.test.skip=false

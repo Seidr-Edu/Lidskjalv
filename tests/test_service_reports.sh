@@ -38,6 +38,10 @@ if [[ "$*" == *" test "* || "$*" == test* ]]; then
   exit 0
 fi
 if is_sonar_goal "$*"; then
+  if [[ -n "${FAKE_EXPECT_COVERAGE_REPORT_PATHS:-}" && "$*" != *"-Dsonar.coverage.jacoco.xmlReportPaths=${FAKE_EXPECT_COVERAGE_REPORT_PATHS}"* ]]; then
+    printf '%s\n' "coverage report paths mismatch" >&2
+    exit 90
+  fi
   if [[ -n "${FAKE_SONAR_SUBMIT_EXIT_CODE:-}" ]]; then
     exit "${FAKE_SONAR_SUBMIT_EXIT_CODE}"
   fi
@@ -144,6 +148,9 @@ assert_json_value "${scm_disabled_run}/outputs/run_report.json" '.scan.scanner_m
 assert_json_value "${scm_disabled_run}/outputs/run_report.json" '.scan.scanner_version' "5.5.0.6356" "service report should capture the Maven scanner version"
 assert_json_value "${scm_disabled_run}/outputs/run_report.json" '.scan.coverage.status' "available" "successful submission should record available coverage"
 assert_json_value "${scm_disabled_run}/outputs/run_report.json" '.scan.coverage.jdk' "17" "coverage JDK should match the successful build JDK"
+assert_json_value "${scm_disabled_run}/outputs/run_report.json" '.scan.coverage.mode' "maven_test" "service report should capture the Maven coverage mode"
+assert_json_value "${scm_disabled_run}/outputs/run_report.json" '.scan.coverage.command' "mvn test" "service report should capture the Maven coverage command"
+assert_json_value "${scm_disabled_run}/outputs/run_report.json" '.scan.coverage.report_kind' "single_report" "service report should capture the coverage report kind"
 assert_json_value "${scm_disabled_run}/outputs/run_report.json" '.scan.coverage.jacoco_version' "0.8.8" "java 17 fixture should select JaCoCo 0.8.8"
 assert_json_value "${scm_disabled_run}/outputs/run_report.json" '.scan.coverage.attempted' "true" "coverage should be marked as attempted"
 assert_json_value "${scm_disabled_run}/outputs/run_report.json" '.scan.coverage.tests_forced' "true" "Maven coverage should record forced test re-enable"

@@ -176,7 +176,8 @@ The tests cover:
 
 - local path and URL scans
 - separate build/coverage/scanner JDK handling
-- Maven and Gradle coverage submission with JaCoCo XML discovery
+- Maven lifecycle-aware coverage selection (`test` vs `verify`) and aggregate JaCoCo preference
+- Gradle JVM coverage task discovery across multiple `Test` tasks, aggregate reports, and Kotlin/JVM project shapes
 - native-to-CLI Sonar fallback tracking
 - batch state reuse
 - service manifest validation

@@ -54,6 +54,9 @@ LIDSKJALV_SERVICE_MEASURES_JSON="{}"
 LIDSKJALV_SERVICE_COVERAGE_JDK=""
 LIDSKJALV_SERVICE_COVERAGE_STATUS=""
 LIDSKJALV_SERVICE_COVERAGE_REASON=""
+LIDSKJALV_SERVICE_COVERAGE_MODE=""
+LIDSKJALV_SERVICE_COVERAGE_COMMAND=""
+LIDSKJALV_SERVICE_COVERAGE_REPORT_KIND=""
 LIDSKJALV_SERVICE_COVERAGE_JACOCO_VERSION=""
 LIDSKJALV_SERVICE_COVERAGE_JAVA_TARGET=""
 LIDSKJALV_SERVICE_COVERAGE_ATTEMPTED="false"
@@ -408,6 +411,9 @@ lidskjalv_service_write_report() {
   LIDSKJALV_SERVICE_COVERAGE_JDK="$LIDSKJALV_SERVICE_COVERAGE_JDK" \
   LIDSKJALV_SERVICE_COVERAGE_STATUS="$LIDSKJALV_SERVICE_COVERAGE_STATUS" \
   LIDSKJALV_SERVICE_COVERAGE_REASON="$LIDSKJALV_SERVICE_COVERAGE_REASON" \
+  LIDSKJALV_SERVICE_COVERAGE_MODE="$LIDSKJALV_SERVICE_COVERAGE_MODE" \
+  LIDSKJALV_SERVICE_COVERAGE_COMMAND="$LIDSKJALV_SERVICE_COVERAGE_COMMAND" \
+  LIDSKJALV_SERVICE_COVERAGE_REPORT_KIND="$LIDSKJALV_SERVICE_COVERAGE_REPORT_KIND" \
   LIDSKJALV_SERVICE_COVERAGE_JACOCO_VERSION="$LIDSKJALV_SERVICE_COVERAGE_JACOCO_VERSION" \
   LIDSKJALV_SERVICE_COVERAGE_JAVA_TARGET="$LIDSKJALV_SERVICE_COVERAGE_JAVA_TARGET" \
   LIDSKJALV_SERVICE_COVERAGE_ATTEMPTED="$LIDSKJALV_SERVICE_COVERAGE_ATTEMPTED" \
@@ -490,6 +496,9 @@ report = {
             "jdk": nullable("LIDSKJALV_SERVICE_COVERAGE_JDK"),
             "status": nullable("LIDSKJALV_SERVICE_COVERAGE_STATUS"),
             "reason": nullable("LIDSKJALV_SERVICE_COVERAGE_REASON"),
+            "mode": nullable("LIDSKJALV_SERVICE_COVERAGE_MODE"),
+            "command": nullable("LIDSKJALV_SERVICE_COVERAGE_COMMAND"),
+            "report_kind": nullable("LIDSKJALV_SERVICE_COVERAGE_REPORT_KIND"),
             "jacoco_version": nullable("LIDSKJALV_SERVICE_COVERAGE_JACOCO_VERSION"),
             "java_target": nullable("LIDSKJALV_SERVICE_COVERAGE_JAVA_TARGET"),
             "attempted": env("LIDSKJALV_SERVICE_COVERAGE_ATTEMPTED", "false") == "true",
@@ -534,6 +543,9 @@ summary_lines = [
     f"| coverage_jdk | {report['scan']['coverage']['jdk'] or ''} |",
     f"| coverage_status | {report['scan']['coverage']['status'] or ''} |",
     f"| coverage_reason | {report['scan']['coverage']['reason'] or ''} |",
+    f"| coverage_mode | {report['scan']['coverage']['mode'] or ''} |",
+    f"| coverage_command | {report['scan']['coverage']['command'] or ''} |",
+    f"| coverage_report_kind | {report['scan']['coverage']['report_kind'] or ''} |",
     f"| coverage_jacoco_version | {report['scan']['coverage']['jacoco_version'] or ''} |",
     f"| coverage_java_target | {report['scan']['coverage']['java_target'] or ''} |",
     f"| coverage_attempted | {report['scan']['coverage']['attempted']} |",
@@ -590,6 +602,9 @@ lidskjalv_service_load_scan_metadata() {
   LIDSKJALV_SERVICE_COVERAGE_JDK="$(state_get "$project_key" "coverage_jdk" 2>/dev/null || true)"
   LIDSKJALV_SERVICE_COVERAGE_STATUS="$(state_get "$project_key" "coverage_status" 2>/dev/null || true)"
   LIDSKJALV_SERVICE_COVERAGE_REASON="$(state_get "$project_key" "coverage_reason" 2>/dev/null || true)"
+  LIDSKJALV_SERVICE_COVERAGE_MODE="$(state_get "$project_key" "coverage_mode" 2>/dev/null || true)"
+  LIDSKJALV_SERVICE_COVERAGE_COMMAND="$(state_get "$project_key" "coverage_command" 2>/dev/null || true)"
+  LIDSKJALV_SERVICE_COVERAGE_REPORT_KIND="$(state_get "$project_key" "coverage_report_kind" 2>/dev/null || true)"
   LIDSKJALV_SERVICE_COVERAGE_JACOCO_VERSION="$(state_get "$project_key" "coverage_jacoco_version" 2>/dev/null || true)"
   LIDSKJALV_SERVICE_COVERAGE_JAVA_TARGET="$(state_get "$project_key" "coverage_java_target" 2>/dev/null || true)"
   LIDSKJALV_SERVICE_COVERAGE_ATTEMPTED="$(state_get "$project_key" "coverage_attempted" 2>/dev/null || true)"

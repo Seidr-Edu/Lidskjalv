@@ -179,7 +179,7 @@ run_scan_for_prepared_repo() {
   if [[ "$skip_sonar" == "true" ]]; then
     log_info "Skipping SonarQube submission (--skip-sonar)"
     if declare -f state_set_coverage_info >/dev/null 2>&1; then
-      state_set_coverage_info "$key" "skipped" "skip_sonar" "" "" "" "" "false" "false" "0"
+      state_set_coverage_info "$key" "skipped" "skip_sonar" "" "" "" "" "" "" "" "false" "false" "0"
     fi
     state_set_status "$key" "success"
     state_set_scan_timestamp "$key"

@@ -207,63 +207,129 @@ import org.gradle.api.tasks.testing.Test
 import org.gradle.testing.jacoco.plugins.JacocoPluginExtension
 import org.gradle.testing.jacoco.tasks.JacocoReport
 
-def ensureRootCoverageTask = {
-    def rootCoverageTask = gradle.rootProject.tasks.findByName("lidskjalvCoverage")
-    if (rootCoverageTask == null) {
-        rootCoverageTask = gradle.rootProject.tasks.create("lidskjalvCoverage")
+def eligibleProjects = new LinkedHashSet()
+def eligiblePluginIds = [
+    "java-base",
+    "groovy",
+    "scala",
+    "org.jetbrains.kotlin.jvm",
+]
+
+def configureJacocoExtension = { project, hadJacoco ->
+    def jacocoExtension = project.extensions.findByType(JacocoPluginExtension)
+    if (jacocoExtension != null && (!hadJacoco || !jacocoExtension.toolVersion)) {
+        jacocoExtension.toolVersion = "${jacoco_version}"
     }
-    rootCoverageTask
 }
 
-gradle.rootProject {
-    if (tasks.findByName("lidskjalvCoverage") == null) {
-        tasks.create("lidskjalvCoverage")
+def configureExistingReportTask = { project, rootCoverageTask, reportTask, testTask ->
+    reportTask.dependsOn(testTask)
+    testTask.finalizedBy(reportTask)
+    reportTask.reports {
+        xml.required = true
+        html.required = false
+        csv.required = false
     }
+    rootCoverageTask.dependsOn(reportTask)
+}
+
+def createSyntheticReportTask = { project, rootCoverageTask, testTask ->
+    def capitalized = testTask.name.substring(0, 1).toUpperCase() + testTask.name.substring(1)
+    def reportTaskName = "lidskjalvJacoco\${capitalized}Report"
+    def reportTask = project.tasks.findByName(reportTaskName)
+    if (reportTask == null) {
+        reportTask = project.tasks.create(reportTaskName, JacocoReport) { jacocoReportTask ->
+            dependsOn(testTask)
+            executionData(testTask)
+            if (project.extensions.findByName("sourceSets") != null) {
+                def mainSourceSet = project.sourceSets.findByName("main")
+                if (mainSourceSet != null) {
+                    sourceDirectories.from(mainSourceSet.allSource.srcDirs)
+                    additionalSourceDirs.from(mainSourceSet.allSource.srcDirs)
+                    classDirectories.from(mainSourceSet.output)
+                }
+            }
+            reports {
+                xml.required = true
+                html.required = false
+                csv.required = false
+                xml.outputLocation = project.layout.buildDirectory.file("reports/jacoco/\${testTask.name}/\${reportTaskName}.xml")
+            }
+            onlyIf {
+                executionData.files.any { it.exists() }
+            }
+        }
+    }
+    rootCoverageTask.dependsOn(reportTask)
+}
+
+def isAggregateReportTask = { reportTask ->
+    def lowerName = reportTask.name.toLowerCase()
+    lowerName.contains("aggregate") || reportTask.name.endsWith("CodeCoverageReport")
 }
 
 allprojects { project ->
-    project.pluginManager.withPlugin("java") {
+    eligiblePluginIds.each { pluginId ->
+        project.pluginManager.withPlugin(pluginId) {
+            eligibleProjects.add(project)
+        }
+    }
+}
+
+gradle.projectsEvaluated {
+    def rootProject = gradle.rootProject
+    def rootCoverageTask = rootProject.tasks.findByName("lidskjalvCoverage")
+    if (rootCoverageTask == null) {
+        rootCoverageTask = rootProject.tasks.create("lidskjalvCoverage")
+    }
+
+    eligibleProjects.each { project ->
+        def testTasks = project.tasks.withType(Test).toList().sort { a, b -> a.path <=> b.path }
+        if (testTasks.isEmpty()) {
+            return
+        }
+
         def hadJacoco = project.plugins.hasPlugin("jacoco")
         if (!hadJacoco) {
             project.pluginManager.apply("jacoco")
         }
-        def jacocoExtension = project.extensions.findByType(JacocoPluginExtension)
-        if (jacocoExtension != null && (!hadJacoco || !jacocoExtension.toolVersion)) {
-            jacocoExtension.toolVersion = "${jacoco_version}"
+        configureJacocoExtension(project, hadJacoco)
+
+        def reportTasks = project.tasks.withType(JacocoReport).toList().sort { a, b -> a.path <=> b.path }
+        def aggregateReportTasks = reportTasks.findAll { reportTask ->
+            isAggregateReportTask(reportTask)
         }
 
-        project.afterEvaluate {
-            def rootCoverageTask = ensureRootCoverageTask()
-            project.tasks.withType(Test).each { testTask ->
-                def capitalized = testTask.name.substring(0, 1).toUpperCase() + testTask.name.substring(1)
-                def reportTaskName = "lidskjalvJacoco\${capitalized}Report"
-                def reportTask = project.tasks.findByName(reportTaskName)
-                if (reportTask == null) {
-                    reportTask = project.tasks.create(reportTaskName, JacocoReport) { jacocoReportTask ->
-                        dependsOn(testTask)
-                        executionData(testTask)
-                        if (project.extensions.findByName("sourceSets") != null) {
-                            def mainSourceSet = project.sourceSets.findByName("main")
-                            if (mainSourceSet != null) {
-                                sourceDirectories.from(mainSourceSet.allSource.srcDirs)
-                                additionalSourceDirs.from(mainSourceSet.allSource.srcDirs)
-                                classDirectories.from(mainSourceSet.output)
-                            }
-                        }
-                        reports {
-                            xml.required = true
-                            html.required = false
-                            csv.required = false
-                            xml.outputLocation = project.layout.buildDirectory.file("reports/jacoco/\${testTask.name}/\${reportTaskName}.xml")
-                        }
-                        onlyIf {
-                            executionData.files.any { it.exists() }
-                        }
-                    }
+        aggregateReportTasks.each { reportTask ->
+            testTasks.each { testTask ->
+                reportTask.dependsOn(testTask)
+            }
+            reportTask.reports {
+                xml.required = true
+                html.required = false
+                csv.required = false
+            }
+            rootCoverageTask.dependsOn(reportTask)
+        }
+
+        testTasks.each { testTask ->
+            def capitalized = testTask.name.substring(0, 1).toUpperCase() + testTask.name.substring(1)
+            def matchingReportTasks = reportTasks.findAll { reportTask ->
+                if (aggregateReportTasks.contains(reportTask)) {
+                    return false
                 }
-                testTask.finalizedBy(reportTask)
-                rootCoverageTask.dependsOn(testTask)
-                rootCoverageTask.dependsOn(reportTask)
+                def lowerName = reportTask.name.toLowerCase()
+                lowerName == "jacoco\${testTask.name.toLowerCase()}report" ||
+                    lowerName == "lidskjalvjacoco\${testTask.name.toLowerCase()}report" ||
+                    lowerName.contains(testTask.name.toLowerCase())
+            }
+
+            if (matchingReportTasks.isEmpty()) {
+                createSyntheticReportTask(project, rootCoverageTask, testTask)
+            } else {
+                matchingReportTasks.each { reportTask ->
+                    configureExistingReportTask(project, rootCoverageTask, reportTask, testTask)
+                }
             }
         }
     }
@@ -318,6 +384,7 @@ gradle_prepare_coverage() {
   }
 
   local exit_code=0
+  coverage_set_plan_metadata "gradle_jvm_tasks" "$(basename "$gradle_cmd") lidskjalvCoverage"
   gradle_run_command "$log_file" "$gradle_user_home" "$gradle_cmd" --init-script "$init_script" lidskjalvCoverage || exit_code=$?
 
   popd >/dev/null || true

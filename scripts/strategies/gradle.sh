@@ -374,7 +374,6 @@ gradle_prepare_coverage() {
   local gradle_user_home="${build_dir}/.gradle-user-home"
   ensure_dir "$gradle_user_home"
   ensure_dir "$support_dir"
-  coverage_set_plan_metadata "gradle_jvm_tasks" "$(basename "$gradle_cmd") lidskjalvCoverage"
 
   local init_script="${support_dir}/jacoco-init.gradle"
   gradle_write_jacoco_init_script "$init_script" "$jacoco_version"
@@ -385,6 +384,7 @@ gradle_prepare_coverage() {
   }
 
   local exit_code=0
+  coverage_set_plan_metadata "gradle_jvm_tasks" "$(basename "$gradle_cmd") lidskjalvCoverage"
   gradle_run_command "$log_file" "$gradle_user_home" "$gradle_cmd" --init-script "$init_script" lidskjalvCoverage || exit_code=$?
 
   popd >/dev/null || true

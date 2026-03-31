@@ -594,7 +594,6 @@ maven_prepare_coverage() {
   local maven_user_home="${effective_build_dir}/.m2"
   local maven_repo_local="${maven_user_home}/repository"
   ensure_dir "$maven_repo_local"
-  coverage_set_plan_metadata "maven_${coverage_mode}" "$(basename "$mvn_cmd") ${coverage_goal}"
 
   pushd "$effective_build_dir" >/dev/null || {
     # shellcheck disable=SC2034  # Read by submit-sonar.sh after sourcing.
@@ -603,6 +602,7 @@ maven_prepare_coverage() {
   }
 
   local exit_code=0
+  coverage_set_plan_metadata "maven_${coverage_mode}" "$(basename "$mvn_cmd") ${coverage_goal}"
   local -a test_cmd=(
     "$mvn_cmd"
     "$coverage_goal"

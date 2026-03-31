@@ -409,8 +409,8 @@ selected_reports_file="${tmp}/selected-reports.txt"
 coverage_select_preferred_reports \
   "/tmp/example/target/site/jacoco/jacoco.xml" \
   "/tmp/example/target/site/jacoco-aggregate/jacoco.xml" > "${selected_reports_file}"
-selected_reports="$(cat "${selected_reports_file}")"
-assert_eq "/tmp/example/target/site/jacoco-aggregate/jacoco.xml" "$selected_reports" "aggregate coverage reports should be preferred over per-module reports"
+selected_reports_output="$(cat "${selected_reports_file}")"
+assert_eq "/tmp/example/target/site/jacoco-aggregate/jacoco.xml" "$selected_reports_output" "aggregate coverage reports should be preferred over per-module reports"
 assert_eq "aggregate" "$COVERAGE_REPORT_KIND" "aggregate report selection should record aggregate report kind"
 
 resolver_build_dir="${tmp}/resolver-build"

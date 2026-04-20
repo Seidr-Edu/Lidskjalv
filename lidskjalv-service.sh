@@ -136,6 +136,18 @@ lidskjalv_service_normalize_rel_path() {
   printf '%s\n' "$raw"
 }
 
+lidskjalv_service_valid_scan_label() {
+  local value="${1:-}"
+  case "$value" in
+    original|generated)
+      return 0
+      ;;
+  esac
+  [[ "$value" =~ ^generated-[A-Za-z0-9._-]+$ ]] || return 1
+  [[ "$value" != *".."* ]] || return 1
+  return 0
+}
+
 lidskjalv_service_load_manifest() {
   local manifest_path="$1"
   python3 - <<'PY' "$manifest_path"
@@ -766,8 +778,8 @@ lidskjalv_service_main() {
   [[ -n "$manifest_timeout" ]] && resolved_timeout="$manifest_timeout"
   [[ -n "$manifest_poll" ]] && resolved_poll="$manifest_poll"
 
-  if [[ "$resolved_scan_label" != "original" && "$resolved_scan_label" != "generated" ]]; then
-    lidskjalv_service_apply_service_error "invalid-service-config" "scan_label must be original or generated"
+  if ! lidskjalv_service_valid_scan_label "$resolved_scan_label"; then
+    lidskjalv_service_apply_service_error "invalid-service-config" "scan_label must be original, generated, or generated-<safe-suffix>"
     LIDSKJALV_SERVICE_FINISHED_AT="$(timestamp)"
     lidskjalv_service_finalize_run || return 1
     return 0

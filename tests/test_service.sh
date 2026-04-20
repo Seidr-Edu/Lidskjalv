@@ -105,7 +105,17 @@ assert_json_path_exists "${manifest_owned_run}/outputs/run_report.json" '.scan.a
 assert_not_exists "${manifest_owned_run}/artifacts/scans/original/workspace" "workspace copy should be cleaned after reporting"
 assert_not_exists "${manifest_owned_run}/artifacts/scans/generated" "env scan_label override should not create generated scan dir"
 
-for scan_label in original generated; do
+invalid_scan_label_run="${tmp}/invalid-scan-label-run"
+mkdir -p "${invalid_scan_label_run}/config"
+write_manifest "${invalid_scan_label_run}/config/manifest.yaml" $'version: 1\nscan_label: generated/../../x\nproject_key: invalid-scan-label\nskip_sonar: true'
+LIDSKJALV_RUN_DIR="$invalid_scan_label_run" \
+LIDSKJALV_MANIFEST="${invalid_scan_label_run}/config/manifest.yaml" \
+LIDSKJALV_INPUT_REPO="${ROOT_DIR}/tests/fixtures/maven_app" \
+./lidskjalv-service.sh >/dev/null
+assert_json_value "${invalid_scan_label_run}/outputs/run_report.json" '.status' "error" "unsafe scan_label should emit error report"
+assert_json_value "${invalid_scan_label_run}/outputs/run_report.json" '.reason' "invalid-service-config" "unsafe scan_label reason mismatch"
+
+for scan_label in original generated generated-v2 generated-v3; do
   run_dir="${tmp}/${scan_label}-service-run"
   mkdir -p "${run_dir}/config"
   write_manifest "${run_dir}/config/manifest.yaml" $'version: 1\nscan_label: '"${scan_label}"$'\nproject_key: '"${scan_label}"$'-scan\nproject_name: '"${scan_label}"$'-scan\nskip_sonar: true'

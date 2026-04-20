@@ -72,6 +72,8 @@ Manifest path: `/run/config/manifest.yaml`
 The manifest is required in service mode. `scan_label`, `project_key`,
 `project_name`, `repo_subdir`, `skip_sonar`, and the Sonar wait settings are
 owned by that manifest and are not overridden from environment variables.
+`scan_label` must be `original`, `generated`, or a safe `generated-*` variant
+such as `generated-v2`.
 
 ```yaml
 version: 1
@@ -148,7 +150,8 @@ The orchestrator is expected to stage the service manifest at
 the container.
 
 Run the same image a second time with a manifest whose `scan_label` is
-`generated` and with `/input/repo` pointed at `artifacts/generated-repo/`.
+`generated` or `generated-v2` and with `/input/repo` pointed at
+`artifacts/generated-repo/`.
 
 ## Release
 

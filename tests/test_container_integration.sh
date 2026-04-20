@@ -83,4 +83,18 @@ assert_not_exists "${generated_run_dir}/artifacts/scans/generated/workspace" "ge
 assert_dir_exists "${generated_run_dir}/artifacts/scans/generated/logs" "generated container logs should exist"
 assert_dir_exists "${generated_run_dir}/artifacts/scans/generated/metadata" "generated container metadata should exist"
 
+generated_v2_run_dir="$(
+  run_container_scan \
+    "generated-v2-run" \
+    "${ROOT_DIR}/tests/fixtures/maven_monorepo" \
+    $'version: 1\nrun_id: container-test-generated-v2\nscan_label: generated-v2\nproject_key: container-generated-v2\nproject_name: container-generated-v2\nrepo_subdir: app\nskip_sonar: true'
+)"
+assert_json_value "${generated_v2_run_dir}/outputs/run_report.json" '.status' "passed" "generated-v2 container scan should pass"
+assert_json_value "${generated_v2_run_dir}/outputs/run_report.json" '.scan_label' "generated-v2" "generated-v2 container scan should preserve scan label"
+assert_json_value "${generated_v2_run_dir}/outputs/run_report.json" '.inputs.repo_subdir' "app" "generated-v2 container scan should preserve repo_subdir"
+assert_json_value "${generated_v2_run_dir}/outputs/run_report.json" '.artifacts.workspace_dir' "null" "generated-v2 container workspace should be reported as ephemeral"
+assert_not_exists "${generated_v2_run_dir}/artifacts/scans/generated-v2/workspace" "generated-v2 container workspace should be cleaned"
+assert_dir_exists "${generated_v2_run_dir}/artifacts/scans/generated-v2/logs" "generated-v2 container logs should exist"
+assert_dir_exists "${generated_v2_run_dir}/artifacts/scans/generated-v2/metadata" "generated-v2 container metadata should exist"
+
 popd >/dev/null

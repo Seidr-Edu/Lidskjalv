@@ -9,6 +9,9 @@ source "${_SUBMIT_SH_DIR}/select-jdk.sh"
 source "${_SUBMIT_SH_DIR}/coverage.sh"
 source "${_SUBMIT_SH_DIR}/../strategies/maven.sh"
 source "${_SUBMIT_SH_DIR}/../strategies/gradle.sh"
+if ! declare -f is_android_project >/dev/null 2>&1; then
+  source "${_SUBMIT_SH_DIR}/detect-build.sh"
+fi
 
 # ============================================================================
 # SonarQube Health Check
@@ -482,10 +485,6 @@ sonar_should_cli_fallback() {
       ;;
   esac
 
-  if [[ "$build_tool" == "gradle" ]] && [[ "$reason" == "android_plugin_incompatibility" ]]; then
-    return 0
-  fi
-
   return 1
 }
 
@@ -519,6 +518,11 @@ sonar_prepare_coverage() {
       effective_build_dir="${MAVEN_COVERAGE_BUILD_DIR:-$build_dir}"
       ;;
     gradle)
+      if is_android_project "$build_dir"; then
+        coverage_mark_fallback "android_no_sdk"
+        sonar_record_coverage_info "$key"
+        return 1
+      fi
       if ! gradle_prepare_coverage "$build_dir" "$COVERAGE_JACOCO_VERSION" "$coverage_log" "$support_dir"; then
         coverage_mark_fallback "${GRADLE_COVERAGE_REASON:-gradle_coverage_prepare_failed}"
         sonar_record_coverage_info "$key"
@@ -597,6 +601,10 @@ submit_to_sonar() {
   local build_jdk="${PIPELINE_BUILD_JDK:-}"
   local build_jdk_home=""
   local submitter_preference="${LIDSKJALV_SUBMITTER_PREFERENCE:-native}"
+  if [[ "$build_tool" == "gradle" ]] && is_android_project "$build_dir"; then
+    submitter_preference="cli"
+    log_info "Android project: using CLI scanner (native Gradle sonar requires Android SDK)"
+  fi
   local native_runtime_selection=""
   local native_scanner_jdk=""
   local native_runtime_source=""

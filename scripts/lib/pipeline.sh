@@ -163,18 +163,23 @@ run_scan_for_prepared_repo() {
   state_set_status "$key" "building"
   state_set_build_info "$key" "$build_tool" ""
 
-  if ! build_project "$key" "$build_dir" "$build_tool" "$effective_jdk"; then
-    PIPELINE_ATTEMPTED_JDKS_CSV="$BUILD_RESULT_ATTEMPTED_JDKS_CSV"
-    state_set_status "$key" "failed" "$BUILD_RESULT_REASON" "$BUILD_RESULT_MESSAGE"
-    return 1
-  fi
+  if is_android_project "$build_dir"; then
+    log_info "Android project: skipping build (no Android SDK in CI), proceeding to source-only Sonar scan"
+    state_set_build_info "$key" "$build_tool" "android_skipped"
+  else
+    if ! build_project "$key" "$build_dir" "$build_tool" "$effective_jdk"; then
+      PIPELINE_ATTEMPTED_JDKS_CSV="$BUILD_RESULT_ATTEMPTED_JDKS_CSV"
+      state_set_status "$key" "failed" "$BUILD_RESULT_REASON" "$BUILD_RESULT_MESSAGE"
+      return 1
+    fi
 
-  # shellcheck disable=SC2034  # Shared pipeline metadata is consumed by submit-sonar.sh and service reporting.
-  PIPELINE_BUILD_JDK="$BUILD_RESULT_JDK"
-  # shellcheck disable=SC2034  # Shared pipeline metadata is consumed by submit-sonar.sh and service reporting.
-  PIPELINE_ATTEMPTED_JDKS_CSV="$BUILD_RESULT_ATTEMPTED_JDKS_CSV"
-  state_set_build_info "$key" "$build_tool" "$BUILD_RESULT_JDK"
-  state_set_successful_build "$key" "$build_tool" "$BUILD_RESULT_JDK"
+    # shellcheck disable=SC2034  # Shared pipeline metadata is consumed by submit-sonar.sh and service reporting.
+    PIPELINE_BUILD_JDK="$BUILD_RESULT_JDK"
+    # shellcheck disable=SC2034  # Shared pipeline metadata is consumed by submit-sonar.sh and service reporting.
+    PIPELINE_ATTEMPTED_JDKS_CSV="$BUILD_RESULT_ATTEMPTED_JDKS_CSV"
+    state_set_build_info "$key" "$build_tool" "$BUILD_RESULT_JDK"
+    state_set_successful_build "$key" "$build_tool" "$BUILD_RESULT_JDK"
+  fi
 
   if [[ "$skip_sonar" == "true" ]]; then
     log_info "Skipping SonarQube submission (--skip-sonar)"

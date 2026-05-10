@@ -19,6 +19,20 @@ write_manifest() {
 pushd "$ROOT_DIR" >/dev/null
 
 root_state_checksum="$(file_checksum "${ROOT_DIR}/.data/lidskjalv/state/scan-state.json")"
+source "${ROOT_DIR}/scripts/lib/build.sh"
+reordered_gradle_strategies="$(build_reorder_strategies_for_hint "gradle" "25" "${GRADLE_STRATEGIES[@]}")"
+assert_eq \
+  "25|build -x test -x check" \
+  "$(printf '%s\n' "$reordered_gradle_strategies" | head -n 1)" \
+  "gradle Java 25 hint should prioritize the JDK 25 build strategy"
+assert_contains \
+  "25|assemble" \
+  "$reordered_gradle_strategies" \
+  "gradle strategy set should include a JDK 25 assemble fallback"
+assert_contains \
+  "25|compileJava" \
+  "$reordered_gradle_strategies" \
+  "gradle strategy set should include a JDK 25 compileJava fallback"
 
 invalid_run="${tmp}/invalid-run"
 mkdir -p "${invalid_run}/config" "${invalid_run}/input"

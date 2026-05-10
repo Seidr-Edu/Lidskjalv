@@ -12,10 +12,12 @@
 # shellcheck disable=SC2034  # Referenced by build.sh after sourcing this file.
 GRADLE_STRATEGIES=(
   # Modern JDKs with test skipping (no -x integrationTest: Gradle 8.9+ fails on non-existent tasks)
+  "25|build -x test -x check"
   "21|build -x test -x check"
   "17|build -x test -x check"
   
   # Try just assemble (compile without tests)
+  "25|assemble"
   "21|assemble"
   "17|assemble"
   "11|assemble"
@@ -29,6 +31,7 @@ GRADLE_STRATEGIES=(
   "11|classes testClasses"
 
   # Wrapper-only projects may expose a smaller task surface but still support Java compilation.
+  "25|compileJava"
   "21|compileJava"
   "17|compileJava"
 )
